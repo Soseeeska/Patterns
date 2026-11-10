@@ -70,6 +70,12 @@ interaction:
   exclude_breakout_day: true       # не считать в статистике касания в день, закрывший баланс
   opposite_boundary_horizon_days: [0, 1, 3]   # 0 = тот же день
 
+intraday:                          # этап 6: реакция на зоны по 30m барам с флипом
+  levels: [VAH, VAL, POC, HVN]
+  hvn_share: 0.70                  # HVN-полоса: строки вокруг POC с TPO ≥ 70% от максимума
+  reaction_bars_after: 2           # реакция меряется до конца теста + 2 бара
+  placebo_min_dist_ticks: 8        # фальш-зона не ближе 8 тиков к любому реальному VAH/VAL/POC
+
 day_type:
   avg_range_lookback_days: 20
   # Расширение диапазона (RE) засчитывается, если выход за IB > этой доли IB.
