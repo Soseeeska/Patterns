@@ -4,7 +4,7 @@
 Результат: output/<INSTR>_examples.png
 Слева — контекст: дни от начала композита до 3 дней после касания
 (серая линия — range дня, чёрная — VA дня, синий прямоугольник — VA композита,
-оранжевая линия — уровень зоны, жёлтая полоса — день касания).
+оранжевая линия — уровень входа, фиолетовая — POC композита, жёлтая полоса — день касания).
 Справа — TPO-профиль дня касания с уровнем зоны.
 """
 from __future__ import annotations
@@ -23,12 +23,11 @@ from tpo.data import ROOT, load_config
 from tpo.plot import draw_day
 
 CASES = [
-    ("Первое касание VAH → отказ", dict(level_type="VAH", touch_number=1, outcome="rejection")),
-    ("Первое касание VAH → принятие", dict(level_type="VAH", touch_number=1, outcome="acceptance")),
-    ("Касание VAL сверху → отказ", dict(level_type="VAL", approach="above", outcome="rejection")),
-    ("POC → принятие и доход до противоположной границы",
-     dict(level_type="POC", outcome="acceptance", reached_opposite_d0=True)),
-    ("Гэп через уровень (VAH)", dict(level_type="VAH", gap_through=True)),
+    ("Вход через VAH сверху → принятие (close в POC или ниже)", dict(level_type="VAH", outcome="acceptance")),
+    ("Вход через VAH сверху → отказ", dict(level_type="VAH", outcome="rejection")),
+    ("Вход через VAL снизу → принятие (close в POC или выше)", dict(level_type="VAL", outcome="acceptance")),
+    ("Вход через VAL снизу → отказ", dict(level_type="VAL", outcome="rejection")),
+    ("Вход в композит в трендовый день", dict(day_type="Trend", outcome="acceptance")),
 ]
 
 
@@ -89,12 +88,15 @@ def main(instrument: str = "ES") -> None:
         draw_day(axp, bars[bars.date == e.date], drow, tick,
                  f"{e.date:%Y-%m-%d}: {drow.day_type}, форма {drow.profile_shape}")
         axp.axhline(e.level_price, color="tab:orange", lw=1.6, ls="--")
-        lo = min(drow.low, e.level_price, e.opposite_boundary if e.reached_opposite_d0 else drow.low)
-        hi = max(drow.high, e.level_price)
+        axp.axhline(e.comp_poc, color="tab:purple", lw=1.4, ls=":")
+        axc.hlines(e.comp_poc, cx0, len(d) - 0.5, color="tab:purple", lw=1.2, ls=":")
+        lo = min(drow.low, e.level_price, e.comp_poc)
+        hi = max(drow.high, e.level_price, e.comp_poc)
         axp.set_ylim(lo - 4 * tick, hi + 4 * tick)
         axp.text(0.02, 0.01,
                  f"Исход: {'принятие' if e.outcome == 'acceptance' else 'отказ'}"
                  f" (касание в периоде {'ABCDEFGHIJKLM'[int(e.first_touch_period)]})\n"
+                 f"Close {drow.close:.2f}, POC композита {e.comp_poc:.2f} (фиолетовая)\n"
                  f"Противоп. граница {e.opposite_boundary:.2f} в тот же день: {reach}\n"
                  f"MFE {e.mfe_ticks} тиков, MAE {e.mae_ticks} тиков",
                  transform=axp.transAxes, fontsize=7, va="bottom",
