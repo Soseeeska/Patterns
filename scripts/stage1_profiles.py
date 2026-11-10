@@ -16,7 +16,8 @@ import numpy as np
 import pandas as pd
 
 from tpo.data import ROOT, load_bars, load_config
-from tpo.profile import daily_profiles, detect_rolls
+from tpo.profile import daily_profiles
+from tpo.rolls import back_adjust, roll_table
 
 
 def plot_tpo_days(bars, daily, dates, tick, path):
@@ -60,20 +61,22 @@ def main(instrument: str = "ES") -> None:
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
 
-    bars = load_bars(instrument, cfg)
+    raw = load_bars(instrument, cfg)
+    rolls = roll_table(raw, cfg, tick)
+    rolls.to_csv(out / f"{instrument}_rolls.csv", index=False, float_format="%.2f")
+    bars = back_adjust(raw, rolls)
     daily, _ = daily_profiles(bars, cfg, tick)
     daily.to_csv(out / f"{instrument}_daily_profiles.csv", index=False, float_format="%.2f")
-
-    rolls = detect_rolls(daily)
-    rolls.to_csv(out / f"{instrument}_rolls.csv", float_format="%.2f")
 
     full = daily[~daily["short_day"]]
     print(f"{instrument}: {len(daily)} дней ({daily.date.min():%Y-%m-%d} – "
           f"{daily.date.max():%Y-%m-%d}), полных {len(full)}, коротких {daily.short_day.sum()}")
     print(f"Средняя ширина VA: {(full.vah - full.val).mean():.2f} п., "
           f"средний диапазон: {(full.high - full.low).mean():.2f} п.")
-    print(f"Найдено ролловеров: {len(rolls)}, медианный гэп после: "
-          f"{rolls.gap_to_next.median():.2f} п.")
+    print(f"Ролловеров: {len(rolls)}, суммарный сдвиг самой старой истории: "
+          f"{rolls.spread.sum():+.2f} п.")
+    print(rolls.to_string(index=False, float_format=lambda x: f"{x:.2f}",
+                          formatters={"roll_date": lambda x: f"{x:%Y-%m-%d}"}))
 
     sample = full.sort_values("date").tail(8)["date"].tolist()
     plot_tpo_days(bars, daily, sample, tick, out / f"{instrument}_tpo_sample.png")

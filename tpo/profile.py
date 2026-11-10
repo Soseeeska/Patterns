@@ -142,17 +142,3 @@ def daily_profiles(bars: pd.DataFrame, cfg: dict, tick: float) -> tuple[pd.DataF
         profiles[date] = p
     return pd.DataFrame(rows), profiles
 
-
-def detect_rolls(daily: pd.DataFrame, rel_threshold: float = 0.55) -> pd.DataFrame:
-    """Эвристика для непрерывного ряда без склейки: перед сменой контракта
-    объём в истекающем контракте падает. Возвращает последний
-    «низкообъёмный» день перед каждым ролловом и гэп к следующему дню."""
-    d = daily[~daily["short_day"]].set_index("date")
-    rel = d["volume"] / d["volume"].rolling(11, center=True, min_periods=5).median()
-    low = rel < rel_threshold
-    gap = d["open"].shift(-1) - d["close"]
-    out = pd.DataFrame({"rel_volume": rel, "gap_to_next": gap})[low]
-    # Оставляем последний день в каждом квартальном кластере.
-    keep = out.index.to_series().diff(-1).abs() > pd.Timedelta(days=10)
-    keep.iloc[-1] = True
-    return out[keep.values]

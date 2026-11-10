@@ -18,9 +18,13 @@
 - Тик = 0.25.
 
 ### Роллирование
-Выгрузка **не скорректирована** на склейку контрактов. На смене контракта (вторник недели экспирации) цена прыгает на величину спреда календаря: медианно ~+40 п., в 2024–2026 гг. до +85 п. Перед роллом объём в старом контракте падает. Эвристика `detect_rolls` находит эти дни, результат пишется в `output/ES_rolls.csv`.
-
-Для дневных профилей это не мешает. Но зоны композитов живут бессрочно, поэтому уровни, построенные до ролла, после ролла оказываются смещены на 30–85 пунктов. Решение — до этапа 3.
+Выгрузка **не скорректирована** на склейку контрактов, поэтому делаем back-adjust сами (`tpo/rolls.py`):
+- **Дата ролла** — вторник недели экспирации (3-я пятница минус 3 дня). Код проверяет, что объём в этот день вырос как минимум в 1.4 раза; за 2021–2026 гг. найдено 23 ролла.
+- **Спред** считается по модели carry: `close × (ставка ФРС − див. доходность) × 91/365`. Ставки и доходности задаются таблицей в `config.yaml`. Значения на 2026 год — допущение.
+- **Почему не сырой гэп:** в гэпе дня ролла есть ещё и ночное движение рынка, например в CPI-дни 2022 года −73 и +148 п. Если вычесть из гэпа модельный спред, остаток имеет std 37 п. — столько же, сколько у обычного ночного гэпа (std 32 п.). Значит, модель отделяет спред от движения рынка.
+- **Ручные значения:** точный спред из платформы можно задать в `roll.overrides`, он заменит модельный.
+- **Как сдвигается история:** все цены до ролла сдвигаются на его спред. Сырые цены остаются в колонках `*_raw`.
+- **Погрешность:** несколько пунктов на каждый ролл. Поэтому в `events.csv` добавляется колонка `rolls_crossed` — сколько роллов прошло между концом композита и касанием. Статистика сравнивает зоны с `rolls_crossed = 0` и `> 0`; если результаты сильно расходятся, корректировка вносит искажения.
 
 **Особенность 30-минутных баров.** Один бар — это ровно один TPO-период. TPO периода занимает все ценовые строки от `low` до `high` бара, поэтому профиль строится точно. Ограничения:
 - момент касания известен только с точностью до периода;
@@ -100,7 +104,7 @@
 ## Выход
 
 ### Таблица событий `events.csv` (строка = день × зона)
-`date, instrument, zone_id, composite_start, composite_end, level_type (VAH/VAL/POC), level_price, zone_age_days, zone_status, prior_touches, approach (above/below), open_vs_level, first_touch_period, outcome (rejection/acceptance), acceptance_period, reached_opposite_boundary_d0/d1/d3, mfe_ticks, mae_ticks, mfe_atr, mae_atr, day_type, profile_shape, tpo_imbalance, poc_position, va_width_rel, single_prints, tail_up, tail_down, poor_high, poor_low, value_migration, multi_zone`
+`date, instrument, zone_id, composite_start, composite_end, level_type (VAH/VAL/POC), level_price, zone_age_days, rolls_crossed, zone_status, prior_touches, approach (above/below), open_vs_level, first_touch_period, outcome (rejection/acceptance), acceptance_period, reached_opposite_boundary_d0/d1/d3, mfe_ticks, mae_ticks, mfe_atr, mae_atr, day_type, profile_shape, tpo_imbalance, poc_position, va_width_rel, single_prints, tail_up, tail_down, poor_high, poor_low, value_migration, multi_zone`
 
 Определения для MFE, MAE и противоположной границы:
 - **MFE/MAE** — от уровня в направлении отказа / против него, с периода касания до конца дня.

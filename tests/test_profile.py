@@ -38,3 +38,22 @@ def test_merge_profiles():
     b = build_profile(np.array([2]), np.array([4]))
     m = merge_profiles([a, b])
     assert m.low == 0 and m.counts.tolist() == [1, 1, 2, 1, 1]
+
+
+def test_roll_dates_tuesday_before_third_friday():
+    import pandas as pd
+    from tpo.rolls import roll_dates
+    d = roll_dates(pd.Timestamp("2024-01-01"), pd.Timestamp("2024-12-31"))
+    assert [x.strftime("%m-%d") for x in d] == ["03-12", "06-18", "09-17", "12-17"]
+
+
+def test_back_adjust_shifts_only_before_roll():
+    import pandas as pd
+    from tpo.rolls import back_adjust
+    bars = pd.DataFrame({"date": pd.to_datetime(["2024-03-11", "2024-03-12"]),
+                         "open": [100.0, 150.0], "high": [101.0, 151.0],
+                         "low": [99.0, 149.0], "close": [100.0, 150.0]})
+    rolls = pd.DataFrame({"roll_date": [pd.Timestamp("2024-03-12")], "spread": [50.0]})
+    out = back_adjust(bars, rolls)
+    assert out["close"].tolist() == [150.0, 150.0]
+    assert out["close_raw"].tolist() == [100.0, 150.0]
