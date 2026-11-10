@@ -1,0 +1,70 @@
+# Параметры исследования композитов баланса (TPO, Dalton).
+# Все пороги из SPEC.md живут здесь — код не должен содержать «магических» чисел.
+
+data:
+  instruments:
+    ES: {file: data/ES_30m_RTH.csv, tick_size: 0.25}
+    NQ: {file: data/NQ_30m_RTH.csv, tick_size: 0.25}
+  timezone: America/Chicago        # таймзона timestamp в файлах
+  timestamp_is_bar_start: true     # timestamp = начало 30-минутного бара
+  rth_start: "08:30"
+  rth_end: "15:00"
+  expected_periods_per_day: 13     # 08:30–15:00 = 13 TPO-периодов
+  min_periods_full_day: 13         # дни короче — "short day", исключаются из классификации типов дня
+  continuous_contract: back_adjusted
+
+tpo:
+  period_minutes: 30
+  ib_periods: 2                    # IB = A + B
+  value_area_pct: 0.70
+  va_expansion: dalton_two_rows    # расширение VA от POC по 2 уровня
+  price_row_ticks: 1               # шаг строки профиля в тиках
+
+balance:
+  min_days: 3
+  va_overlap_min: 0.50             # доля VA нового дня, лежащая внутри VA текущего композита
+  end_rules:                       # баланс закрывается по первому сработавшему правилу
+    - va_overlap_below_min
+    - acceptance_beyond_composite_extreme   # принятие за High/Low композита (см. acceptance)
+  include_end_day_in_composite: false
+
+zones:
+  levels: [VAH, VAL, POC]
+  lifetime: unlimited              # зоны живут бессрочно; статус virgin/tested ведётся отдельно
+  available_from: day_after_balance_end   # защита от look-ahead
+  merge_within_ticks: 0            # 0 = не объединять близкие уровни разных композитов
+
+interaction:
+  touch_tolerance_ticks: 2
+  acceptance:
+    periods_beyond: 2              # TPO-периодов полностью за уровнем
+    consecutive: true
+  # отказ = касание без выполнения условия принятия
+  opposite_boundary_horizon_days: [0, 1, 3]   # 0 = тот же день
+
+day_type:
+  avg_range_lookback_days: 20
+  non_trend_range_vs_avg_max: 0.60
+  normal_ib_share_of_range_min: 0.85
+  normal_max_extension_share_of_ib: 0.15
+  normal_variation_range_vs_ib_max: 2.0
+  trend_range_vs_ib_min: 2.0
+  trend_close_extreme_share: 0.15  # close в крайних 15% диапазона по направлению расширения
+  double_distribution:
+    min_single_print_gap_ticks: 4
+    min_gap_share_of_range: 0.10
+  neutral:
+    center_close_band: [0.25, 0.75]   # close в середине диапазона → Neutral Center
+    extreme_close_share: 0.20         # close в крайних 20% → Neutral Extreme
+
+profile_shape:
+  p_b_poc_third: true              # POC в верхней/нижней трети + перевес TPO → P / b
+  tpo_imbalance_threshold: 0.60    # доля TPO по одну сторону от POC
+  thin_max_tpo_per_row: 3          # вытянутый «trend»-профиль
+
+stats:
+  min_events_per_cell: 30          # меньше — помечать ячейку как ненадёжную
+  baseline: [all_days, random_levels]
+  random_levels_per_day: 3
+  split_by: [instrument, year]
+  holdout_from: "2024-01-01"       # калибровка до даты, проверка после
