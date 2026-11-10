@@ -1,6 +1,13 @@
 """Поиск балансов и построение композитных профилей.
 
-Алгоритм (параметры — config.balance):
+Метод balance.method = "close_in_range" (основной):
+  * день 1 — старт; следующий день добавляется, если его close внутри High–Low
+    уже набранных дней композита; иначе композит закрывается
+    (close_above / close_below), а новый старт — этот же день;
+  * композит засчитывается, если в нём ≥ min_days дней (первые 3 дня тоже
+    проходят это правило).
+
+Метод "va_overlap" (прежний, параметры — config.balance):
   * идём по полным дням по порядку; короткие дни пропускаются (не входят
     в баланс и не прерывают его);
   * кандидат = список подряд идущих дней, композит = сумма их TPO;
@@ -68,7 +75,9 @@ def find_balances(bars: pd.DataFrame, daily: pd.DataFrame, profiles: dict,
     va_pct = cfg["tpo"]["value_area_pct"]
     rules = set(bcfg["end_rules"])
     full = daily[~daily["short_day"]].sort_values("date").reset_index(drop=True)
+    method = bcfg.get("method", "va_overlap")
     day_va = {r.date: (int(round(r.val / tick)), int(round(r.vah / tick))) for r in full.itertuples()}
+    day_close = {r.date: int(round(r.close / tick)) for r in full.itertuples()}
     period_hl = {
         d: (np.rint(g.sort_values("period")["low"].to_numpy() / tick).astype(np.int64),
             np.rint(g.sort_values("period")["high"].to_numpy() / tick).astype(np.int64))
@@ -76,6 +85,14 @@ def find_balances(bars: pd.DataFrame, daily: pd.DataFrame, profiles: dict,
     }
 
     def fits(cand: Candidate, date) -> tuple[bool, str, float]:
+        if method == "close_in_range":
+            # день входит в композит, если закрылся внутри High–Low уже набранных дней
+            c = day_close[date]
+            if c > cand.profile.high:
+                return False, "close_above", np.nan
+            if c < cand.profile.low:
+                return False, "close_below", np.nan
+            return True, "", np.nan
         val, vah = day_va[date]
         ov = va_overlap_share(val, vah, cand.val, cand.vah)
         lows, highs = period_hl[date]
@@ -120,7 +137,7 @@ def find_balances(bars: pd.DataFrame, daily: pd.DataFrame, profiles: dict,
             cand.add(date, p, va_pct)
             continue
         close(cand, date, reason)
-        if len(cand.dates) < bcfg["min_days"] and len(cand.dates) > 1:
+        if method != "close_in_range" and bcfg["min_days"] > len(cand.dates) > 1:
             # повтор с последнего дня кандидата
             last = cand.dates[-1]
             retry = Candidate()

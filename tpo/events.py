@@ -23,8 +23,8 @@ import numpy as np
 import pandas as pd
 
 
-def build_zones(comps: pd.DataFrame, levels: list[str]) -> pd.DataFrame:
-    closed = comps[comps["end_reason"] != "open"]
+def build_zones(comps: pd.DataFrame, levels: list[str], min_days: int = 0) -> pd.DataFrame:
+    closed = comps[(comps["end_reason"] != "open") & (comps["n_days"] >= min_days)]
     rows = []
     for c in closed.itertuples():
         for lv in levels:
@@ -59,7 +59,7 @@ def build_events(bars: pd.DataFrame, days: pd.DataFrame, comps: pd.DataFrame,
     tol = icfg["touch_tolerance_ticks"] * tick
     n_acc = icfg["acceptance"]["periods_beyond"]
     horizons = icfg["opposite_boundary_horizon_days"]
-    zones = build_zones(comps, cfg["zones"]["levels"])
+    zones = build_zones(comps, cfg["zones"]["levels"], cfg["zones"].get("min_composite_days", 0))
 
     d = days[days["day_type"] != "Short"].sort_values("date").reset_index(drop=True)
     d["atr"] = (d["high"] - d["low"]).rolling(20, min_periods=10).mean().shift(1)

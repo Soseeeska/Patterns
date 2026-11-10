@@ -52,3 +52,22 @@ def test_find_balances_closes_on_breakout():
     assert c.n_days == 4 and c.end_reason == "acceptance_up"
     assert c.available_from == pd.Timestamp("2024-01-08")
     assert c.low == 100 and c.high == 110
+
+
+def test_close_in_range_method():
+    cfg = {**CFG, "balance": {**CFG["balance"], "method": "close_in_range"}}
+    def day(lo, hi, close):
+        return [(lo, hi), (lo + 1, hi - 1), (close, close)]
+    bars = _bars([
+        ("2024-01-02", day(100, 110, 105)),
+        ("2024-01-03", day(102, 112, 108)),   # close 108 внутри 100–110
+        ("2024-01-04", day(98, 109, 101)),    # внутри 100–112
+        ("2024-01-05", day(99, 111, 110)),    # внутри 98–112
+        ("2024-01-08", day(110, 120, 118)),   # close 118 > 112 → закрытие вверх
+    ])
+    daily, prof = daily_profiles(bars, cfg, 1.0)
+    comps, _ = find_balances(bars, daily, prof, cfg, 1.0)
+    assert len(comps) == 1
+    c = comps.iloc[0]
+    assert c.n_days == 4 and c.end_reason == "close_above"
+    assert c.available_from == pd.Timestamp("2024-01-08")

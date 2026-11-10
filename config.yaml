@@ -38,6 +38,9 @@ tpo:
   tail_min_rows: 2                 # хвост = ≥2 single prints на краю
 
 balance:
+  # close_in_range: день добавляется, пока его close внутри High–Low композита;
+  # закрытие вне диапазона завершает композит. va_overlap — прежнее правило ниже.
+  method: close_in_range
   min_days: 3
   va_overlap_min: 0.30             # доля VA нового дня, лежащая внутри VA текущего композита
   end_rules:                       # баланс закрывается по первому сработавшему правилу
@@ -47,6 +50,7 @@ balance:
 
 zones:
   levels: [VAH, VAL, POC]
+  min_composite_days: 3            # зоны берутся из композитов не короче N дней
   lifetime: unlimited              # зоны живут бессрочно; статус virgin/tested ведётся отдельно
   available_from: day_after_balance_end   # защита от look-ahead
   merge_within_ticks: 0            # 0 = не объединять близкие уровни разных композитов
@@ -93,7 +97,7 @@ stats:
     min_va_width_ticks: 8
     seed: 0
   sensitivity:                     # пересчёт ключевых цифр при других порогах
-    balance.va_overlap_min: [0.3, 0.5]
+    zones.min_composite_days: [3, 5]
     interaction.touch_tolerance_ticks: [0, 2, 4]
     interaction.acceptance.periods_beyond: [2, 3]
   split_by: [instrument, year]

@@ -39,7 +39,7 @@ def main(instrument: str = "ES") -> None:
 
     full = days[days.day_type != "Short"]
     print(f"{instrument}: событий {len(ev)}, зон {ev.zone_id.nunique()} из "
-          f"{3 * (comps.end_reason != 'open').sum()}, дней с касанием {ev.date.nunique()} "
+          f"{3 * ((comps.end_reason != 'open') & (comps.n_days >= cfg['zones'].get('min_composite_days', 0))).sum()}, дней с касанием {ev.date.nunique()} "
           f"из {len(full)} ({100 * ev.date.nunique() / len(full):.0f}%)")
     print(f"Проверка look-ahead: касаний раньше available_from — "
           f"{int((ev.date < ev.merge(comps, on='composite_id').available_from).sum())}")

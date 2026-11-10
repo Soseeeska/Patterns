@@ -138,6 +138,7 @@ def export_report_csv(res: dict, folder) -> None:
     m = res["meta"]
     pd.DataFrame([{
         "start": m["start"], "end": m["end"], "days": m["days"], "composites": m["composites"],
+        "composites_all": m["composites_all"], "min_composite_days": m["min_composite_days"],
         "zones": m["zones"], "events_total": m["events_total"],
         "events_breakout_day": m["events_breakout_day"], "events": m["events"],
         "event_days": m["event_days"], "event_days_pct": round(100 * m["event_days"] / m["days"], 1),
@@ -172,7 +173,10 @@ def main(instrument: str = "ES") -> None:
     full = days[days.day_type != "Short"]
     res["meta"] = {
         "start": full.date.min(), "end": full.date.max(), "days": len(full),
-        "composites": int((comps.end_reason != "open").sum()),
+        "composites": int(((comps.end_reason != "open")
+                           & (comps.n_days >= cfg["zones"].get("min_composite_days", 0))).sum()),
+        "composites_all": int((comps.end_reason != "open").sum()),
+        "min_composite_days": cfg["zones"].get("min_composite_days", 0),
         "zones": int(real_all.zone_id.nunique()),
         "events_total": len(real_all), "events_breakout_day": int(real_all.breakout_day.sum()),
         "events": len(real), "event_days": int(real.date.nunique()),
@@ -262,7 +266,8 @@ def main(instrument: str = "ES") -> None:
             for lv in s_all.index:
                 sens.append({
                     "param": path, "value": v, "level_type": lv,
-                    "composites": int((comps2.end_reason != "open").sum()),
+                    "composites": int(((comps2.end_reason != "open")
+                                       & (comps2.n_days >= c2["zones"].get("min_composite_days", 0))).sum()),
                     "n": int(s_all.at[lv, "n"]),
                     "acceptance": s_all.at[lv, "acceptance"],
                     "reached_d0": s_all.at[lv, "reached_d0"],
