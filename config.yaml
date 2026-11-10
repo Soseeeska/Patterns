@@ -4,14 +4,14 @@
 data:
   instruments:
     ES: {file: data/ES_30m_RTH.csv, tick_size: 0.25}
-    NQ: {file: data/NQ_30m_RTH.csv, tick_size: 0.25}
-  timezone: America/Chicago        # таймзона timestamp в файлах
+  source_timezone: Europe/Berlin   # таймзона timestamp в выгрузке (15:30 = 09:30 ET)
+  timezone: America/Chicago        # во что переводим для расчётов
   timestamp_is_bar_start: true     # timestamp = начало 30-минутного бара
   rth_start: "08:30"
   rth_end: "15:00"
   expected_periods_per_day: 13     # 08:30–15:00 = 13 TPO-периодов
   min_periods_full_day: 13         # дни короче — "short day", исключаются из классификации типов дня
-  continuous_contract: back_adjusted
+  continuous_contract: unadjusted  # выгрузка ESZ6 — склейка без корректировки, см. SPEC «Роллирование»
 
 tpo:
   period_minutes: 30
@@ -19,6 +19,7 @@ tpo:
   value_area_pct: 0.70
   va_expansion: dalton_two_rows    # расширение VA от POC по 2 уровня
   price_row_ticks: 1               # шаг строки профиля в тиках
+  tail_min_rows: 2                 # хвост = ≥2 single prints на краю
 
 balance:
   min_days: 3
