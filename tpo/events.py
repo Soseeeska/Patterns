@@ -5,8 +5,11 @@
   * касание: уровень в [low − tol, high + tol] хотя бы одного периода дня;
   * подход: сторона open дня относительно уровня (open == уровень → по close
     предыдущего дня); gap_through — open и вчерашний close по разные стороны;
-  * принятие: ≥ N подряд периодов (начиная с периода касания) целиком по
-    дальнюю сторону уровня; иначе — отказ;
+  * принятие (acceptance.mode = "periods"): ≥ N подряд периодов (начиная с
+    периода касания) целиком по дальнюю сторону уровня; иначе — отказ;
+  * acceptance.mode = "poc_close": учитываются только входы в композит снаружи
+    (VAH сверху, VAL снизу); принятие — close дня в POC композита (± допуск)
+    или дальше POC от стороны входа; иначе — отказ;
   * противоположная граница: VAH → VAL, VAL → VAH, POC → VAL при подходе сверху,
     VAH при подходе снизу. Проверяется с периода касания до конца дня (d0)
     и дальше на 1 и 3 полных дня (кумулятивно);
@@ -39,6 +42,7 @@ def build_zones(comps: pd.DataFrame, levels: list[str], min_days: int = 0) -> pd
                 "level_price": getattr(c, lv.lower()),
                 "comp_vah": c.vah,
                 "comp_val": c.val,
+                "comp_poc": c.poc,
             })
     return pd.DataFrame(rows)
 
@@ -58,6 +62,8 @@ def build_events(bars: pd.DataFrame, days: pd.DataFrame, comps: pd.DataFrame,
     icfg = cfg["interaction"]
     tol = icfg["touch_tolerance_ticks"] * tick
     n_acc = icfg["acceptance"]["periods_beyond"]
+    mode = icfg["acceptance"].get("mode", "periods")
+    poc_tol = icfg["acceptance"].get("poc_tolerance_ticks", 2) * tick
     horizons = icfg["opposite_boundary_horizon_days"]
     zones = build_zones(comps, cfg["zones"]["levels"], cfg["zones"].get("min_composite_days", 0))
 
@@ -95,9 +101,20 @@ def build_events(bars: pd.DataFrame, days: pd.DataFrame, comps: pd.DataFrame,
                 and day["open"] != L and prev_close != L
             t_mask = (lows - tol <= L) & (highs + tol >= L)
             t0 = int(np.argmax(t_mask))
-            beyond = highs[t0:] < L if above else lows[t0:] > L
-            a_end = _run_end(beyond, n_acc)
-            accepted = a_end >= 0
+            if mode == "poc_close":
+                # только вход в композит снаружи: VAH сверху, VAL снизу
+                entering = (z.level_type == "VAH" and above) or (z.level_type == "VAL" and not above)
+                if not entering:
+                    touches[z.zone_id] += 1
+                    continue
+                # принятие = день закрылся в POC (± допуск) или дальше POC от стороны входа
+                accepted = (day["close"] <= z.comp_poc + poc_tol) if above \
+                    else (day["close"] >= z.comp_poc - poc_tol)
+                a_end = -1
+            else:
+                beyond = highs[t0:] < L if above else lows[t0:] > L
+                a_end = _run_end(beyond, n_acc)
+                accepted = a_end >= 0
 
             if z.level_type == "VAH":
                 target = z.comp_val
@@ -145,6 +162,8 @@ def build_events(bars: pd.DataFrame, days: pd.DataFrame, comps: pd.DataFrame,
                 "outcome": "acceptance" if accepted else "rejection",
                 "acceptance_period": t0 + a_end if accepted else -1,
                 "opposite_boundary": target,
+                "comp_poc": z.comp_poc,
+                "close_minus_poc": day["close"] - z.comp_poc,
                 **{f"reached_opposite_d{h}": reach[h] for h in horizons},
                 "mfe_ticks": round(mfe / tick),
                 "mae_ticks": round(mae / tick),

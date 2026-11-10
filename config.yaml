@@ -58,6 +58,11 @@ zones:
 interaction:
   touch_tolerance_ticks: 2
   acceptance:
+    # poc_close: только входы в композит (VAH сверху, VAL снизу); принятие = close дня
+    #            в POC (± poc_tolerance_ticks) или за POC от стороны входа.
+    # periods:   принятие = periods_beyond подряд периодов целиком за уровнем.
+    mode: poc_close
+    poc_tolerance_ticks: 2
     periods_beyond: 2              # TPO-периодов полностью за уровнем
     consecutive: true
   # отказ = касание без выполнения условия принятия
@@ -99,6 +104,6 @@ stats:
   sensitivity:                     # пересчёт ключевых цифр при других порогах
     zones.min_composite_days: [3, 5]
     interaction.touch_tolerance_ticks: [0, 2, 4]
-    interaction.acceptance.periods_beyond: [2, 3]
+    interaction.acceptance.poc_tolerance_ticks: [0, 2, 8]
   split_by: [instrument, year]
   holdout_from: "2024-01-01"       # калибровка до даты, проверка после
