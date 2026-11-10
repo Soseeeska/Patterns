@@ -61,22 +61,22 @@ interaction:
 
 day_type:
   avg_range_lookback_days: 20
-  non_trend_range_vs_avg_max: 0.60
-  normal_ib_share_of_range_min: 0.85
-  normal_max_extension_share_of_ib: 0.15
-  normal_variation_range_vs_ib_max: 2.0
-  trend_range_vs_ib_min: 2.0
-  trend_close_extreme_share: 0.15  # close в крайних 15% диапазона по направлению расширения
-  double_distribution:
+  # Расширение диапазона (RE) засчитывается, если выход за IB > этой доли IB.
+  # Меньший выход — «прокол», день считается без RE в эту сторону.
+  min_extension_share_of_ib: 0.15
+  non_trend_range_vs_avg_max: 0.60   # без RE и range < 0.6 × средний range за 20 дней
+  normal_ib_share_of_range_min: 0.85 # без RE и IB ≥ 85% range
+  trend_range_vs_ib_min: 2.0         # trend: range > 2 × IB ...
+  trend_close_extreme_share: 0.15    # ... и close в крайних 15% по направлению RE
+  double_distribution:               # внутренний разрыв из single prints
     min_single_print_gap_ticks: 4
     min_gap_share_of_range: 0.10
   neutral:
-    center_close_band: [0.25, 0.75]   # close в середине диапазона → Neutral Center
-    extreme_close_share: 0.20         # close в крайних 20% → Neutral Extreme
+    center_close_band: [0.25, 0.75]  # close внутри → Neutral Center, иначе Neutral Extreme
 
 profile_shape:
-  p_b_poc_third: true              # POC в верхней/нижней трети + перевес TPO → P / b
-  tpo_imbalance_threshold: 0.60    # доля TPO по одну сторону от POC
+  # P: POC в верхней трети и центр масс TPO ≥ 0.55 диапазона (b — зеркально)
+  p_b_mass_center_min: 0.55
   thin_max_tpo_per_row: 3          # вытянутый «trend»-профиль
 
 stats:

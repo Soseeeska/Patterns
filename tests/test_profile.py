@@ -57,3 +57,16 @@ def test_back_adjust_shifts_only_before_roll():
     out = back_adjust(bars, rolls)
     assert out["close"].tolist() == [150.0, 150.0]
     assert out["close_raw"].tolist() == [100.0, 150.0]
+
+
+def test_internal_single_gap_ignores_tails():
+    from tpo.day_type import internal_single_gap
+    c = np.array([1, 1, 3, 2, 1, 1, 1, 2, 4, 1])
+    assert internal_single_gap(c) == 3
+
+
+def test_value_migration():
+    from tpo.day_type import value_migration
+    assert value_migration(110, 120, 100, 109) == "higher"
+    assert value_migration(101, 108, 100, 109) == "inside"
+    assert value_migration(105, 115, 100, 109) == "overlap_higher"
