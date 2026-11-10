@@ -68,8 +68,8 @@ day_type:
   # без RE и не Non-trend → Normal
   trend_range_vs_ib_min: 2.0         # trend: range > 2 × IB ...
   trend_close_extreme_share: 0.15    # ... и close в крайних 15% по направлению RE
-  trend_min_va_share_of_range: 0.50  # ... и профиль вытянутый: VA ≥ 50% диапазона
-  trend_max_tpo_per_row: 8           # ... и нет «пуза»: max TPO в строке ≤ 8
+  trend_min_va_share_of_range: 0.45  # ... и профиль вытянутый: VA ≥ 45% диапазона
+  trend_max_tpo_per_row: 9           # ... и нет «пуза»: max TPO в строке ≤ 9
   double_distribution:               # внутренний тонкий разрыв (LVN) между двумя распределениями
     gap_max_tpo_per_row: 2           # строки разрыва: TPO ≤ 2
     min_single_print_gap_ticks: 4

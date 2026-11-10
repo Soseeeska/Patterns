@@ -80,7 +80,7 @@
 |---|---|---|
 | 1 | Neutral Center / Extreme | RE в обе стороны. Close в 25–75% диапазона → Center, иначе → Extreme |
 | 2 | Double Distribution Trend | RE в одну сторону + внутренний (не хвост) тонкий разрыв из строк с ≤2 TPO, ≥ 4 тиков и ≥ 10% диапазона |
-| 3 | Trend | RE в одну сторону, диапазон > 2×IB, close в крайних 15% по направлению RE, профиль **вытянутый**: VA ≥ 50% диапазона и max TPO в строке ≤ 8 |
+| 3 | Trend | RE в одну сторону, диапазон > 2×IB, close в крайних 15% по направлению RE, профиль **вытянутый**: VA ≥ 45% диапазона и max TPO в строке ≤ 9 |
 | 4 | Normal Variation | RE в одну сторону, не Trend |
 | 5 | Non-trend | без RE, диапазон < 0.6 × средний диапазон за 20 прошлых дней |
 | 6 | Normal | без RE, не Non-trend |
@@ -105,12 +105,12 @@
 
 | Тип | % | | Форма | % |
 |---|---|---|---|---|
-| Normal Variation | 56.5 | | D | 60.6 |
+| Normal Variation | 55.2 | | D | 60.6 |
 | Double Distribution | 15.8 | | P | 15.8 |
 | Neutral Extreme | 10.6 | | B | 15.8 |
 | Neutral Center | 6.1 | | b | 7.8 |
 | Normal | 5.9 | | | |
-| Trend | 2.7 | | | |
+| Trend | 4.0 | | | |
 | Non-trend | 2.4 | | | |
 
 Запуск: `python -m scripts.stage2_day_types ES`. Выборка на ручную проверку пишется в `output/ES_day_types_review.csv` (колонка `your_label`) и `output/ES_day_types_review_*.png`.

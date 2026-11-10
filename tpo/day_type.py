@@ -4,7 +4,7 @@
   1. Neutral Center / Extreme — значимое RE в обе стороны
   2. Double Distribution      — RE в одну сторону + внутренний разрыв из single prints
   3. Trend                    — RE в одну сторону, range > 2×IB, close у края по направлению RE,
-                                профиль вытянутый (VA ≥ 50% range, max TPO в строке ≤ 8)
+                                профиль вытянутый (VA ≥ 45% range, max TPO в строке ≤ 9)
   4. Normal Variation         — RE в одну сторону (остальное)
   5. Non-trend                — без RE, range < 0.6 × средний range
   6. Normal                   — без RE (остальное)
