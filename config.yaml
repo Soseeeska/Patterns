@@ -39,7 +39,7 @@ tpo:
 
 balance:
   min_days: 3
-  va_overlap_min: 0.50             # доля VA нового дня, лежащая внутри VA текущего композита
+  va_overlap_min: 0.30             # доля VA нового дня, лежащая внутри VA текущего композита
   end_rules:                       # баланс закрывается по первому сработавшему правилу
     - va_overlap_below_min
     - acceptance_beyond_composite_extreme   # принятие за High/Low композита (см. acceptance)
