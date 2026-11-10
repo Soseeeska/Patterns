@@ -79,13 +79,12 @@
 | # | Тип | Правило |
 |---|---|---|
 | 1 | Neutral Center / Extreme | RE в обе стороны. Close в 25–75% диапазона → Center, иначе → Extreme |
-| 2 | Double Distribution Trend | RE в одну сторону + внутренний (не хвост) разрыв из single prints ≥ 4 тиков и ≥ 10% диапазона |
-| 3 | Trend | RE в одну сторону, диапазон > 2×IB, close в крайних 15% по направлению RE |
+| 2 | Double Distribution Trend | RE в одну сторону + внутренний (не хвост) тонкий разрыв из строк с ≤2 TPO, ≥ 4 тиков и ≥ 10% диапазона |
+| 3 | Trend | RE в одну сторону, диапазон > 2×IB, close в крайних 15% по направлению RE, профиль **вытянутый**: VA ≥ 50% диапазона и max TPO в строке ≤ 8 |
 | 4 | Normal Variation | RE в одну сторону, не Trend |
 | 5 | Non-trend | без RE, диапазон < 0.6 × средний диапазон за 20 прошлых дней |
-| 6 | Normal | без RE, IB ≥ 85% диапазона |
+| 6 | Normal | без RE, не Non-trend |
 
-Если день не подошёл ни под одно правило, ставится `Unclassified`; такие дни выводятся в отчёт для ручного разбора.
 
 ### 6. Форма профиля и распределение принтов
 Для каждого дня считаются:
@@ -102,16 +101,17 @@
 - миграция value к прошлому дню: higher / lower / overlapping-higher / overlapping-lower / inside / outside.
 
 ### Результат этапа 2 (ES, 1470 полных дней)
+После первой проверки: разрыв DD — строки с ≤2 TPO (на 30-минутных барах быстрый переход оставляет 2 TPO, а не 1); Trend требует вытянутого профиля; Unclassified влит в Normal.
+
 | Тип | % | | Форма | % |
 |---|---|---|---|---|
-| Normal Variation | 54.4 | | D | 64.6 |
-| Double Distribution | 11.3 | | P | 16.7 |
-| Neutral Extreme | 10.6 | | B | 11.3 |
-| Trend | 9.3 | | b | 7.4 |
-| Neutral Center | 6.1 | | | |
-| Normal | 5.5 | | | |
+| Normal Variation | 56.5 | | D | 60.6 |
+| Double Distribution | 15.8 | | P | 15.8 |
+| Neutral Extreme | 10.6 | | B | 15.8 |
+| Neutral Center | 6.1 | | b | 7.8 |
+| Normal | 5.9 | | | |
+| Trend | 2.7 | | | |
 | Non-trend | 2.4 | | | |
-| Unclassified | 0.4 | | | |
 
 Запуск: `python -m scripts.stage2_day_types ES`. Выборка на ручную проверку пишется в `output/ES_day_types_review.csv` (колонка `your_label`) и `output/ES_day_types_review_*.png`.
 

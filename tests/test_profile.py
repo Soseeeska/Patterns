@@ -70,3 +70,10 @@ def test_value_migration():
     assert value_migration(110, 120, 100, 109) == "higher"
     assert value_migration(101, 108, 100, 109) == "inside"
     assert value_migration(105, 115, 100, 109) == "overlap_higher"
+
+
+def test_internal_gap_with_two_tpo_rows():
+    from tpo.day_type import internal_single_gap
+    c = np.array([4, 5, 2, 2, 1, 2, 6, 3])
+    assert internal_single_gap(c, max_tpo=1) == 1
+    assert internal_single_gap(c, max_tpo=2) == 4

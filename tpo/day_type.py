@@ -3,11 +3,11 @@
 Правила проверяются по порядку (первое сработавшее):
   1. Neutral Center / Extreme — значимое RE в обе стороны
   2. Double Distribution      — RE в одну сторону + внутренний разрыв из single prints
-  3. Trend                    — RE в одну сторону, range > 2×IB, close у края по направлению RE
+  3. Trend                    — RE в одну сторону, range > 2×IB, close у края по направлению RE,
+                                профиль вытянутый (VA ≥ 50% range, max TPO в строке ≤ 8)
   4. Normal Variation         — RE в одну сторону (остальное)
   5. Non-trend                — без RE, range < 0.6 × средний range
-  6. Normal                   — без RE, IB ≥ 85% range
-  иначе Unclassified.
+  6. Normal                   — без RE (остальное)
 """
 from __future__ import annotations
 
@@ -17,16 +17,16 @@ import pandas as pd
 from .profile import Profile
 
 
-def internal_single_gap(counts: np.ndarray) -> int:
-    """Длина (в строках) самого длинного участка TPO=1, у которого и выше,
-    и ниже есть строки с TPO ≥ 2 (т.е. не хвост)."""
-    multi = np.flatnonzero(counts >= 2)
+def internal_single_gap(counts: np.ndarray, max_tpo: int = 1) -> int:
+    """Длина (в строках) самого длинного «тонкого» участка (TPO ≤ max_tpo),
+    у которого и выше, и ниже есть строки с TPO > max_tpo (т.е. не хвост)."""
+    multi = np.flatnonzero(counts > max_tpo)
     if len(multi) < 2:
         return 0
     inner = counts[multi[0]:multi[-1] + 1]
     best = run = 0
     for v in inner:
-        run = run + 1 if v == 1 else 0
+        run = run + 1 if v <= max_tpo else 0
         best = max(best, run)
     return best
 
@@ -89,7 +89,7 @@ def classify_days(daily: pd.DataFrame, profiles: dict, cfg: dict, tick: float) -
     gaps, shapes, imb, pocpos = [], [], [], []
     for _, r in d.iterrows():
         p = profiles[r.date]
-        g = internal_single_gap(p.counts) * p.row
+        g = internal_single_gap(p.counts, ddcfg["gap_max_tpo_per_row"]) * p.row
         n_rows = len(p.counts) * p.row
         is_dd_gap = g >= ddcfg["min_single_print_gap_ticks"] and g >= ddcfg["min_gap_share_of_range"] * n_rows
         gaps.append(g if is_dd_gap else 0)
@@ -98,6 +98,10 @@ def classify_days(daily: pd.DataFrame, profiles: dict, cfg: dict, tick: float) -
         imb.append(a)
         pocpos.append(pp)
     d["dd_gap_ticks"] = gaps
+    d["va_share_of_range"] = (d["vah"] - d["val"]) / rng.replace(0, np.nan)
+    d["max_tpo_row"] = [int(profiles[x].counts.max()) for x in d["date"]]
+    elongated = ((d["va_share_of_range"] >= dcfg["trend_min_va_share_of_range"])
+                 & (d["max_tpo_row"] <= dcfg["trend_max_tpo_per_row"]))
     d["tpo_share_above_poc"] = imb
     d["poc_position"] = pocpos
 
@@ -114,16 +118,15 @@ def classify_days(daily: pd.DataFrame, profiles: dict, cfg: dict, tick: float) -
             types.append("Neutral Center" if lo_c <= close_pos[i] <= hi_c else "Neutral Extreme")
         elif one_side[i] and d.at[i, "dd_gap_ticks"] > 0:
             types.append("Double Distribution")
-        elif one_side[i] and rng[i] > dcfg["trend_range_vs_ib_min"] * ib[i] and trend_close[i]:
+        elif (one_side[i] and rng[i] > dcfg["trend_range_vs_ib_min"] * ib[i]
+              and trend_close[i] and elongated[i]):
             types.append("Trend")
         elif one_side[i]:
             types.append("Normal Variation")
         elif not np.isnan(avg_rng[i]) and rng[i] < dcfg["non_trend_range_vs_avg_max"] * avg_rng[i]:
             types.append("Non-trend")
-        elif ib[i] >= dcfg["normal_ib_share_of_range_min"] * rng[i]:
-            types.append("Normal")
         else:
-            types.append("Unclassified")
+            types.append("Normal")
     d["day_type"] = types
     d["re_direction"] = np.select([re_up & re_dn, re_up, re_dn], ["both", "up", "down"], "none")
     d["range_vs_ib"] = rng / ib.replace(0, np.nan)
