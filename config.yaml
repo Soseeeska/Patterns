@@ -86,7 +86,15 @@ profile_shape:
 
 stats:
   min_events_per_cell: 30          # меньше — помечать ячейку как ненадёжную
-  baseline: [all_days, random_levels]
-  random_levels_per_day: 3
+  baseline: [all_days, placebo_zones]
+  placebo:                         # фальш-зоны: уровни композита сдвинуты на ±U(lo, hi) ширин VA
+    runs: 20
+    shift_va_widths: [1.0, 3.0]
+    min_va_width_ticks: 8
+    seed: 0
+  sensitivity:                     # пересчёт ключевых цифр при других порогах
+    balance.va_overlap_min: [0.3, 0.5]
+    interaction.touch_tolerance_ticks: [0, 2, 4]
+    interaction.acceptance.periods_beyond: [2, 3]
   split_by: [instrument, year]
   holdout_from: "2024-01-01"       # калибровка до даты, проверка после
