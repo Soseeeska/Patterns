@@ -122,6 +122,15 @@ zone_align:                        # подгонка границ первор�
   max_width_points: 10.0
   placebo_runs: 10
 
+day_context:                       # сегодня против вчера + карта зон (scripts/day_context.py)
+  spike_min_ticks: 8               # спайк: последний период (M) вышел за экстремум A–L на ≥ 2 п.
+  long_tail_ticks: 20              # хвост ≥ 5 п. — «длинный», короче — «короткий»
+  grey_min_ticks: 8                # серая зона: незаполненные single prints прошлого дня, ≥ 2 п.
+  ib_width_bands: [0.75, 1.25]     # IB уже 0.75 среднего — узкий, шире 1.25 — широкий (среднее за 20 дней)
+  zone_tolerance_ticks: 2          # касание / остановка у края зоны ± 2 тика
+  split_date: "2025-01-01"         # поиск закономерностей — до, проверка — после
+  placebo_runs: 20
+
 day_type:
   avg_range_lookback_days: 20
   # Расширение диапазона (RE) засчитывается, если выход за IB > этой доли IB.
