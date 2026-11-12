@@ -143,11 +143,13 @@ def build_panel(bars, daily, cfg, tick, zmap, cls_tab, local_only=False):
 
 def design(df, cols):
     X = df[cols].copy()
+    X["ib_w"] = X["ib_w"].fillna(1.0)
+    cat = [c for c in X.columns
+           if c == "k" or not (pd.api.types.is_numeric_dtype(X[c]) or pd.api.types.is_bool_dtype(X[c]))]
     for c in X.columns:
-        if X[c].dtype == bool:
+        if c not in cat:
             X[c] = X[c].astype(float)
-    X["ib_w"] = X["ib_w"].fillna(1.0) if "ib_w" in X else None
-    X = pd.get_dummies(X, columns=[c for c in X.columns if X[c].dtype == object or c == "k"], dtype=float)
+    X = pd.get_dummies(X.astype({c: str for c in cat}), columns=cat, dtype=float)
     return X.fillna(0.0)
 
 
