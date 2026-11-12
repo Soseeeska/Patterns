@@ -17,6 +17,9 @@ import sys
 import numpy as np
 import pandas as pd
 
+from scripts.hvn_va_stats import per_day
+from scripts.primary_zones import placebo as primary_placebo
+from scripts.primary_zones import zone_frame
 from scripts.stage1_profiles import load_adjusted
 from tpo.balance import find_balances
 from tpo.data import ROOT, load_config
@@ -68,7 +71,26 @@ def zone_features(base: pd.DataFrame, comps: pd.DataFrame, min_days: int, tick: 
         confl = bool((np.abs(levels - r.range_level) <= tol).any())
         in_va = bool(((val[m] <= r.open) & (r.open <= vah[m])).any())
         out.append({"obstacle": obstacle > 0, "n_obstacles": obstacle,
-                    "confluence": confl, "open_in_comp_va": in_va})
+                    "confluence": confl, "open_inside": in_va})
+    return pd.DataFrame(out, index=base.index)
+
+
+def band_features(base: pd.DataFrame, zones: pd.DataFrame, tick: float) -> pd.DataFrame:
+    """То же для первичных HVN-зон (полосы lo–hi), доступных в день открытия."""
+    av = zones.available_from.to_numpy(dtype="datetime64[ns]")
+    zlo, zhi = zones.lo.to_numpy(), zones.hi.to_numpy()
+    tol = CONFLUENCE_TICKS * tick
+    out = []
+    for r in base.itertuples():
+        m = av <= np.datetime64(r.date)
+        lo_, hi_ = zlo[m], zhi[m]
+        lo, hi = sorted((r.open, r.range_level))
+        # полоса целиком строго между open и границей прошлого дня
+        obstacle = int(((lo_ > lo + tick) & (hi_ < hi - tick)).sum())
+        confl = bool(((lo_ - tol <= r.range_level) & (r.range_level <= hi_ + tol)).any())
+        inside = bool(((lo_ <= r.open) & (r.open <= hi_)).any())
+        out.append({"obstacle": obstacle > 0, "n_obstacles": obstacle,
+                    "confluence": confl, "open_inside": inside})
     return pd.DataFrame(out, index=base.index)
 
 
@@ -81,36 +103,15 @@ def rates(df: pd.DataFrame) -> dict:
     return res
 
 
-FEATURES = ["obstacle", "confluence", "open_in_comp_va"]
+FEATURES = ["obstacle", "confluence", "open_inside"]
 
 
 def split_rates(df: pd.DataFrame, feat: str) -> dict:
     return {flag: rates(df[df[feat] == flag]) for flag in (True, False)}
 
 
-def main(instrument: str = "ES") -> None:
-    cfg = load_config()
-    out = ROOT / "output"
-    out.mkdir(exist_ok=True)
-    bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
-    comps, _ = find_balances(bars, daily, profiles, cfg, tick)
-    min_days = cfg["zones"].get("min_composite_days", 0)
-
-    base = base_table(bars, daily)
-    real = pd.concat([base, zone_features(base, comps, min_days, tick)], axis=1)
-    real.to_csv(out / f"{instrument}_outside_open.csv", index=False, float_format="%.2f")
-
-    pc = cfg["stats"]["placebo"]
-    rng = np.random.default_rng(pc["seed"])
-    placebo = [pd.concat([base, zone_features(base, placebo_comps(comps, rng, cfg, tick), min_days, tick)],
-                         axis=1) for _ in range(pc["runs"])]
-
-    print(f"{instrument}: открытий вне диапазона {len(real)} "
-          f"(выше {int((real.side == 'above').sum())}, ниже {int((real.side == 'below').sum())})")
-    b = rates(real)
-    print("База: " + "  ".join(f"{t}: A {b[t+'_A']:.1%} / 1ч {b[t+'_1h']:.1%} / день {b[t+'_day']:.1%}"
-                               for t in TARGETS))
-
+def combo(real: pd.DataFrame, placebo: list[pd.DataFrame]) -> pd.DataFrame:
+    """Доли возврата с признаком и без, разница против разброса фальш-зон."""
     rows = []
     gap_q = pd.qcut(real.gap, 3, labels=["малый", "средний", "большой"])
     subsets = {"все": slice(None), "выше": real.side == "above", "ниже": real.side == "below"}
@@ -144,11 +145,54 @@ def main(instrument: str = "ES") -> None:
     res = pd.DataFrame(rows)
     res["edge"] = np.where(res.diff_real > res.diff_placebo_hi, "выше фона",
                            np.where(res.diff_real < res.diff_placebo_lo, "ниже фона", "как фон"))
+    return res
+
+
+def main(instrument: str = "ES") -> None:
+    cfg = load_config()
+    out = ROOT / "output"
+    out.mkdir(exist_ok=True)
+    bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
+    comps, _ = find_balances(bars, daily, profiles, cfg, tick)
+    min_days = cfg["zones"].get("min_composite_days", 0)
+
+    base = base_table(bars, daily)
+    pc = cfg["stats"]["placebo"]
+    rng = np.random.default_rng(pc["seed"])
+    real_c = pd.concat([base, zone_features(base, comps, min_days, tick)], axis=1)
+    plac_c = [pd.concat([base, zone_features(base, placebo_comps(comps, rng, cfg, tick), min_days, tick)],
+                        axis=1) for _ in range(pc["runs"])]
+
+    zc, pz = cfg["hvn_zones"], cfg["primary_zones"]
+    hd = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
+    hd["ok"] = hd.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
+    zones = zone_frame(hd, daily, cfg, tick)
+    zones = zones[zones.available_from.notna()]
+    real_p = pd.concat([base, band_features(base, zones, tick)], axis=1)
+    rng2 = np.random.default_rng(42)
+    plac_p = [pd.concat([base, band_features(base, primary_placebo(zones, rng2, pz, tick, False), tick)],
+                        axis=1) for _ in range(pz["placebo_runs"])]
+
+    keep = ["obstacle", "n_obstacles", "confluence", "open_inside"]
+    real_c.join(real_p[keep].add_prefix("hvn_")).to_csv(
+        out / f"{instrument}_outside_open.csv", index=False, float_format="%.2f")
+    frames = []
+    for src, real, placebo in [("композиты", real_c, plac_c), ("первичные HVN", real_p, plac_p)]:
+        frames.append(combo(real, placebo).assign(source=src))
+    res = pd.concat(frames)
     res.to_csv(out / f"{instrument}_outside_open_combo.csv", index=False, float_format="%.4f")
+    real = real_c
+
+    print(f"{instrument}: открытий вне диапазона {len(real)} "
+          f"(выше {int((real.side == 'above').sum())}, ниже {int((real.side == 'below').sum())})")
+    b = rates(real)
+    print("База: " + "  ".join(f"{t}: A {b[t+'_A']:.1%} / 1ч {b[t+'_1h']:.1%} / день {b[t+'_day']:.1%}"
+                               for t in TARGETS))
+
 
     pd.set_option("display.width", 250)
     show = res[(res.flag) & (res.window == "day")]
-    print(show[["subset", "feature", "target", "n", "real", "diff_real", "diff_placebo",
+    print(show[["source", "subset", "feature", "target", "n", "real", "diff_real", "diff_placebo",
                 "diff_placebo_lo", "diff_placebo_hi", "edge"]].round(3).to_string(index=False))
 
 
