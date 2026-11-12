@@ -76,6 +76,14 @@ intraday:                          # этап 6: реакция на зоны п
   reaction_bars_after: 2           # реакция меряется до конца теста + 2 бара
   placebo_min_dist_ticks: 8        # фальш-зона не ближе 8 тиков к любому реальному VAH/VAL/POC
 
+hvn_zones:                         # зоны из дневных HVN (scripts/hvn_zones.py)
+  min_tpo: 8                       # берём дни, где HVN в VA = 8..10 TPO в строке
+  max_tpo: 10
+  # зона дня = HVN-полоса вокруг POC (строки ≥ intraday.hvn_share × максимум)
+  merge_overlap_min: 0.50          # доля пересечения от более узкой зоны
+  merge_max_width_points: 10.0     # склейка только если итоговая зона ≤ 10 п.
+  # зона доступна со следующего дня после дня, в котором она построена
+
 day_type:
   avg_range_lookback_days: 20
   # Расширение диапазона (RE) засчитывается, если выход за IB > этой доли IB.
