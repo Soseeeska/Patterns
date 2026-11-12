@@ -4,6 +4,18 @@
 data:
   instruments:
     ES: {file: data/ES_30m_RTH.csv, tick_size: 0.25}
+    ES_ETH:                        # та же выгрузка ESZ6, полная сессия Globex (ETH + RTH);
+                                   # используется только как бары для тестов зон, профили — по RTH
+      file: data/ES_30m_ETH.csv
+      tick_size: 0.25
+      overrides:                   # накладываются поверх общих параметров (load_config(instrument=...))
+        data:
+          rth_start: "17:00"       # сессия 17:00–16:00 CT, дата — по дню закрытия
+          rth_end: "16:00"
+          expected_periods_per_day: 46
+          min_periods_full_day: 46
+        roll:
+          min_volume_ratio: 1.3      # ночной объём размывает скачок: 2026-03-17 даёт 1.34
   source_timezone: Europe/Berlin   # таймзона timestamp в выгрузке (15:30 = 09:30 ET)
   timezone: America/Chicago        # во что переводим для расчётов
   timestamp_is_bar_start: true     # timestamp = начало 30-минутного бара
@@ -15,6 +27,7 @@ data:
 
 roll:
   rule: tuesday_before_third_friday   # день, когда выгрузка переходит на новый контракт
+  switch_time_ct: "15:00"             # переход — в понедельник накануне в 15:00 CT (виден по гэпу в ETH)
   min_volume_ratio: 1.4               # проверка: объём в день ролла / объём накануне
   days_to_next_expiry: 91
   # Ожидаемая ставка ФРС на квартал после ролла, % (по ролловерам Mar/Jun/Sep/Dec).

@@ -1,7 +1,7 @@
-"""Тепловая карта HVN-пиков 8–10 принтов, продлённых вправо до конца данных.
+"""Тепловая карта HVN-пиков [min_tpo, max_tpo] принтов (RTH: 8–10), продлённых вправо до конца данных.
 
-Для каждого полного дня, где максимум TPO внутри VA = 8–10, берутся строки
-внутри VA с TPO ≥ 8 (сам пик). Со следующего дня каждая такая строка
+Для каждого полного дня, где максимум TPO внутри VA в [min_tpo, max_tpo], берутся строки
+внутри VA с TPO ≥ min_tpo (сам пик). Со следующего дня каждая такая строка
 «горит» бесконечно вправо. Плотность в день t на цене p — сколько пиков,
 появившихся до t, покрывают корзину p (корзина = bin_points пунктов).
 
@@ -23,6 +23,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from scripts.stage1_profiles import load_adjusted
 from tpo.data import ROOT, load_config
+from tpo.plot import bars_on_days
 
 INK, MUTED, SURFACE = "#0b0b0b", "#52514e", "#fcfcfb"
 CMAP = LinearSegmentedColormap.from_list("heat", ["#fde9d3", "#f6a35c", "#d95926", "#8c2a0c", "#3d1003"])
@@ -58,7 +59,7 @@ def density(daily, peaks, bin_pts):
     return edges, np.cumsum(inc, axis=0)
 
 
-def draw(ax, prof_ax, daily, edges, dens, i0, title):
+def draw(ax, prof_ax, daily, bars, periods, edges, dens, i0, title):
     win = daily.iloc[i0:]
     D = dens[i0:].T.astype(float)
     lo, hi = win.low.min() - 20, win.high.max() + 20
@@ -69,8 +70,8 @@ def draw(ax, prof_ax, daily, edges, dens, i0, title):
     vmax = np.nanpercentile(D, 99.5) if np.isfinite(D).any() else 1
     x = np.arange(len(win) + 1) - 0.5
     m = ax.pcolormesh(x, e, D, cmap=CMAP, vmin=1, vmax=vmax, shading="flat", rasterized=True)
-    ax.plot(np.arange(len(win)), win.close, color=INK, lw=0.7)
-    ax.vlines(np.arange(len(win)), win.low, win.high, color=INK, lw=0.4, alpha=0.35)
+    bars_on_days(ax, bars, list(win.date), periods, color=INK, lw=0.3 if len(win) > 400 else 0.5,
+                 alpha=0.6)
     ax.set_ylim(lo, hi)
     ax.set_xlim(-0.5, len(win) - 0.5)
     step = max(len(win) // 8, 1)
@@ -96,10 +97,11 @@ def draw(ax, prof_ax, daily, edges, dens, i0, title):
 
 
 def main(instrument: str = "ES", bin_points: str = "1", zoom_days: str = "250") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     zc = cfg["hvn_zones"]
     bin_pts, zoom = float(bin_points), int(zoom_days)
-    _, daily, profiles, _, tick = load_adjusted(instrument, cfg)
+    bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
+    periods = cfg["data"]["expected_periods_per_day"]
     daily = daily.sort_values("date").reset_index(drop=True)
     peaks = peak_rows(daily, profiles, tick, zc["min_tpo"], zc["max_tpo"])
     edges, dens = density(daily, peaks, bin_pts)
@@ -113,17 +115,17 @@ def main(instrument: str = "ES", bin_points: str = "1", zoom_days: str = "250") 
                                                                    "wspace": 0.03})
     fig.subplots_adjust(top=0.9, bottom=0.08, left=0.05, right=0.98)
     fig.patch.set_facecolor(SURFACE)
-    m = draw(axes[0, 0], axes[0, 1], daily, edges, dens, 0,
-             f"Вся история: {len(peaks)} пиков 8–10 TPO, продлены вправо")
-    draw(axes[1, 0], axes[1, 1], daily, edges, dens, max(len(daily) - zoom, 0),
+    m = draw(axes[0, 0], axes[0, 1], daily, bars, periods, edges, dens, 0,
+             f"Вся история: {len(peaks)} пиков {zc['min_tpo']}–{zc['max_tpo']} TPO, продлены вправо")
+    draw(axes[1, 0], axes[1, 1], daily, bars, periods, edges, dens, max(len(daily) - zoom, 0),
          f"Последние {zoom} дней")
     cb = fig.colorbar(m, cax=fig.add_axes([0.62, 0.935, 0.25, 0.01]), orientation="horizontal")
     cb.set_label("сколько пиков на цене", fontsize=8, color=MUTED)
     cb.ax.tick_params(labelsize=7, colors=MUTED)
-    fig.suptitle(f"{instrument}: плотность HVN-пиков 8–10 принтов (строки внутри VA с TPO ≥ {zc['min_tpo']}), "
+    fig.suptitle(f"{instrument}: плотность HVN-пиков {zc['min_tpo']}–{zc['max_tpo']} принтов (строки внутри VA с TPO ≥ {zc['min_tpo']}), "
                  f"корзина {bin_pts:g} п.", x=0.01, ha="left", y=0.955, fontsize=11, color=INK)
-    fig.text(0.01, 0.035, "Каждый пик начинает гореть со следующего дня и не гаснет. Чёрная линия — close, "
-             "штрихи — дневной диапазон. Цены back-adjusted (ESZ6). Справа — плотность на последний день; "
+    fig.text(0.01, 0.035, "Каждый пик начинает гореть со следующего дня и не гаснет. Чёрные штрихи — 30m-бары "
+             "(high–low). Цены back-adjusted (ESZ6). Справа — плотность на последний день; "
              "пунктир — последний close.", fontsize=7, color=MUTED)
     fig.savefig(out / f"{instrument}_hvn_heatmap.png", dpi=140, facecolor=SURFACE, bbox_inches="tight")
     plt.close(fig)

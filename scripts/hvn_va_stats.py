@@ -61,7 +61,7 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     _, daily, profiles, _, tick = load_adjusted(instrument, cfg)

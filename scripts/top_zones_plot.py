@@ -2,12 +2,12 @@
 
 Берёт тесты из output/<INSTR>_zone_wicks_tests.csv (сначала scripts.zone_wicks),
 считает тесты за последние N торговых дней и рисует top-K зон:
-  1) обзор — дневные бары и зоны;
+  1) обзор — 30m-бары (штрихи high–low) и зоны;
   2) по каждой зоне — 30m-свечи только тех дней, когда зона тестировалась
      (дни склеены подряд, между днями — тонкий разделитель); отмечены начала
      тестов: удержание / пробой, и хвосты через границу зоны.
 
-Запуск:  python -m scripts.top_zones_plot [ES] [days] [top]
+Запуск:  python -m scripts.top_zones_plot [ES] [days] [top] [бары: ES_ETH]
 Результат: output/<INSTR>_top_zones_overview.png, output/<INSTR>_top_zones_30m.png
 """
 from __future__ import annotations
@@ -22,8 +22,9 @@ import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
 
-from scripts.stage1_profiles import load_adjusted
+from scripts.stage1_profiles import load_adjusted, load_test_bars, tag
 from tpo.data import ROOT, load_config
+from tpo.plot import bars_on_days
 from tpo.wicks import BOUNDARY, wick_positions
 
 INK, MUTED, SURFACE, GRID = "#0b0b0b", "#52514e", "#fcfcfb", "#e4e3df"
@@ -49,15 +50,21 @@ def candles(ax, x, o, h, l, c, w=0.6):
     ax.bar(x[~up], (o - c)[~up], bottom=c[~up], width=w, color="#3d3c39", edgecolor="#3d3c39", lw=0.6, zorder=3)
 
 
-def main(instrument: str = "ES", days: str = "200", top: str = "6") -> None:
-    cfg = load_config()
+def main(instrument: str = "ES", days: str = "200", top: str = "6", bars_instrument: str | None = None) -> None:
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     n_days, k = int(days), int(top)
-    bars, daily, _, _, tick = load_adjusted(instrument, cfg)
-    daily = daily.sort_values("date").reset_index(drop=True)
+    bars, _, _, _, tick = load_adjusted(instrument, cfg)
+    periods = cfg["data"]["expected_periods_per_day"]
+    if bars_instrument and bars_instrument != instrument:
+        bars, periods = load_test_bars(bars_instrument)
+    name = tag(instrument, bars_instrument, None)
+    # «дни» — сессии тех баров, на которых шли тесты
+    daily = (bars.groupby("date").agg(open=("open", "first"), high=("high", "max"), low=("low", "min"),
+                                      close=("close", "last")).reset_index())
     start = daily.date.iloc[-n_days]
-    tests = pd.read_csv(out / f"{instrument}_zone_wicks_tests.csv", parse_dates=["date"])
-    zones = pd.read_csv(out / f"{instrument}_zone_wicks_zones.csv", parse_dates=["available_from"]).set_index("zone_id")
+    tests = pd.read_csv(out / f"{name}_zone_wicks_tests.csv", parse_dates=["date"])
+    zones = pd.read_csv(out / f"{name}_zone_wicks_zones.csv", parse_dates=["available_from"]).set_index("zone_id")
     r = tests[tests.date >= start]
     g = r.groupby("zone_id").agg(n=("outcome", "size"), hold=("outcome", lambda s: (s == "hold").mean()),
                                  test_days=("date", "nunique"))
@@ -70,8 +77,8 @@ def main(instrument: str = "ES", days: str = "200", top: str = "6") -> None:
     pos = {d: i for i, d in enumerate(win.date)}
     fig, ax = plt.subplots(figsize=(14, 7.5))
     fig.patch.set_facecolor(SURFACE)
-    candles(ax, np.arange(len(win)), win.open.to_numpy(), win.high.to_numpy(), win.low.to_numpy(),
-            win.close.to_numpy(), w=0.7)
+    bars_on_days(ax, bars, list(win.date), periods, color=MUTED, lw=0.35,
+                 alpha=0.8)
     lo = min(win.low.min(), sel.lo.min()) - 20
     hi = max(win.high.max(), sel.hi.max()) + 20
     gap = (hi - lo) * 0.035
@@ -97,12 +104,13 @@ def main(instrument: str = "ES", days: str = "200", top: str = "6") -> None:
     t = list(range(0, len(win), max(len(win) // 10, 1)))
     ax.set_xticks(t, [f"{win.date[i]:%d.%m.%y}" for i in t])
     _clean(ax)
-    ax.set_title(f"{instrument}: {k} самых тестируемых первородных зон за последние {n_days} дней "
+    ax.set_title(f"{name}: {k} самых тестируемых первородных зон за последние {n_days} дней "
                  f"(тесты 30m, правило этапа 6)", fontsize=10, loc="left", color=INK)
-    fig.text(0.01, 0.01, "Зона закрашена с дня, когда стала доступна. Цены back-adjusted (ESZ6).",
+    fig.text(0.01, 0.01, "Серые штрихи — 30m-бары (high–low). Зона закрашена с дня, когда стала доступна. "
+             "Цены back-adjusted (ESZ6).",
              fontsize=7, color=MUTED)
     fig.tight_layout(rect=(0, 0.02, 0.82, 1))
-    fig.savefig(out / f"{instrument}_top_zones_overview.png", dpi=150, facecolor=SURFACE)
+    fig.savefig(out / f"{name}_top_zones_overview.png", dpi=150, facecolor=SURFACE)
     plt.close(fig)
 
     # 2) 30m по каждой зоне
@@ -151,7 +159,7 @@ def main(instrument: str = "ES", days: str = "200", top: str = "6") -> None:
     fig.suptitle(f"30m-свечи только в дни тестов (дни склеены подряд), последние {n_days} дней",
                  x=0.01, ha="left", fontsize=11, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.965))
-    fig.savefig(out / f"{instrument}_top_zones_30m.png", dpi=140, facecolor=SURFACE)
+    fig.savefig(out / f"{name}_top_zones_30m.png", dpi=140, facecolor=SURFACE)
     plt.close(fig)
     print(sel.to_string())
 

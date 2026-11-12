@@ -9,7 +9,7 @@
     удержание).
 Для каждого варианта — фальш-зоны со сдвигом на 1.5–3 ширины.
 
-Запуск:  python -m scripts.primary_zones_variants [ES]
+Запуск:  python -m scripts.primary_zones_variants [ES] [бары для 30m-тестов: ES_ETH] [с даты]
 Результат: output/<INSTR>_primary_variants.csv,
            output/<INSTR>_primary_zones_<вариант>.csv
 """
@@ -22,7 +22,7 @@ import pandas as pd
 
 from scripts.hvn_va_stats import per_day
 from scripts.primary_zones import placebo, raw_confirmations, zone_frame
-from scripts.stage1_profiles import load_adjusted
+from scripts.stage1_profiles import align_zones, load_adjusted, load_test_bars, tag
 from tpo.data import ROOT, load_config
 from tpo.intraday import run_tests
 from tpo.primary_zones import zone_tests
@@ -59,8 +59,8 @@ def fmt(v, p):
     return f"{v:.1%} [{p.mean():.1%}]{mark}"
 
 
-def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+def main(instrument: str = "ES", bars_instrument: str | None = None, since: str | None = None) -> None:
+    cfg = load_config(instrument=instrument)
     zc, pc = cfg["hvn_zones"], cfg["primary_zones"]
     cc = pc["clean_day"]
     ov = zc["merge_overlap_min"]
@@ -77,6 +77,10 @@ def main(instrument: str = "ES") -> None:
           f"поздних TPO ≤ {cc['late_share_max']:.0%}: {(days.qual & (days.late_share <= cc['late_share_max'])).sum()})\n")
 
     tol = cfg["interaction"]["touch_tolerance_ticks"] * tick
+    # 30m-тесты — на барах bars_instrument (например, ETH); профили, зоны и дневные тесты — по RTH
+    tbars = load_test_bars(bars_instrument or instrument, since)[0] if (bars_instrument or since) else bars
+    on = (lambda zz: align_zones(zz, tbars)) if (bars_instrument or since) else (lambda zz: zz)
+    ftag = tag(instrument, bars_instrument, since)
     rows = []
     for leave_by in ("hvn", "va"):
         for which in ("все", "чистые"):
@@ -85,15 +89,15 @@ def main(instrument: str = "ES") -> None:
             z = zone_frame(d, daily, cfg, tick, leave_by)
             fz = z[z.available_from.notna()].copy()
             name = f"уход по {leave_by.upper()}, дни {which}"
-            tag = f"{leave_by}_{'all' if which == 'все' else 'clean'}"
+            vtag = f"{leave_by}_{'all' if which == 'все' else 'clean'}"
             zs = z.copy()
             zs["conf_dates"] = zs.conf_dates.map(lambda xs: " ".join(f"{x:%Y-%m-%d}" for x in xs))
-            zs.to_csv(out / f"{instrument}_primary_zones_{tag}.csv", index=False, float_format="%.2f")
+            zs.to_csv(out / f"{ftag}_primary_zones_{vtag}.csv", index=False, float_format="%.2f")
 
             qual = d[d.ok]
             real_conf = np.mean([len(x) > 0 for x in raw_confirmations(fz, qual, ov, tick)])
             td = zone_tests(daily, fz, tol)
-            t30 = run_tests(bars, bands_for_30m(fz), cfg, tick)
+            t30 = run_tests(tbars, bands_for_30m(on(fz)), cfg, tick)
             rng = np.random.default_rng(42)
             pconf, pday, p30h, p30r, p30f = [], [], [], [], []
             for r in range(pc["placebo_runs"]):
@@ -101,7 +105,7 @@ def main(instrument: str = "ES") -> None:
                 pconf.append(np.mean([len(x) > 0 for x in raw_confirmations(pz, qual, ov, tick)]))
                 pday.append((zone_tests(daily, pz, tol).result == "hold").mean())
                 if r < pc["placebo_runs_30m"]:
-                    pt = run_tests(bars, bands_for_30m(pz), cfg, tick)
+                    pt = run_tests(tbars, bands_for_30m(on(pz)), cfg, tick)
                     s = m30(pt)
                     p30h.append(s["hold"])
                     pf = pt[(pt.test_no == 1) & (pt.flips_before == 0)]
@@ -127,7 +131,7 @@ def main(instrument: str = "ES") -> None:
             rows.append(row)
             print(name, "— готово")
     res = pd.DataFrame(rows)
-    res.to_csv(out / f"{instrument}_primary_variants.csv", index=False)
+    res.to_csv(out / f"{ftag}_primary_variants.csv", index=False)
     pd.set_option("display.width", 250)
     pd.set_option("display.max_columns", 30)
     print("\n[в скобках — среднее у фальш-зон; ↑/↓ — вне 5–95% фальш-прогонов]\n")

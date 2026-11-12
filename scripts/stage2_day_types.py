@@ -18,7 +18,7 @@ from tpo.plot import draw_days
 
 
 def main(instrument: str = "ES", n_sample: str = "30", seed: str = "7") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)

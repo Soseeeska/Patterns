@@ -43,7 +43,7 @@ def pick(ev: pd.DataFrame, cond: dict, used: set) -> pd.Series:
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     bars, days, comps, ev, tick = build_all(instrument, cfg)
     ev = ev[~ev.breakout_day]
     full = days[days.day_type != "Short"].reset_index(drop=True)

@@ -24,7 +24,7 @@ def load_adjusted(instrument: str, cfg: dict):
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     bars, daily, _, rolls, tick = load_adjusted(instrument, cfg)
@@ -51,3 +51,42 @@ def main(instrument: str = "ES") -> None:
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
+
+
+def load_test_bars(bars_instrument: str, since: str | None = None):
+    """Back-adjusted 30m-бары другого набора (например, ES_ETH) — только для
+    тестов зон; профили и зоны при этом строятся по основному инструменту.
+    since — оставить бары с этой даты сессии (YYYY-MM-DD)."""
+    import pandas as pd
+    from tpo.data import load_config as _lc
+    cfg = _lc(instrument=bars_instrument)
+    tick = cfg["data"]["instruments"][bars_instrument]["tick_size"]
+    raw = load_bars(bars_instrument, cfg)
+    bars = back_adjust(raw, roll_table(raw, cfg, tick))
+    if since:
+        bars = bars[bars["date"] >= pd.Timestamp(since)].reset_index(drop=True)
+    return bars, cfg["data"]["expected_periods_per_day"]
+
+
+def align_zones(zones, bars):
+    """Сдвигает available_from на первую сессию в bars не раньше него (зоны,
+    ставшие доступны до начала bars, тестируются с начала bars); зоны,
+    доступные после конца bars, выбрасываются."""
+    import numpy as np
+    days = np.sort(bars["date"].unique())
+    z = zones.copy()
+    idx = np.searchsorted(days, z["available_from"].to_numpy(dtype="datetime64[ns]"))
+    keep = idx < len(days)
+    z = z[keep].copy()
+    z["available_from"] = days[idx[keep]]
+    return z
+
+
+def tag(instrument: str, bars_instrument: str | None, since: str | None) -> str:
+    """Имя для файлов результатов: ES, ES_x_ES_ETH, ES_since2023-07-13 ..."""
+    t = instrument
+    if bars_instrument and bars_instrument != instrument:
+        t += f"_x_{bars_instrument}"
+    if since:
+        t += f"_since{since}"
+    return t

@@ -31,7 +31,7 @@ def build_all(instrument: str, cfg: dict):
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     _, days, comps, ev, _ = build_all(instrument, cfg)

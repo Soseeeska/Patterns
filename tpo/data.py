@@ -9,9 +9,24 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def load_config(path: str | Path = ROOT / "config.yaml") -> dict:
+def _merge(base: dict, over: dict) -> dict:
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
+def load_config(path: str | Path = ROOT / "config.yaml", instrument: str | None = None) -> dict:
+    """С instrument — поверх общих параметров накладываются
+    data.instruments.<instrument>.overrides (например, сессия ETH)."""
     with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    if instrument:
+        over = cfg["data"]["instruments"][instrument].get("overrides") or {}
+        _merge(cfg, over)
+    return cfg
 
 
 def load_bars(instrument: str, cfg: dict) -> pd.DataFrame:
@@ -19,6 +34,9 @@ def load_bars(instrument: str, cfg: dict) -> pd.DataFrame:
 
     Формат файла: без заголовка, `YYYYMMDD HHMMSS,open,high,low,close,volume`,
     время — начало бара в часовом поясе `data.source_timezone`.
+    Сессия начинается в `data.rth_start` (CT). Если сессия переходит через
+    полночь (rth_start > rth_end, как у ETH 17:00–16:00), дата сессии —
+    следующий календарный день (конвенция Globex).
     """
     dcfg = cfg["data"]
     icfg = dcfg["instruments"][instrument]
@@ -30,12 +48,15 @@ def load_bars(instrument: str, cfg: dict) -> pd.DataFrame:
     ts = pd.to_datetime(df["ts"], format="%Y%m%d %H%M%S")
     ts = ts.dt.tz_localize(dcfg["source_timezone"]).dt.tz_convert(dcfg["timezone"])
     df["ts"] = ts
-    df["date"] = ts.dt.tz_localize(None).dt.normalize()
-
     start = pd.Timedelta(dcfg["rth_start"] + ":00")
-    tod = ts.dt.tz_localize(None) - df["date"]
+    end = pd.Timedelta(dcfg["rth_end"] + ":00")
+    local = ts.dt.tz_localize(None)
+    # сдвиг так, чтобы начало сессии стало началом суток её даты
+    shift = (pd.Timedelta(days=1) - start) if start > end else -start
+    shifted = local + shift
+    df["date"] = shifted.dt.normalize()
     period_min = cfg["tpo"]["period_minutes"]
-    offset = (tod - start) / pd.Timedelta(minutes=period_min)
+    offset = (shifted - df["date"]) / pd.Timedelta(minutes=period_min)
     bad = (offset % 1 != 0) | (offset < 0)
     if bad.any():
         raise ValueError(

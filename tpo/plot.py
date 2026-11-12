@@ -10,8 +10,10 @@ import numpy as np
 CMAP = plt.get_cmap("viridis", 13)
 
 
-def draw_day(ax, g, d, tick: float, title: str = "") -> None:
-    """g — бары одного дня, d — строка дневной таблицы."""
+def draw_day(ax, g, d, tick: float, title: str = "", periods: int = 13) -> None:
+    """g — бары одного дня, d — строка дневной таблицы; periods — число
+    периодов сессии (13 для RTH, 46 для ETH) — для цвета и ширины."""
+    cmap = plt.get_cmap("viridis", periods)
     filled: dict[int, int] = {}
     xs, ys, cs = [], [], []
     for _, r in g.sort_values("period").iterrows():
@@ -21,7 +23,7 @@ def draw_day(ax, g, d, tick: float, title: str = "") -> None:
             xs.append(x)
             ys.append(t * tick)
             cs.append(int(r.period))
-    ax.barh(ys, 1, left=xs, height=tick, color=CMAP(cs), edgecolor="none", align="center")
+    ax.barh(ys, 1, left=xs, height=tick, color=cmap(cs), edgecolor="none", align="center")
     for lvl, color, name in [(d.vah, "tab:blue", "VAH"), (d.val, "tab:blue", "VAL"),
                              (d.poc, "tab:red", "POC")]:
         ax.axhline(lvl, color=color, lw=0.8, alpha=0.7)
@@ -30,7 +32,7 @@ def draw_day(ax, g, d, tick: float, title: str = "") -> None:
     ax.plot([-0.6, -0.6], [d.ib_low, d.ib_high], color="k", lw=2.5)
     ax.plot([-0.6], [d.close], marker="<", color="tab:red", ms=5)
     ax.set_ylim(d.low - 3 * tick, d.high + 3 * tick)
-    ax.set_xlim(-1, 13)
+    ax.set_xlim(-1, max(13, max(filled.values()) + 2))
     ax.set_xticks([])
     ax.tick_params(labelsize=6)
     ax.set_title(title, fontsize=8)
@@ -54,3 +56,12 @@ def draw_days(bars, daily, dates, tick, path, titles=None, ncols=5, header=""):
     fig.tight_layout()
     fig.savefig(path, dpi=130)
     plt.close(fig)
+
+
+def bars_on_days(ax, bars, dates, periods: int, color="#0b0b0b", lw=0.35, alpha=0.55) -> None:
+    """30m-бары поверх оси, где x — номер дня в dates: бар периода p дня i
+    рисуется отрезком low–high на x = i − 0.5 + (p + 0.5) / periods."""
+    pos = {d: i for i, d in enumerate(dates)}
+    b = bars[bars["date"].isin(pos)]
+    x = b["date"].map(pos).to_numpy() - 0.5 + (b["period"].to_numpy() + 0.5) / periods
+    ax.vlines(x, b["low"].to_numpy(), b["high"].to_numpy(), color=color, lw=lw, alpha=alpha, zorder=2)

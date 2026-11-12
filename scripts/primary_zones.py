@@ -98,7 +98,7 @@ def zone_frame(days: pd.DataFrame, daily: pd.DataFrame, cfg: dict, tick: float,
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     zc, pc = cfg["hvn_zones"], cfg["primary_zones"]
     ov = zc["merge_overlap_min"]
     out = ROOT / "output"

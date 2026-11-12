@@ -22,7 +22,7 @@ from tpo.hvn_zones import Zone, merge_zones, zone_clusters, zone_roles
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     zc = cfg["hvn_zones"]
     out = ROOT / "output"
     out.mkdir(exist_ok=True)

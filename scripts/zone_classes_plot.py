@@ -4,7 +4,7 @@
 close (полоса с дня доступности зоны). Справа — из чего сложился класс:
 доли лонг-отторжений, шорт-отторжений и проторговки по каждой зоне.
 
-Запуск:  python -m scripts.zone_classes_plot [ES] [days] [range_points]
+Запуск:  python -m scripts.zone_classes_plot [ES] [days] [range_points] [бары: ES_ETH]
          (сначала python -m scripts.zone_classes)
 Результат: output/<INSTR>_zone_classes.png
 """
@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.patches import Patch
 
-from scripts.stage1_profiles import load_adjusted
+from scripts.stage1_profiles import load_adjusted, load_test_bars, tag
 from scripts.top_zones_plot import INK, MUTED, SURFACE, _clean, candles
 from tpo.data import ROOT, load_config
 from tpo.zone_classes import RANGE, RESISTANCE, SUPPORT
@@ -28,15 +28,20 @@ from tpo.zone_classes import RANGE, RESISTANCE, SUPPORT
 COLOR = {SUPPORT: "#008300", RESISTANCE: "#e34948", RANGE: "#8a8984"}
 
 
-def main(instrument: str = "ES", days: str = "30", rng_pts: str = "150") -> None:
-    cfg = load_config()
+def main(instrument: str = "ES", days: str = "30", rng_pts: str = "150", bars_instrument: str | None = None) -> None:
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     n_days, R = int(days), float(rng_pts)
     bars, daily, _, _, _ = load_adjusted(instrument, cfg)
-    daily = daily.sort_values("date").reset_index(drop=True)
+    sess_name = "RTH"
+    if bars_instrument and bars_instrument != instrument:
+        bars, _ = load_test_bars(bars_instrument)
+        sess_name = "ETH+RTH"
+    ftag = tag(instrument, bars_instrument, None)
     bars = bars.sort_values("ts").reset_index(drop=True)
-    z = pd.read_csv(out / f"{instrument}_zone_classes_by_rejections.csv", parse_dates=["available_from"])
-    last = daily.close.iloc[-1]
+    daily = pd.DataFrame({"date": sorted(bars.date.unique())})        # сессии баров
+    z = pd.read_csv(out / f"{ftag}_zone_classes_by_rejections.csv", parse_dates=["available_from"])
+    last = bars.close.iloc[-1]
     z = z[(z.hi >= last - R) & (z.lo <= last + R)].sort_values("lo").reset_index(drop=True)
     first_day = daily.date.iloc[-n_days]
     win = bars[bars.date >= first_day].reset_index(drop=True)          # 30m-бары
@@ -66,7 +71,7 @@ def main(instrument: str = "ES", days: str = "30", rng_pts: str = "150") -> None
     t = day_start[::max(len(day_start) // 10, 1)]
     ax.set_xticks(t, [f"{win.date[i]:%d.%m}" for i in t])
     _clean(ax)
-    ax.set_title(f"30m-свечи RTH, последние {n_days} дней ({n} баров); зоны в ±{R:g} п. от close", fontsize=10, loc="left", color=INK)
+    ax.set_title(f"30m-свечи {sess_name}, последние {n_days} сессий ({n} баров); зоны в ±{R:g} п. от close", fontsize=10, loc="left", color=INK)
 
     # справа: состав взаимодействий
     y = np.arange(len(z))
@@ -93,15 +98,15 @@ def main(instrument: str = "ES", days: str = "30", rng_pts: str = "150") -> None
 
     handles = [Patch(color=COLOR[c], alpha=0.5, label=c) for c in (SUPPORT, RESISTANCE, RANGE)]
     fig.legend(handles=handles, loc="upper right", ncol=3, fontsize=8, frameon=False)
-    fig.suptitle(f"{instrument}: классы первородных зон по 30m-взаимодействиям "
+    fig.suptitle(f"{ftag}: классы первородных зон по 30m-взаимодействиям "
                  f"(≥ {share:.0%} отторжений в одну сторону — поддержка / сопротивление, иначе проторговка)",
                  x=0.01, ha="left", fontsize=11, color=INK)
     fig.text(0.01, 0.01, "Класс посчитан по всей жизни зоны, включая последние дни. Цены back-adjusted (ESZ6).",
              fontsize=7, color=MUTED)
     fig.subplots_adjust(left=0.05, right=0.9, top=0.9, bottom=0.12)
-    fig.savefig(out / f"{instrument}_zone_classes.png", dpi=140, facecolor=SURFACE)
+    fig.savefig(out / f"{ftag}_zone_classes.png", dpi=140, facecolor=SURFACE)
     plt.close(fig)
-    print(out / f"{instrument}_zone_classes.png")
+    print(out / f"{ftag}_zone_classes.png")
 
 
 if __name__ == "__main__":

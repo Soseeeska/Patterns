@@ -6,7 +6,7 @@
   * устойчивость: класс по первой половине взаимодействий зоны против
     класса по второй половине (зоны с ≥ 10 взаимодействиями).
 
-Запуск:  python -m scripts.zone_classes [ES]
+Запуск:  python -m scripts.zone_classes [ES] [бары: ES_ETH] [с даты: 2023-07-13]
 Два правила: большинство из трёх типов и «по отторжениям» (config.wicks.class_rejection_share).
 
 Результат: output/<INSTR>_zone_classes.csv, output/<INSTR>_zone_classes_by_rejections.csv
@@ -20,7 +20,7 @@ import pandas as pd
 
 from scripts.hvn_va_stats import per_day
 from scripts.primary_zones import placebo, zone_frame
-from scripts.stage1_profiles import load_adjusted
+from scripts.stage1_profiles import align_zones, load_adjusted, load_test_bars, tag
 from tpo.data import ROOT, load_config
 from tpo.zone_classes import RANGE, RESISTANCE, SUPPORT, classify, interaction_types
 
@@ -63,8 +63,8 @@ def stats(df: pd.DataFrame) -> dict:
     return out
 
 
-def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+def main(instrument: str = "ES", bars_instrument: str | None = None, since: str | None = None) -> None:
+    cfg = load_config(instrument=instrument)
     zc, pc = cfg["hvn_zones"], cfg["primary_zones"]
     out = ROOT / "output"
     bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
@@ -72,13 +72,17 @@ def main(instrument: str = "ES") -> None:
     days["ok"] = days.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
     z = zone_frame(days, daily, cfg, tick)
     fz = z[z.available_from.notna()].reset_index(drop=True)
+    if bars_instrument or since:          # зоны — по профилям instrument, бары для тестов — другие
+        bars, _ = load_test_bars(bars_instrument or instrument, since)
+        fz = align_zones(fz, bars).reset_index(drop=True)
+    name = tag(instrument, bars_instrument, since)
     mw = cfg["wicks"]["min_wick_ticks"] * tick
 
     share = cfg["wicks"]["class_rejection_share"]
     for title, sh, suffix in (("ПРАВИЛО 1: большинство из трёх типов", None, ""),
                               (f"ПРАВИЛО 2: по отторжениям (≥ {share:.0%} в одну сторону)", share, "_by_rejections")):
         print(f"\n===== {title} =====")
-        report(bars, daily, fz, mw, pc, tick, cfg, sh, out / f"{instrument}_zone_classes{suffix}.csv", instrument)
+        report(bars, daily, fz, mw, pc, tick, cfg, sh, out / f"{name}_zone_classes{suffix}.csv", name)
 
 
 def report(bars, daily, fz, mw, pc, tick, cfg, share, path, instrument):

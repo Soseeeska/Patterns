@@ -6,7 +6,7 @@
   спорный:    есть зоны «поддержка+сопротивление»; берутся самые свежие
               кластеры размером 5–6, 8–13 и ≥ 20 зон.
 
-Слева — дневные бары (back-adjusted) и зоны: полоса начинается в день, из
+Слева — 30m-бары (back-adjusted) и зоны: полоса начинается в день, из
 которого зона построена, и тянется вправо; точки — дни, вошедшие в зону.
 Справа — «лестница»: зоны кластера по цене, чтобы видеть перекрытия.
 
@@ -27,6 +27,7 @@ from matplotlib.patches import Patch, Rectangle
 from scripts.stage1_profiles import load_adjusted
 from tpo.data import ROOT, load_config
 from tpo.hvn_zones import BOTH, RANGE, RESISTANCE, SUPPORT
+from tpo.plot import bars_on_days
 
 STYLE = {  # цвет, штриховка, короткая подпись
     SUPPORT: ("#008300", None, "П"),
@@ -55,7 +56,8 @@ def pick(g: pd.DataFrame) -> tuple[list[int], list[int]]:
     return list(normal), disputed
 
 
-def draw_cluster(ax, lad, zc: pd.DataFrame, daily: pd.DataFrame, title: str) -> None:
+def draw_cluster(ax, lad, zc: pd.DataFrame, daily: pd.DataFrame, bars: pd.DataFrame, periods: int,
+                 title: str) -> None:
     dates = list(daily.date)
     pos = {d: i for i, d in enumerate(dates)}
     i0 = max(pos[zc.first_day.min()] - 10, 0)
@@ -65,8 +67,7 @@ def draw_cluster(ax, lad, zc: pd.DataFrame, daily: pd.DataFrame, title: str) -> 
     y0, y1 = zc.lo.min() - pad, zc.hi.max() + pad
     xs = range(len(win))
 
-    ax.vlines(xs, win.low, win.high, color=MUTED, lw=0.8, alpha=0.55, zorder=1)
-    ax.scatter(xs, win.close, s=4, color=MUTED, alpha=0.7, zorder=1, linewidths=0)
+    bars_on_days(ax, bars, list(win.date), periods, color=MUTED, lw=0.5, alpha=0.7)
     right = len(win) - 0.5
     for r in zc.sort_values("first_day").itertuples():
         color, hatch, short = STYLE[r.role]
@@ -121,7 +122,7 @@ def _clean(ax) -> None:
         ax.spines[s].set_color("#c9c8c2")
 
 
-def figure(clusters, z, g, daily, title, path) -> None:
+def figure(clusters, z, g, daily, bars, periods, title, path) -> None:
     fig, axes = plt.subplots(len(clusters), 2, figsize=(13, 3.6 * len(clusters)),
                              gridspec_kw={"width_ratios": [3.2, 1]}, squeeze=False)
     fig.patch.set_facecolor(SURFACE)
@@ -129,7 +130,7 @@ def figure(clusters, z, g, daily, title, path) -> None:
         c = g.loc[cid]
         zc = z[z.cluster_id == cid]
         roles = ", ".join(f"{STYLE[k][2]} {v}" for k, v in zc.role.value_counts().items())
-        draw_cluster(ax, lad, zc, daily,
+        draw_cluster(ax, lad, zc, daily, bars, periods,
                      f"Кластер {cid}: {c.n} {_zones_word(c.n)}, {c.lo:.2f}–{c.hi:.2f} ({c.hi - c.lo:.1f} п.), "
                      f"{c.d0:%d.%m.%Y}–{c.d1:%d.%m.%Y}  ·  {roles}")
     handles = [Patch(facecolor=STYLE[r][0], hatch=STYLE[r][1], edgecolor=SURFACE, label=r)
@@ -137,7 +138,7 @@ def figure(clusters, z, g, daily, title, path) -> None:
     fig.legend(handles=handles, loc="upper right", ncol=3, fontsize=8, frameon=False)
     fig.suptitle(title, x=0.01, ha="left", fontsize=11, color=INK)
     fig.text(0.01, 0.005, "Полоса зоны начинается в день, из которого она построена; точки — дни зоны. "
-             "Серые штрихи — дневной диапазон, точки — close. Цены back-adjusted (ESZ6).",
+             "Серые штрихи — 30m-бары (диапазон high–low). Цены back-adjusted (ESZ6).",
              fontsize=7, color=MUTED)
     fig.tight_layout(rect=(0, 0.015, 1, 0.97))
     fig.savefig(path, dpi=150, facecolor=SURFACE)
@@ -145,14 +146,15 @@ def figure(clusters, z, g, daily, title, path) -> None:
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     z = pd.read_csv(out / f"{instrument}_hvn_zones.csv", parse_dates=["first_day", "last_day"])
-    _, daily, _, _, _ = load_adjusted(instrument, cfg)
+    bars, daily, _, _, _ = load_adjusted(instrument, cfg)
+    periods = cfg["data"]["expected_periods_per_day"]
     g = cluster_table(z)
     normal, disputed = pick(g)
-    figure(normal, z, g, daily, "Нормальные кластеры: пара зон, одна над другой", out / f"{instrument}_hvn_clusters_normal.png")
-    figure(disputed, z, g, daily, "Спорные кластеры: цепочки зон, у которых роль двойная",
+    figure(normal, z, g, daily, bars, periods, "Нормальные кластеры: пара зон, одна над другой", out / f"{instrument}_hvn_clusters_normal.png")
+    figure(disputed, z, g, daily, bars, periods, "Спорные кластеры: цепочки зон, у которых роль двойная",
            out / f"{instrument}_hvn_clusters_disputed.png")
     print("нормальные:", normal, "спорные:", disputed)
     print(g.loc[normal + disputed].to_string())

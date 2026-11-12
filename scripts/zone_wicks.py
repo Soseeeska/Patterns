@@ -13,7 +13,8 @@ C. Срез тестов по числу хвостов через границ�
 D. Самые «живые» зоны: больше всего хвостов через границу и close внутри.
 Всё сравнивается с фальш-зонами (сдвиг на 1.5–3 ширины).
 
-Запуск:  python -m scripts.zone_wicks [ES]
+Запуск:  python -m scripts.zone_wicks [ES] [бары: ES_ETH] [с даты: 2023-07-13]
+         (зоны всегда по профилям первого инструмента; второй — бары для тестов)
 Результат: output/<INSTR>_zone_wicks_tests.csv, output/<INSTR>_zone_wicks_zones.csv
 """
 from __future__ import annotations
@@ -26,7 +27,7 @@ import pandas as pd
 from scripts.hvn_va_stats import per_day
 from scripts.primary_zones import placebo, zone_frame
 from scripts.primary_zones_variants import bands_for_30m
-from scripts.stage1_profiles import load_adjusted
+from scripts.stage1_profiles import align_zones, load_adjusted, load_test_bars, tag
 from tpo.data import ROOT, load_config
 from tpo.intraday import run_tests
 from tpo.wicks import BOUNDARY, INSIDE, main_opposite, wick_positions
@@ -106,8 +107,8 @@ def summary(tch: pd.Series, t: pd.DataFrame) -> dict:
     return out
 
 
-def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+def main(instrument: str = "ES", bars_instrument: str | None = None, since: str | None = None) -> None:
+    cfg = load_config(instrument=instrument)
     zc, pc = cfg["hvn_zones"], cfg["primary_zones"]
     out = ROOT / "output"
     bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
@@ -115,10 +116,14 @@ def main(instrument: str = "ES") -> None:
     days["ok"] = days.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
     z = zone_frame(days, daily, cfg, tick)
     fz = z[z.available_from.notna()].reset_index(drop=True)
+    if bars_instrument or since:          # зоны — по профилям instrument, бары для тестов — другие
+        bars, _ = load_test_bars(bars_instrument or instrument, since)
+        fz = align_zones(fz, bars).reset_index(drop=True)
+    name = tag(instrument, bars_instrument, since)
 
     tch, tests, zsum = analyze(bars, fz, cfg, tick)
-    tests.to_csv(out / f"{instrument}_zone_wicks_tests.csv", index=False)
-    zsum.to_csv(out / f"{instrument}_zone_wicks_zones.csv", index=False, float_format="%.2f")
+    tests.to_csv(out / f"{name}_zone_wicks_tests.csv", index=False)
+    zsum.to_csv(out / f"{name}_zone_wicks_zones.csv", index=False, float_format="%.2f")
     real = summary(tch, tests)
 
     rng = np.random.default_rng(42)
@@ -128,7 +133,7 @@ def main(instrument: str = "ES") -> None:
         ptch, ptests, _ = analyze(bars, pz, cfg, tick)
         plac.append(summary(ptch, ptests))
 
-    print(f"{instrument}: зон {len(fz)}, тестов {len(tests)}; хвост ≥ {cfg['wicks']['min_wick_ticks']} тиков\n")
+    print(f"{name}: зон {len(fz)}, баров {len(bars)} ({bars.date.min():%Y-%m-%d} – {bars.date.max():%Y-%m-%d}), тестов {len(tests)}; хвост ≥ {cfg['wicks']['min_wick_ticks']} тиков\n")
     print(f"{'метрика':62s} {'реальные':>9s} {'фальш':>9s}  5–95% фальш")
     for k, v in real.items():
         if k.endswith("| n") or k == "A: баров-касаний":

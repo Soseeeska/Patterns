@@ -58,7 +58,7 @@ METRICS = {"acc_d0": "Принятие по close, день входа",
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     tick = cfg["data"]["instruments"][instrument]["tick_size"]
     tol = cfg["interaction"]["acceptance"].get("poc_tolerance_ticks", 2) * tick
     bars, daily, _, _, _ = load_adjusted(instrument, cfg)

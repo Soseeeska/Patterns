@@ -43,7 +43,7 @@ def prep(t: pd.DataFrame, cfg) -> pd.DataFrame:
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
     comps, comp_prof = find_balances(bars, daily, profiles, cfg, tick)

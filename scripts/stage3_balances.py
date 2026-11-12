@@ -43,7 +43,7 @@ def draw_period(ax, daily, comps, start, end, label_ids=False):
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)

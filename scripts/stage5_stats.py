@@ -150,7 +150,7 @@ def export_report_csv(res: dict, folder) -> None:
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     min_n = cfg["stats"]["min_events_per_cell"]
