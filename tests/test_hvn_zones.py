@@ -26,3 +26,12 @@ def test_cascade_merge():
     # 0..9 и 20..29 не пересекаются; зона 5..24 сливается с обеими
     out = merge_zones([Zone(0, 9, [1]), Zone(20, 29, [2]), Zone(5, 24, [3])], 0.5, 40)
     assert [(z.lo, z.hi, z.dates) for z in out] == [(0, 29, [1, 2, 3])]
+
+
+def test_roles_from_width_blocked_pairs():
+    from tpo.hvn_zones import BOTH, RANGE, RESISTANCE, SUPPORT, zone_roles
+    zones = merge_zones([Zone(0, 19, [1]), Zone(10, 29, [2]), Zone(100, 105, [3]),
+                         Zone(20, 39, [4])], 0.5, 25)
+    roles, _, _ = zone_roles(zones, 0.5)
+    by_lo = {z.lo: r for z, r in zip(zones, roles)}
+    assert by_lo == {0: SUPPORT, 10: BOTH, 20: RESISTANCE, 100: RANGE}

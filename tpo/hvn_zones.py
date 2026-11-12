@@ -48,3 +48,46 @@ def merge_zones(day_zones: list[Zone], overlap_min: float, max_width_ticks: int)
             z = Zone(min(z.lo, e.lo), max(z.hi, e.hi), sorted(e.dates + z.dates))
         zones.append(z)
     return zones
+
+
+RANGE, RESISTANCE, SUPPORT, BOTH = "проторговка", "сопротивление", "поддержка", "поддержка+сопротивление"
+
+
+def blocked_pairs(zones: list[Zone], overlap_min: float) -> list[tuple[int, int]]:
+    """Пары итоговых зон, которые пересекаются ≥ overlap_min, но не склеены.
+    После merge_zones такое возможно только из-за лимита ширины."""
+    out = []
+    for i in range(len(zones)):
+        for j in range(i + 1, len(zones)):
+            if overlap_share(zones[i], zones[j]) >= overlap_min:
+                out.append((i, j))
+    return out
+
+
+def zone_roles(zones: list[Zone], overlap_min: float) -> tuple[list[str], list[list[int]], list[list[int]]]:
+    """Роль каждой зоны. В каждой несклеенной паре верхняя (по середине,
+    при равенстве — по верхнему краю) — сопротивление, нижняя — поддержка.
+    Зона без таких пар — проторговка; зона, бывшая верхней в одной паре и
+    нижней в другой, — поддержка+сопротивление.
+    Возвращает роли и для каждой зоны индексы соседей снизу и сверху."""
+    below = [[] for _ in zones]   # зоны, над которыми эта стоит (она для них сопротивление)
+    above = [[] for _ in zones]
+    for i, j in blocked_pairs(zones, overlap_min):
+        a, b = zones[i], zones[j]
+        if (a.lo + a.hi, a.hi) > (b.lo + b.hi, b.hi):
+            upper, lower = i, j
+        else:
+            upper, lower = j, i
+        below[upper].append(lower)
+        above[lower].append(upper)
+    roles = []
+    for k in range(len(zones)):
+        if below[k] and above[k]:
+            roles.append(BOTH)
+        elif below[k]:
+            roles.append(RESISTANCE)
+        elif above[k]:
+            roles.append(SUPPORT)
+        else:
+            roles.append(RANGE)
+    return roles, below, above
