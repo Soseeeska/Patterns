@@ -94,6 +94,10 @@ primary_zones:                     # первородные зоны (scripts/pr
     late_from_period: 9            # поздние периоды: J–M (с 9-го, счёт с 0)
     late_share_max: 0.50           # доля TPO HVN-полосы от поздних периодов не больше 50%
 
+wicks:                             # хвосты 30m-свечей у первородных зон (scripts/zone_wicks.py)
+  min_wick_ticks: 2                # хвост короче 2 тиков не считается
+  placebo_runs: 10
+
 day_type:
   avg_range_lookback_days: 20
   # Расширение диапазона (RE) засчитывается, если выход за IB > этой доли IB.
