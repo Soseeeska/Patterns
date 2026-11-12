@@ -18,7 +18,7 @@ import pandas as pd
 from scripts.hvn_va_stats import per_day
 from scripts.stage1_profiles import load_adjusted
 from tpo.data import ROOT, load_config
-from tpo.hvn_zones import Zone, merge_zones, zone_roles
+from tpo.hvn_zones import Zone, merge_zones, zone_clusters, zone_roles
 
 
 def main(instrument: str = "ES") -> None:
@@ -37,11 +37,12 @@ def main(instrument: str = "ES") -> None:
     zones = merge_zones(day_zones, zc["merge_overlap_min"], max_w)
     zones.sort(key=lambda z: (z.lo, z.hi))
     roles, below, above = zone_roles(zones, zc["merge_overlap_min"])
+    clusters = zone_clusters(zones, zc["merge_overlap_min"])
 
     trade_days = list(daily.date)
     nxt = {d: (trade_days[i + 1] if i + 1 < len(trade_days) else pd.NaT) for i, d in enumerate(trade_days)}
     res = pd.DataFrame([{
-        "zone_id": k + 1, "role": roles[k],
+        "zone_id": k + 1, "cluster_id": clusters[k] + 1, "role": roles[k],
         "lo": z.lo * tick, "hi": z.hi * tick, "width_pts": (z.hi - z.lo) * tick,
         "n_days": len(z.dates), "first_day": z.dates[0], "last_day": z.dates[-1],
         "available_from": nxt[z.dates[0]],

@@ -91,3 +91,21 @@ def zone_roles(zones: list[Zone], overlap_min: float) -> tuple[list[str], list[l
         else:
             roles.append(RANGE)
     return roles, below, above
+
+
+def zone_clusters(zones: list[Zone], overlap_min: float) -> list[int]:
+    """Кластер = связная группа зон по несклеенным парам (пересечение ≥
+    overlap_min). Зона проторговки — кластер из одной зоны. Номер кластера —
+    наименьший индекс зоны в нём."""
+    parent = list(range(len(zones)))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i, j in blocked_pairs(zones, overlap_min):
+        a, b = find(i), find(j)
+        parent[max(a, b)] = min(a, b)
+    return [find(i) for i in range(len(zones))]

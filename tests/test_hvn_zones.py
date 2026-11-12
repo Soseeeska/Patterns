@@ -35,3 +35,9 @@ def test_roles_from_width_blocked_pairs():
     roles, _, _ = zone_roles(zones, 0.5)
     by_lo = {z.lo: r for z, r in zip(zones, roles)}
     assert by_lo == {0: SUPPORT, 10: BOTH, 20: RESISTANCE, 100: RANGE}
+
+
+def test_clusters_follow_blocked_pairs():
+    from tpo.hvn_zones import zone_clusters
+    zones = [Zone(0, 19), Zone(10, 29), Zone(20, 39), Zone(100, 105)]
+    assert zone_clusters(zones, 0.5) == [0, 0, 0, 3]
