@@ -56,8 +56,8 @@ def grey_zones(daily: pd.DataFrame, profiles: dict, tick: float, min_ticks: int)
         for lo_t, hi_t in single_runs(p.counts, p.low, p.row, max(1, min_ticks // p.row)):
             lo, hi = lo_t * tick, hi_t * tick
             later = np.flatnonzero((L[i + 1:] <= lo) & (H[i + 1:] >= hi))
-            filled = dates[i + 1 + later[0]] if len(later) else np.datetime64("NaT")
-            avail = dates[i + 1] if i + 1 < len(d) else np.datetime64("NaT")
+            filled = dates[i + 1 + later[0]] if len(later) else np.datetime64("NaT", "ns")
+            avail = dates[i + 1] if i + 1 < len(d) else np.datetime64("NaT", "ns")
             rows.append({"lo": lo, "hi": hi, "formed": r.date, "available_from": avail, "filled": filled})
     return pd.DataFrame(rows)
 

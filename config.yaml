@@ -130,6 +130,8 @@ day_context:                       # сегодня против вчера + к
   zone_tolerance_ticks: 2          # касание / остановка у края зоны ± 2 тика
   split_date: "2025-01-01"         # поиск закономерностей — до, проверка — после
   placebo_runs: 20
+  hidden_lookahead_days: 20        # скрытый уровень: прошит сингл-принтами / тейлом в течение 20 дней
+  hidden_control_min_dist_ticks: 4 # контрольная точка в той же зоне single prints — не ближе 1 п. к уровню
 
 day_type:
   avg_range_lookback_days: 20

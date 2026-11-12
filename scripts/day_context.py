@@ -14,7 +14,12 @@
 Всё про зоны сравнивается со сдвинутыми зонами (1.5–3 ширины, ширина ≥ 4 п.).
 Таблицы — отдельно до и после split_date.
 
-Запуск:  python -m scripts.day_context [ES]
+Раздел 0 — признаки из заметок «MP FP»: Expansion Potential (Balance open /
+Disbalance in range / Full disbalance), принятие/отторжение в A, ширина IB,
+фейл экстеншин, последние полчаса (M) и open к вчерашнему close,
+долгосрочные / краткосрочные хвосты.
+
+Запуск:  python -m scripts.day_context [ES] [1|0 — считать ли зоны (долго)]
 Результат: output/<INSTR>_day_context.csv
 """
 from __future__ import annotations
@@ -151,8 +156,26 @@ def build(bars, daily, profiles, cfg, tick, zmap, cls_tab, zones_only=False):
                       "y_spike": sp, "y_tail_up": tail_bucket(y.tail_up_ticks, cc["long_tail_ticks"]),
                       "y_tail_dn": tail_bucket(y.tail_down_ticks, cc["long_tail_ticks"]),
                       "y_poor_high": bool(y.poor_high), "y_poor_low": bool(y.poor_low)})
+            # хвосты по заметкам: долгосрочный — день закрылся на противоположной стороне от хвоста
+            mn = cfg["tpo"]["tail_min_rows"] * cfg["tpo"]["price_row_ticks"]
+            cpos = (y.close - y.low) / (y.high - y.low) if y.high > y.low else 0.5
+            r["y_tail_up_kind"] = ("нет" if y.tail_up_ticks < mn else
+                                   "долгосрочный" if cpos <= 0.5 else "краткосрочный")
+            r["y_tail_dn_kind"] = ("нет" if y.tail_down_ticks < mn else
+                                   "долгосрочный" if cpos >= 0.5 else "краткосрочный")
+            nxt = d.iloc[i:i + 5]
+            r["y_high_held5"] = bool(len(nxt) == 5 and nxt.high.max() <= y.high)
+            r["y_low_held5"] = bool(len(nxt) == 5 and nxt.low.min() >= y.low)
+            # последние полчаса вчера (M) и open относительно вчерашнего close
+            M = by_day[y.date].iloc[-1]
+            r["y_m"] = ("M лонговый" if M.close > M.open else "M шортовый" if M.close < M.open else "M доджи")
+            r["y_m_vs_poc"] = "close M выше POC" if M.close > y.poc else "close M ниже POC"
+            r["gap"] = "open выше close вчера" if t.open > y.close else "open ниже close вчера"
+            r["day_up"] = bool(t.close > t.open)
             # open
             r["open_loc"] = open_location(t.open, y)
+            r["open_cat"] = {"внутри VA": "Balance open", "VAH–High": "Disbalance in range",
+                             "Low–VAL": "Disbalance in range"}.get(r["open_loc"], "Full disbalance")
             if sp == "none":
                 r["open_vs_spike"] = "нет спайка"
             else:
@@ -162,6 +185,22 @@ def build(bars, daily, profiles, cfg, tick, zmap, cls_tab, zones_only=False):
             A = g[g.period == 0].iloc[0]
             ib = g[g.period < cfg["tpo"]["ib_periods"]]
             r["a_close_vs_va"] = loc_vs_va(A.close, A.close, y)
+            r["a_accept"] = "A: принятие (close в VA)" if r["a_close_vs_va"] == "внутри VA" else "A: отторжение (close вне VA)"
+            # расширение: RE за IB (> 15% IB), диапазон к среднему, порядок расширений
+            ibh, ibl = ib.high.max(), ib.low.min()
+            ext = cfg["day_type"]["min_extension_share_of_ib"] * (ibh - ibl)
+            rest = g[g.period >= cfg["tpo"]["ib_periods"]]
+            up_p = rest.period[rest.high > ibh + ext]
+            dn_p = rest.period[rest.low < ibl - ext]
+            r["re_up"], r["re_dn"] = len(up_p) > 0, len(dn_p) > 0
+            r["re_any"] = r["re_up"] or r["re_dn"]
+            r["re_both"] = r["re_up"] and r["re_dn"]
+            if r["re_both"]:
+                first_up = up_p.min() < dn_p.min()
+                # фейл экстеншин: закрылись за IB со стороны второго расширения
+                r["failed_ext_reversal"] = bool(t.close < ibl) if first_up else bool(t.close > ibh)
+            r["range_rel"] = t.range_vs_avg
+            r["expansion"] = bool(t.range_vs_avg > 1.0) if not np.isnan(t.range_vs_avg) else np.nan
             r["ib_vs_va"] = loc_vs_va(ib.low.min(), ib.high.max(), y)
             r["ib_width"] = bucket_rel((ib.high.max() - ib.low.min()) / ib_avg[i], *cc["ib_width_bands"])
             # исходы: вчерашние цели
@@ -190,7 +229,7 @@ def table(df, by, cols, names, split):
         print(f"{str(key):24s} {cells}   {len(pre):4d} / {len(post):3d}")
 
 
-def main(instrument: str = "ES") -> None:
+def main(instrument: str = "ES", zones: str = "1") -> None:
     cfg = load_config(instrument=instrument)
     cc, zc = cfg["day_context"], cfg["hvn_zones"]
     out = ROOT / "output"
@@ -217,6 +256,30 @@ def main(instrument: str = "ES") -> None:
           f"(заполнено {grey.filled.notna().sum()})")
     print("В каждой ячейке: до split / после split.")
 
+    print("\n===== 0. ПО ЗАМЕТКАМ «MP FP» =====")
+    ex = ["re_any", "re_both", "expansion", "hit_y_poc"]
+    exn = ["RE за IB", "RE в обе", "диапазон > ср.", "POC вчера"]
+    print("\nExpansion Potential: тип открытия → расширение дня")
+    cat_order = ["Balance open", "Disbalance in range", "Full disbalance"]
+    df["open_cat"] = pd.Categorical(df.open_cat, cat_order)
+    table(df.sort_values("open_cat"), "open_cat", ex, exn, split)
+    print("\nRejection / Acceptance в A: тип открытия × A → расширение дня")
+    table(df.sort_values(["open_cat", "a_accept"]).assign(k=lambda x: x.open_cat.astype(str) + " · " + x.a_accept),
+          "k", ex, exn, split)
+    print("\nIB: ширина → расширение")
+    table(df[df.ib_width != "?"], "ib_width", ["re_any", "re_both", "expansion"], exn[:3], split)
+    both = df[df.re_both == True]
+    print(f"\nФейл экстеншин (RE в обе стороны, {len(both)} дней): закрылись за IB со стороны второго расширения")
+    table(both.assign(k="все"), "k", ["failed_ext_reversal"], ["разворот"], split)
+    print("\nПоследние полчаса вчера (M) и open относительно вчерашнего close → день вверх / снят High / снят Low")
+    table(df.assign(k=df.y_m + " · " + df.gap), "k", ["day_up", "took_y_high", "took_y_low"],
+          ["день вверх", "снят High", "снят Low"], split)
+    table(df.assign(k=df.y_m_vs_poc + " · " + df.gap), "k", ["day_up", "took_y_high", "took_y_low"],
+          ["день вверх", "снят High", "снят Low"], split)
+    print("\nХвосты по заметкам (долгосрочный — день закрылся на противоположной стороне от хвоста)")
+    table(df, "y_tail_up_kind", ["took_y_high", "y_high_held5"], ["High снят завтра", "High цел 5 дн"], split)
+    table(df, "y_tail_dn_kind", ["took_y_low", "y_low_held5"], ["Low снят завтра", "Low цел 5 дн"], split)
+
     tg = ["hit_y_poc", "hit_y_vah", "hit_y_val", "took_y_high", "took_y_low"]
     tn = ["POC вчера", "VAH вчера", "VAL вчера", "снят High", "снят Low"]
     print("\n===== 1. ЛОКАЛЬНО: сегодня против вчера =====")
@@ -233,15 +296,16 @@ def main(instrument: str = "ES") -> None:
     print(f"\nВчера спайк в M ({len(sp)} дней): open относительно спайка → основание спайка пробито / спайк продолжен / POC вчера")
     table(sp.assign(k=sp.y_spike + " · " + sp.open_vs_spike), "k",
           ["spike_base_broken", "spike_extended", "hit_y_poc"], ["основание", "продолжение", "POC вчера"], split)
-    print("\nВчерашний хвост сверху → снят ли вчерашний High")
+    print("\nВчерашний хвост по длине (≥ long_tail_ticks — длинный) → снят ли вчерашний экстремум")
     table(df, "y_tail_up", ["took_y_high", "hit_y_poc"], ["снят High", "POC вчера"], split)
-    print("\nВчерашний хвост снизу → снят ли вчерашний Low")
     table(df, "y_tail_dn", ["took_y_low", "hit_y_poc"], ["снят Low", "POC вчера"], split)
     print("\nВчера poor high → снят ли вчерашний High")
     table(df, "y_poor_high", ["took_y_high"], ["снят High"], split)
     print("\nВчера poor low → снят ли вчерашний Low")
     table(df, "y_poor_low", ["took_y_low"], ["снят Low"], split)
 
+    if zones == "0":
+        return
     print("\n===== 2. ГЛОБАЛЬНО: зоны (реальные против сдвинутых) =====")
     rng = np.random.default_rng(cfg["stats"]["placebo"]["seed"])
     plac = []
