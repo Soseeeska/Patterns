@@ -1,0 +1,275 @@
+<title>Карта зон ES</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: терминал — заголовок, полоса фильтров, график во всю ширину, панель «под курсором», пояснение. */
+:root{
+  --bg:#f6f7f8; --panel:#ffffff; --ink:#15191d; --muted:#5b636b; --line:#dfe3e7; --grid:#eceff2;
+  --accent:#2a6fdb; --up:#3b4249; --down:#3b4249; --candle-up:#ffffff; --candle-dn:#3b4249;
+  --z-ob:#2a78d6; --z-s:#0f8a3c; --z-r:#d63b3a; --z-range:#6250d6; --z-new:#7d858c; --z-grey:#7d858c;
+  --poc:#e2662c; --va:#15191d; --rth:rgba(42,111,219,.06);
+  --f-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111417; --panel:#181c20; --ink:#e7eaed; --muted:#9aa3ab; --line:#2a3036; --grid:#1f2429;
+  --accent:#5b97f0; --candle-up:#181c20; --candle-dn:#c9ced3; --up:#c9ced3; --down:#c9ced3;
+  --z-ob:#4a8fe6; --z-s:#2fb35e; --z-r:#ef5a59; --z-range:#8f84ea; --z-new:#8d959c; --z-grey:#8d959c;
+  --poc:#f08a52; --va:#e7eaed; --rth:rgba(91,151,240,.08); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111417; --panel:#181c20; --ink:#e7eaed; --muted:#9aa3ab; --line:#2a3036; --grid:#1f2429;
+  --accent:#5b97f0; --candle-up:#181c20; --candle-dn:#c9ced3; --up:#c9ced3; --down:#c9ced3;
+  --z-ob:#4a8fe6; --z-s:#2fb35e; --z-r:#ef5a59; --z-range:#8f84ea; --z-new:#8d959c; --z-grey:#8d959c;
+  --poc:#f08a52; --va:#e7eaed; --rth:rgba(91,151,240,.08); color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.45}
+.wrap{max-width:1400px;margin:0 auto;padding-block:18px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px}
+h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px}
+.filters{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
+.chip[aria-pressed="false"]{color:var(--muted);opacity:.55}
+.chip:focus-visible,.btn:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 18px}
+.ctl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ctl label{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted)}
+.ctl output{font-family:var(--f-num);color:var(--ink);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:13px}
+.row label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.btn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
+.count{font-family:var(--f-num);font-size:12.5px;color:var(--muted)}
+.count b{color:var(--ink);font-weight:500}
+.chartbox{position:relative;height:clamp(420px,66vh,760px);background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#chart{position:absolute;inset:0}
+#overlay{position:absolute;inset:0;pointer-events:none;z-index:2}
+.hover{font-family:var(--f-num);font-size:12.5px;color:var(--muted);min-height:3.2em;display:flex;flex-direction:column;gap:2px}
+.hover .z{color:var(--ink)}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px 28px}
+.note h2{font-size:14px;margin:0 0 6px;font-weight:600}
+.note p,.note li{color:var(--muted);font-size:13px;margin:0;max-width:68ch}
+.note ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{text-align:right;padding:3px 6px;border-bottom:1px solid var(--line)}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl th{color:var(--muted);font-weight:500}
+.tblwrap{overflow-x:auto}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Карта зон ES · 30m</h1>
+    <span class="sub" id="sub"></span>
+  </header>
+
+  <section class="filters" aria-label="Фильтры зон">
+    <div class="chips" id="types"></div>
+    <div class="sliders">
+      <div class="ctl"><label for="f-near">Ближайших к цене (на сессию)<output id="o-near"></output></label><input type="range" id="f-near" min="0" max="20" step="1" value="6"></div>
+      <div class="ctl"><label for="f-tests">Тестов до сессии, не меньше<output id="o-tests"></output></label><input type="range" id="f-tests" min="0" max="60" step="1" value="0"></div>
+      <div class="ctl"><label for="f-rej">Отторжений хвостом, не меньше<output id="o-rej"></output></label><input type="range" id="f-rej" min="0" max="80" step="1" value="0"></div>
+      <div class="ctl"><label for="f-pur">Чистота отторжений, не меньше<output id="o-pur"></output></label><input type="range" id="f-pur" min="0" max="100" step="5" value="0"></div>
+      <div class="ctl"><label for="f-age">Возраст, дней, не меньше<output id="o-age"></output></label><input type="range" id="f-age" min="0" max="1500" step="10" value="0"></div>
+      <div class="ctl"><label for="f-wmax">Ширина зоны, п., не больше<output id="o-wmax"></output></label><input type="range" id="f-wmax" min="1" max="60" step="0.5" value="60"></div>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="f-prev" checked> VA и POC вчерашнего RTH</label>
+      <label><input type="checkbox" id="f-rth" checked> подсветка RTH</label>
+      <button class="btn" id="reset" type="button">Сбросить фильтры</button>
+      <span class="count" id="count"></span>
+    </div>
+  </section>
+
+  <div class="chartbox"><div id="chart"></div><canvas id="overlay"></canvas></div>
+  <div class="hover" id="hover" aria-live="polite"><span>Наведи курсор на график — здесь появятся зоны на этой цене и их метрики на ту сессию.</span></div>
+
+  <section class="note">
+    <div>
+      <h2>Как читать</h2>
+      <ul>
+        <li>Зона показана только в те сессии, когда она уже была известна: с дня появления, серые — до проторговки.</li>
+        <li>Цвет HVN-зоны — её класс на эту сессию по отторжениям хвостом (≥ 60% в одну сторону — поддержка или сопротивление).</li>
+        <li>Все метрики посчитаны по RTH-барам строго до сессии. «Ближайших к цене» — по open сессии.</li>
+        <li>Оранжевая линия — POC вчерашнего RTH, пунктир — его VAH и VAL. Время — CT.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Что показала проверка силы</h2>
+      <p>Тесты первородных HVN-зон 2021–2026 (10 349). Удержание следующего теста у «слабой» и «сильной» трети по каждой метрике; справа — та же разница у сдвинутых случайных зон.</p>
+      <div class="tblwrap"><table class="tbl">
+        <thead><tr><th>Метрика</th><th>слабые</th><th>сильные</th><th>разница</th><th>у случайных</th></tr></thead>
+        <tbody>
+          <tr><td>тестов до</td><td>53,4%</td><td>54,8%</td><td>+1,3</td><td>−2,0…+1,9</td></tr>
+          <tr><td>отторжений до</td><td>54,1%</td><td>53,6%</td><td>−0,5</td><td>−1,6…+1,0</td></tr>
+          <tr><td>чистота</td><td>53,1%</td><td>53,2%</td><td>+0,2</td><td>−1,6…+1,9</td></tr>
+          <tr><td>возраст</td><td>54,0%</td><td>54,7%</td><td>+0,7</td><td>−1,0…+0,8</td></tr>
+          <tr><td>ширина</td><td>50,1%</td><td>55,6%</td><td>+5,5</td><td>+5,0…+7,5</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:6px">Фильтры убирают визуальный шум, но не отбирают зоны, которые держат лучше.</p>
+    </div>
+  </section>
+</div>
+
+<script id="zone-data" type="application/json">__DATA__</script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function(){
+const D = JSON.parse(document.getElementById('zone-data').textContent);
+const TYPES = [
+  ['hvn_S','HVN · поддержка','--z-s'],['hvn_R','HVN · сопротивление','--z-r'],['hvn_range','HVN · проторговка','--z-range'],
+  ['hvn_new','HVN · без истории','--z-new'],['old_balance','Старый баланс (VA композита)','--z-ob'],['grey','Серая (single prints)','--z-grey']];
+const NAME = Object.fromEntries(TYPES.map(t=>[t[0],t[1]]));
+const DEF = {near:6,tests:0,rej:0,pur:0,age:0,wmax:60,prev:true,rth:true,
+  types:{hvn_S:true,hvn_R:true,hvn_range:true,hvn_new:true,old_balance:false,grey:false}};
+let S = JSON.parse(JSON.stringify(DEF));
+try{ const s = JSON.parse(localStorage.getItem('zonemap-filters')||'null'); if(s) S = Object.assign(S,s,{types:Object.assign({},DEF.types,s.types||{})}); }catch(e){}
+const save = ()=>{ try{ localStorage.setItem('zonemap-filters', JSON.stringify(S)); }catch(e){} };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// сессии: индексы баров
+const bars = D.bars, sess = D.sessions;
+const sFirst = [], sLast = [], sOpen = [];
+bars.forEach((b,i)=>{ const s=b[5]; if(sFirst[s]===undefined){sFirst[s]=i; sOpen[s]=b[1];} sLast[s]=i; });
+const lastS = sess.length-1;
+const fmtD = d => { const x=new Date(d+'T12:00:00Z'); return x.toLocaleDateString('ru-RU',{weekday:'short',day:'2-digit',month:'2-digit',timeZone:'UTC'}); };
+document.getElementById('sub').textContent =
+  `${D.instrument} · ${sess.length} сессий ETH+RTH, ${fmtD(sess[0].date)} – ${fmtD(sess[lastS].date)} · RTH-профили по ${fmtD(D.rth_last)}`;
+const rthMask = bars.map(b=>{ const d=new Date(b[0]*1000); const m=d.getUTCHours()*60+d.getUTCMinutes(); return m>=510 && m<900; });
+
+// типы
+const typesEl = document.getElementById('types');
+TYPES.forEach(([k,label,v])=>{
+  const b=document.createElement('button'); b.type='button'; b.className='chip'; b.id='t-'+k;
+  b.innerHTML=`<span class="sw" style="background:var(${v})"></span>${label}`;
+  b.setAttribute('aria-pressed', S.types[k]?'true':'false');
+  b.onclick=()=>{ S.types[k]=!S.types[k]; b.setAttribute('aria-pressed',S.types[k]?'true':'false'); changed(); };
+  typesEl.appendChild(b);
+});
+const ctl = {near:['f-near','o-near',v=>v==0?'все':v], tests:['f-tests','o-tests',v=>v], rej:['f-rej','o-rej',v=>v],
+  pur:['f-pur','o-pur',v=>v==0?'любая':v+'%'], age:['f-age','o-age',v=>v], wmax:['f-wmax','o-wmax',v=>v>=60?'любая':v]};
+// пределы ползунков — по данным
+let mT=0,mR=0,mA=0; D.zones.forEach(z=>z.st.forEach(s=>{ if(s){ mT=Math.max(mT,s[1]); mR=Math.max(mR,s[2]); mA=Math.max(mA,s[4]); }}));
+document.getElementById('f-tests').max=Math.max(5,mT); document.getElementById('f-rej').max=Math.max(5,mR);
+document.getElementById('f-age').max=Math.ceil(Math.max(30,mA)/10)*10;
+Object.entries(ctl).forEach(([k,[id,oid,f]])=>{
+  const el=document.getElementById(id), o=document.getElementById(oid);
+  el.value=S[k]; o.textContent=f(+el.value);
+  el.addEventListener('input',()=>{ S[k]=+el.value; o.textContent=f(S[k]); changed(); });
+});
+['prev','rth'].forEach(k=>{ const el=document.getElementById('f-'+k); el.checked=S[k]; el.onchange=()=>{S[k]=el.checked; changed();}; });
+document.getElementById('reset').onclick=()=>{
+  S=JSON.parse(JSON.stringify(DEF));
+  Object.entries(ctl).forEach(([k,[id,oid,f]])=>{ const el=document.getElementById(id); el.value=S[k]; document.getElementById(oid).textContent=f(S[k]); });
+  ['prev','rth'].forEach(k=>document.getElementById('f-'+k).checked=S[k]);
+  TYPES.forEach(([k])=>document.getElementById('t-'+k).setAttribute('aria-pressed',S.types[k]?'true':'false'));
+  changed();
+};
+
+// какие зоны видны в сессию s
+function visible(s){
+  const open=sOpen[s], out=[]; let total=0;
+  D.zones.forEach(z=>{
+    const st=z.st[s]; if(!st) return; total++;
+    const [kind,tests,rej,pur,age]=st;
+    if(!S.types[kind]) return;
+    if(tests<S.tests || rej<S.rej || age<S.age) return;
+    if(S.pur>0 && (pur===null || pur*100<S.pur)) return;
+    if(S.wmax<60 && z.hi-z.lo>S.wmax) return;
+    const dist = open<z.lo ? z.lo-open : open>z.hi ? open-z.hi : 0;
+    out.push({z,kind,tests,rej,pur,age,dist});
+  });
+  out.sort((a,b)=>a.dist-b.dist);
+  return {list: S.near>0 ? out.slice(0,S.near) : out, total};
+}
+let VIS=[];
+function changed(){
+  save();
+  VIS = sess.map((_,s)=>visible(s));
+  const v=VIS[lastS];
+  document.getElementById('count').innerHTML = `последняя сессия (${fmtD(sess[lastS].date)}): видно <b>${v.list.length}</b> из ${v.total} зон`;
+  dirty=true;
+}
+
+// график
+const el=document.getElementById('chart');
+const chart=LightweightCharts.createChart(el,{autoSize:true,
+  layout:{fontFamily:'IBM Plex Mono, ui-monospace, monospace',fontSize:11},
+  timeScale:{timeVisible:true,secondsVisible:false,rightOffset:4,barSpacing:6},
+  rightPriceScale:{scaleMargins:{top:0.06,bottom:0.06}},
+  crosshair:{mode:LightweightCharts.CrosshairMode.Normal}});
+const series=chart.addCandlestickSeries({priceFormat:{type:'price',precision:2,minMove:D.tick}});
+series.setData(bars.map(b=>({time:b[0],open:b[1],high:b[2],low:b[3],close:b[4]})));
+chart.timeScale().setVisibleLogicalRange({from:Math.max(0,bars.length-46*8),to:bars.length+4});
+function applyTheme(){
+  chart.applyOptions({layout:{background:{type:'solid',color:css('--panel')},textColor:css('--muted')},
+    grid:{vertLines:{color:css('--grid')},horzLines:{color:css('--grid')}},
+    rightPriceScale:{borderColor:css('--line')},timeScale:{borderColor:css('--line')}});
+  series.applyOptions({upColor:css('--candle-up'),downColor:css('--candle-dn'),borderUpColor:css('--up'),
+    borderDownColor:css('--down'),wickUpColor:css('--up'),wickDownColor:css('--down')});
+  dirty=true;
+}
+const mq=matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener?.('change',applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+// слой зон
+const cv=document.getElementById('overlay'), ctx=cv.getContext('2d');
+let dirty=true;
+function hexA(hex,a){ const h=hex.replace('#',''); const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+function draw(){
+  const r=el.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(r.width*dpr)||cv.height!==Math.round(r.height*dpr)){ cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr); cv.style.width=r.width+'px'; cv.style.height=r.height+'px'; }
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,r.width,r.height);
+  const ts=chart.timeScale(), psw=chart.priceScale('right').width(), W=r.width-psw, H=r.height-ts.height();
+  ctx.save(); ctx.beginPath(); ctx.rect(0,0,W,H); ctx.clip();
+  const half=(ts.options().barSpacing||6)/2;
+  const col={}; TYPES.forEach(([k,,v])=>col[k]=css(v));
+  const vr=ts.getVisibleLogicalRange(); if(!vr){ctx.restore();return;}
+  for(let s=0;s<sess.length;s++){
+    if(sLast[s]<vr.from-1||sFirst[s]>vr.to+1) continue;
+    const x0=ts.logicalToCoordinate(sFirst[s])-half, x1=ts.logicalToCoordinate(sLast[s])+half;
+    if(x0===null||x1===null) continue;
+    if(S.rth){ // RTH-часы
+      let a=-1; for(let i=sFirst[s];i<=sLast[s];i++){ if(rthMask[i]&&a<0)a=i; if(rthMask[i]) var b=i; }
+      if(a>=0){ ctx.fillStyle=css('--rth'); const xa=ts.logicalToCoordinate(a)-half, xb=ts.logicalToCoordinate(b)+half; ctx.fillRect(xa,0,xb-xa,H); }
+    }
+    ctx.strokeStyle=css('--line'); ctx.lineWidth=1; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(Math.round(x0)+.5,0); ctx.lineTo(Math.round(x0)+.5,H); ctx.stroke();
+    for(const v of VIS[s].list){
+      const y1=series.priceToCoordinate(v.z.hi), y2=series.priceToCoordinate(v.z.lo); if(y1===null||y2===null) continue;
+      const c=col[v.kind], h=Math.max(2,y2-y1);
+      ctx.fillStyle=hexA(c, v.kind==='old_balance'?0.10:v.kind==='grey'?0.14:0.24); ctx.fillRect(x0,y1,x1-x0,h);
+      ctx.strokeStyle=hexA(c,0.85); ctx.lineWidth=1; ctx.setLineDash(v.kind==='grey'||v.kind==='old_balance'?[4,3]:[]);
+      ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x1,y1); ctx.moveTo(x0,y1+h); ctx.lineTo(x1,y1+h); ctx.stroke();
+    }
+    if(S.prev){
+      const p=sess[s];
+      [[p.vah,'--va',[5,4]],[p.val,'--va',[5,4]],[p.poc,'--poc',[]]].forEach(([price,tok,dash])=>{
+        const y=series.priceToCoordinate(price); if(y===null) return;
+        ctx.strokeStyle=css(tok); ctx.lineWidth=tok==='--poc'?1.6:1; ctx.setLineDash(dash);
+        ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+      });
+    }
+  }
+  ctx.restore();
+}
+function loop(){ draw(); requestAnimationFrame(loop); }
+// подпись под курсором
+const hov=document.getElementById('hover');
+chart.subscribeCrosshairMove(p=>{
+  if(!p.point||p.logical===undefined||p.logical===null){ return; }
+  const i=Math.max(0,Math.min(bars.length-1,Math.round(p.logical))), s=bars[i][5];
+  const price=series.coordinateToPrice(p.point.y); if(price===null) return;
+  const tol=D.tick*2;
+  const hit=VIS[s].list.filter(v=>price>=v.z.lo-tol&&price<=v.z.hi+tol);
+  const head=`<span>${fmtD(sess[s].date)} · цена ${price.toFixed(2)} · вчера (${fmtD(sess[s].prev)}) VAH ${sess[s].vah.toFixed(2)} · POC ${sess[s].poc.toFixed(2)} · VAL ${sess[s].val.toFixed(2)}</span>`;
+  hov.innerHTML = head + (hit.length ? hit.map(v=>`<span class="z">${NAME[v.kind]} ${v.z.lo.toFixed(2)}–${v.z.hi.toFixed(2)} · тестов ${v.tests} · отторжений ${v.rej}${v.pur!==null?' (чистота '+Math.round(v.pur*100)+'%)':''} · возраст ${v.age} дн.</span>`).join('')
+    : '<span>видимых зон на этой цене нет</span>');
+});
+applyTheme(); changed(); loop();
+})();
+</script>
