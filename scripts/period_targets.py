@@ -211,12 +211,11 @@ def main(instrument: str = "ES") -> None:
     for k in (1, 3, 5):
         s = df[df.k == k].copy()
         s["ctrl"] = np.sign(s.control).map({1: "покупатель", -1: "продавец", 0: "поровну"})
-        tab = s.groupby(["ctrl", "last"])[["ext_up", "ext_dn"]].agg(["mean"]).join(s.groupby(["ctrl", "last"]).size().rename("n"))
+        tab = s.groupby(["ctrl", "last"]).agg(up=("ext_up", "mean"), dn=("ext_dn", "mean"), n=("ext_up", "size"))
         tab = tab[tab.n >= 20]
         print(f"\n  после {LETTERS[k]}:")
         for (c, l), r in tab.iterrows():
-            print(f"    {c:10s} · последний {l:11s}  новый High {r[('ext_up', 'mean')]:5.1%}  "
-                  f"новый Low {r[('ext_dn', 'mean')]:5.1%}  (n={int(r['n'])})")
+            print(f"    {c:10s} · последний {l:11s}  новый High {r.up:5.1%}  новый Low {r.dn:5.1%}  (n={int(r.n)})")
 
     # модели: локально vs локально + зоны vs локально + фальш-зоны
     print("\nДобавляют ли зоны что-то к локальному контексту (AUC на 2025–2026, выше — лучше):")
