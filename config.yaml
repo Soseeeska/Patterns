@@ -84,6 +84,11 @@ hvn_zones:                         # зоны из дневных HVN (scripts/h
   merge_max_width_points: 10.0     # склейка только если итоговая зона ≤ 10 п.
   # зона доступна со следующего дня после дня, в котором она построена
 
+primary_zones:                     # первородные зоны (scripts/primary_zones.py), пороги — из hvn_zones
+  placebo_runs: 20
+  placebo_shift_widths: [1.5, 3.0] # сдвиг фальш-зоны: U(1.5, 3) × ширина зоны, вверх или вниз
+  placebo_min_shift_points: 4.0    # ширина для сдвига не меньше 4 п.
+
 day_type:
   avg_range_lookback_days: 20
   # Расширение диапазона (RE) засчитывается, если выход за IB > этой доли IB.
