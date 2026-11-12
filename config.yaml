@@ -112,6 +112,16 @@ wicks:                             # хвосты 30m-свечей у перво
   placebo_runs: 10
   class_rejection_share: 0.60      # вариант классов «по отторжениям»: ≥ 60% отторжений в одну сторону
 
+zone_align:                        # подгонка границ первородных зон по краям тел 30m (scripts/zone_align_test.py)
+  calib_sessions: 20               # подгонка — по первым 20 сессиям после появления зоны, проверка — после
+  search_frac: 0.5                 # окно поиска границы: ± max(0.5 ширины зоны, 2 п.)
+  search_min_points: 2.0
+  w_plain: 0.5                     # край тела без хвоста дальше — вес 0.5 (с хвостом — 1)
+  min_score: 3                     # меньше очков — граница не двигается
+  min_width_ticks: 2
+  max_width_points: 10.0
+  placebo_runs: 10
+
 day_type:
   avg_range_lookback_days: 20
   # Расширение диапазона (RE) засчитывается, если выход за IB > этой доли IB.
