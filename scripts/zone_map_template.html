@@ -72,12 +72,16 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <div class="ctl"><label for="f-tests">Тестов до сессии, не меньше<output id="o-tests"></output></label><input type="range" id="f-tests" min="0" max="60" step="1" value="0"></div>
       <div class="ctl"><label for="f-rej">Отторжений хвостом, не меньше<output id="o-rej"></output></label><input type="range" id="f-rej" min="0" max="80" step="1" value="0"></div>
       <div class="ctl"><label for="f-pur">Чистота отторжений, не меньше<output id="o-pur"></output></label><input type="range" id="f-pur" min="0" max="100" step="5" value="0"></div>
+      <div class="ctl"><label for="f-pmax">Чистота отторжений, не больше<output id="o-pmax"></output></label><input type="range" id="f-pmax" min="50" max="100" step="5" value="100"></div>
+      <div class="ctl"><label for="f-conf">Подтверждений HVN, не меньше<output id="o-conf"></output></label><input type="range" id="f-conf" min="0" max="20" step="1" value="0"></div>
+      <div class="ctl"><label for="f-cnear">HVN считается подтверждением в пределах, п.<output id="o-cnear"></output></label><input type="range" id="f-cnear" min="0" max="10" step="0.5" value="0"></div>
       <div class="ctl"><label for="f-age">Возраст, дней, не меньше<output id="o-age"></output></label><input type="range" id="f-age" min="0" max="1500" step="10" value="0"></div>
       <div class="ctl"><label for="f-wmax">Ширина зоны, п., не больше<output id="o-wmax"></output></label><input type="range" id="f-wmax" min="1" max="60" step="0.5" value="60"></div>
     </div>
     <div class="row">
       <label><input type="checkbox" id="f-prev" checked> VA и POC вчерашнего RTH</label>
       <label><input type="checkbox" id="f-rth" checked> подсветка RTH</label>
+      <button class="btn" id="preset-bal" type="button">Только балансы</button>
       <button class="btn" id="reset" type="button">Сбросить фильтры</button>
       <span class="count" id="count"></span>
     </div>
@@ -94,6 +98,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         <li>Цвет HVN-зоны — её класс на эту сессию по отторжениям хвостом (≥ 60% в одну сторону — поддержка или сопротивление).</li>
         <li>Все метрики посчитаны по RTH-барам строго до сессии. «Ближайших к цене» — по open сессии.</li>
         <li>Оранжевая линия — POC вчерашнего RTH, пунктир — его VAH и VAL. Время — CT.</li>
+        <li>Подтверждение — зачётный HVN-день (8–10 TPO) после появления зоны, чья HVN-полоса легла в зону или в пределах заданных пунктов от неё.</li>
+        <li>«Только балансы»: чистота не больше 60% (отторжения в обе стороны), от 2 подтверждений в пределах 2 п., HVN-зоны и старые балансы.</li>
       </ul>
     </div>
     <div>
@@ -109,7 +115,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <tr><td>ширина</td><td>50,1%</td><td>55,6%</td><td>+5,5</td><td>+5,0…+7,5</td></tr>
         </tbody>
       </table></div>
-      <p style="margin-top:6px">Фильтры убирают визуальный шум, но не отбирают зоны, которые держат лучше.</p>
+      <p style="margin-top:6px">Балансы: дни, когда цена задела зону (6548), — POC дня внутри зоны в 12,4%. С 4+ подтверждениями — 13,2% (у случайных 13,7%), при чистоте &lt; 60% — 11,3% (11,5%), ≥ 2 подтверждения и чистота &lt; 60% — 12,3% (11,7%).</p>
+      <p style="margin-top:6px">Фильтры убирают визуальный шум, но не отбирают зоны, которые держат или проторговываются лучше.</p>
     </div>
   </section>
 </div>
@@ -123,7 +130,7 @@ const TYPES = [
   ['hvn_S','HVN · поддержка','--z-s'],['hvn_R','HVN · сопротивление','--z-r'],['hvn_range','HVN · проторговка','--z-range'],
   ['hvn_new','HVN · без истории','--z-new'],['old_balance','Старый баланс (VA композита)','--z-ob'],['grey','Серая (single prints)','--z-grey']];
 const NAME = Object.fromEntries(TYPES.map(t=>[t[0],t[1]]));
-const DEF = {near:6,tests:0,rej:0,pur:0,age:0,wmax:60,prev:true,rth:true,
+const DEF = {near:6,tests:0,rej:0,pur:0,pmax:100,conf:0,cnear:0,age:0,wmax:60,prev:true,rth:true,
   types:{hvn_S:true,hvn_R:true,hvn_range:true,hvn_new:true,old_balance:false,grey:false}};
 let S = JSON.parse(JSON.stringify(DEF));
 try{ const s = JSON.parse(localStorage.getItem('zonemap-filters')||'null'); if(s) S = Object.assign(S,s,{types:Object.assign({},DEF.types,s.types||{})}); }catch(e){}
@@ -150,7 +157,8 @@ TYPES.forEach(([k,label,v])=>{
   typesEl.appendChild(b);
 });
 const ctl = {near:['f-near','o-near',v=>v==0?'все':v], tests:['f-tests','o-tests',v=>v], rej:['f-rej','o-rej',v=>v],
-  pur:['f-pur','o-pur',v=>v==0?'любая':v+'%'], age:['f-age','o-age',v=>v], wmax:['f-wmax','o-wmax',v=>v>=60?'любая':v]};
+  pur:['f-pur','o-pur',v=>v==0?'любая':v+'%'], pmax:['f-pmax','o-pmax',v=>v>=100?'любая':v+'%'],
+  conf:['f-conf','o-conf',v=>v], cnear:['f-cnear','o-cnear',v=>v==0?'только внутри зоны':v], age:['f-age','o-age',v=>v], wmax:['f-wmax','o-wmax',v=>v>=60?'любая':v]};
 // пределы ползунков — по данным
 let mT=0,mR=0,mA=0; D.zones.forEach(z=>z.st.forEach(s=>{ if(s){ mT=Math.max(mT,s[1]); mR=Math.max(mR,s[2]); mA=Math.max(mA,s[4]); }}));
 document.getElementById('f-tests').max=Math.max(5,mT); document.getElementById('f-rej').max=Math.max(5,mR);
@@ -161,6 +169,16 @@ Object.entries(ctl).forEach(([k,[id,oid,f]])=>{
   el.addEventListener('input',()=>{ S[k]=+el.value; o.textContent=f(S[k]); changed(); });
 });
 ['prev','rth'].forEach(k=>{ const el=document.getElementById('f-'+k); el.checked=S[k]; el.onchange=()=>{S[k]=el.checked; changed();}; });
+function syncControls(){
+  Object.entries(ctl).forEach(([k,[id,oid,f]])=>{ const el=document.getElementById(id); el.value=S[k]; document.getElementById(oid).textContent=f(S[k]); });
+  ['prev','rth'].forEach(k=>document.getElementById('f-'+k).checked=S[k]);
+  TYPES.forEach(([k])=>document.getElementById('t-'+k).setAttribute('aria-pressed',S.types[k]?'true':'false'));
+}
+document.getElementById('preset-bal').onclick=()=>{
+  S=Object.assign(JSON.parse(JSON.stringify(DEF)),{pmax:60,conf:2,cnear:2,near:8,
+    types:{hvn_S:true,hvn_R:true,hvn_range:true,hvn_new:false,old_balance:true,grey:false}});
+  syncControls(); changed();
+};
 document.getElementById('reset').onclick=()=>{
   S=JSON.parse(JSON.stringify(DEF));
   Object.entries(ctl).forEach(([k,[id,oid,f]])=>{ const el=document.getElementById(id); el.value=S[k]; document.getElementById(oid).textContent=f(S[k]); });
@@ -169,18 +187,26 @@ document.getElementById('reset').onclick=()=>{
   changed();
 };
 
+// подтверждения: зачётные HVN-дни до сессии в пределах cnear пунктов от зоны
+const confCount=(z,s)=>{ let n=0; const o=sess[s].ord; for(const [d,g] of z.cf){ if(d<o && g<=S.cnear) n++; } return n; };
+let mC=0; D.zones.forEach(z=>{ S.cnear=10; mC=Math.max(mC,confCount(z,lastS)); }); S.cnear=DEF.cnear;
+try{ const s=JSON.parse(localStorage.getItem('zonemap-filters')||'null'); if(s&&s.cnear!==undefined) S.cnear=s.cnear; }catch(e){}
+document.getElementById('f-conf').max=Math.max(5,mC);
 // какие зоны видны в сессию s
 function visible(s){
   const open=sOpen[s], out=[]; let total=0;
   D.zones.forEach(z=>{
     const st=z.st[s]; if(!st) return; total++;
     const [kind,tests,rej,pur,age]=st;
+    const conf=confCount(z,s);
+    if(conf<S.conf) return;
+    if(S.pmax<100 && (pur===null || pur*100>S.pmax)) return;
     if(!S.types[kind]) return;
     if(tests<S.tests || rej<S.rej || age<S.age) return;
     if(S.pur>0 && (pur===null || pur*100<S.pur)) return;
     if(S.wmax<60 && z.hi-z.lo>S.wmax) return;
     const dist = open<z.lo ? z.lo-open : open>z.hi ? open-z.hi : 0;
-    out.push({z,kind,tests,rej,pur,age,dist});
+    out.push({z,kind,tests,rej,pur,age,dist,conf});
   });
   out.sort((a,b)=>a.dist-b.dist);
   return {list: S.near>0 ? out.slice(0,S.near) : out, total};
@@ -267,7 +293,7 @@ chart.subscribeCrosshairMove(p=>{
   const tol=D.tick*2;
   const hit=VIS[s].list.filter(v=>price>=v.z.lo-tol&&price<=v.z.hi+tol);
   const head=`<span>${fmtD(sess[s].date)} · цена ${price.toFixed(2)} · вчера (${fmtD(sess[s].prev)}) VAH ${sess[s].vah.toFixed(2)} · POC ${sess[s].poc.toFixed(2)} · VAL ${sess[s].val.toFixed(2)}</span>`;
-  hov.innerHTML = head + (hit.length ? hit.map(v=>`<span class="z">${NAME[v.kind]} ${v.z.lo.toFixed(2)}–${v.z.hi.toFixed(2)} · тестов ${v.tests} · отторжений ${v.rej}${v.pur!==null?' (чистота '+Math.round(v.pur*100)+'%)':''} · возраст ${v.age} дн.</span>`).join('')
+  hov.innerHTML = head + (hit.length ? hit.map(v=>`<span class="z">${NAME[v.kind]} ${v.z.lo.toFixed(2)}–${v.z.hi.toFixed(2)} · тестов ${v.tests} · отторжений ${v.rej}${v.pur!==null?' (чистота '+Math.round(v.pur*100)+'%)':''} · подтверждений ${v.conf} · возраст ${v.age} дн.</span>`).join('')
     : '<span>видимых зон на этой цене нет</span>');
 });
 applyTheme(); changed(); loop();

@@ -64,6 +64,14 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="30", path=None):
 
     rth = daily[~daily.short_day].sort_values("date").reset_index(drop=True)
     rd = rth.date.to_numpy()
+    # зачётные HVN-дни (8–10 TPO): полоса HVN и дата — для подтверждений зон
+    q = dd[dd.ok]
+    q_date = q.date.to_numpy(dtype="datetime64[ns]")
+    q_lo, q_hi = q.band_lo.to_numpy(), q.band_hi.to_numpy()
+    MAX_NEAR = 10.0
+    day0 = np.datetime64("1970-01-01")
+    def ordinal(x):
+        return int((np.datetime64(x, "D") - day0).astype(int))
     zones_out = []
     for r in z.itertuples():
         tdates = np.sort(tests.date[tests.zone_id == r.zid].to_numpy(dtype="datetime64[ns]"))
@@ -89,8 +97,12 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="30", path=None):
             st.append([kind, int(np.searchsorted(tdates, dn)), tot,
                        round(max(nl, ns) / tot, 3) if tot else None,
                        int((pd.Timestamp(d) - r.available_from).days)])
+        # подтверждения: зачётный HVN-день после появления зоны; расстояние полосы HVN до зоны (0 — пересекаются)
+        m = q_date >= np.datetime64(r.available_from)
+        gap = np.maximum.reduce([np.zeros(m.sum()), q_lo[m] - r.hi, r.lo - q_hi[m]])
+        conf = [[ordinal(dt), round(float(g), 2)] for dt, g in zip(q_date[m], gap) if g <= MAX_NEAR]
         if any(x is not None for x in st):
-            zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "src": r.type, "st": st})
+            zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "src": r.type, "st": st, "cf": conf})
 
     # бары: время CT как «UTC», чтобы ось показывала Чикаго
     ts = w.ts.dt.tz_localize(None)
@@ -103,6 +115,8 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="30", path=None):
         sess_out.append({"date": f"{pd.Timestamp(d):%Y-%m-%d}", "prev": f"{p.date:%Y-%m-%d}",
                          "vah": float(p.vah), "val": float(p.val), "poc": float(p.poc),
                          "high": float(p.high), "low": float(p.low)})
+    for so, d in zip(sess_out, sess):
+        so["ord"] = ordinal(d)
     data = {"instrument": "ES (ESZ6, back-adjusted)", "bars": bars_out, "sessions": sess_out, "zones": zones_out,
             "rth_last": f"{rth.date.max():%Y-%m-%d}", "tick": tick}
     path = path or str(ROOT / "output" / "zone_map_data.json")
