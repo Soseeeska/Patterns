@@ -97,6 +97,7 @@ primary_zones:                     # первородные зоны (scripts/pr
 wicks:                             # хвосты 30m-свечей у первородных зон (scripts/zone_wicks.py)
   min_wick_ticks: 2                # хвост короче 2 тиков не считается
   placebo_runs: 10
+  class_rejection_share: 0.60      # вариант классов «по отторжениям»: ≥ 60% отторжений в одну сторону
 
 day_type:
   avg_range_lookback_days: 20
