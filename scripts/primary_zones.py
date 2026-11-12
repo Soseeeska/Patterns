@@ -75,6 +75,28 @@ def test_summary(t: pd.DataFrame) -> dict:
     return out
 
 
+def zone_frame(days: pd.DataFrame, daily: pd.DataFrame, cfg: dict, tick: float,
+               leave_by: str = "hvn") -> pd.DataFrame:
+    """days: результат per_day + колонка ok. Возвращает таблицу зон (цены в пунктах)."""
+    zc = cfg["hvn_zones"]
+    inp = pd.DataFrame({"date": days.date, "lo": np.rint(days.band_lo / tick).astype(int),
+                        "hi": np.rint(days.band_hi / tick).astype(int), "ok": days.ok,
+                        "va_lo": np.rint(days.val / tick).astype(int),
+                        "va_hi": np.rint(days.vah / tick).astype(int)})
+    zones = build_primary_zones(inp, zc["merge_overlap_min"],
+                                int(round(zc["merge_max_width_points"] / tick)), leave_by)
+    trade_days = list(daily.date)
+    nxt = {d: trade_days[i + 1] for i, d in enumerate(trade_days[:-1])}
+    return pd.DataFrame([{
+        "zone_id": k + 1, "lo": p.lo * tick, "hi": p.hi * tick, "width_pts": (p.hi - p.lo) * tick,
+        "formation_days": len(p.days), "start": p.days[0], "last_formation_day": p.days[-1],
+        "fixed_on": p.fixed_on, "available_from": nxt.get(p.fixed_on, pd.NaT) if p.fixed_on is not None else pd.NaT,
+        "confirmations": len(p.confirmations),
+        "first_confirmation": p.confirmations[0] if p.confirmations else pd.NaT,
+        "conf_dates": p.confirmations,
+    } for k, p in enumerate(zones)])
+
+
 def main(instrument: str = "ES") -> None:
     cfg = load_config()
     zc, pc = cfg["hvn_zones"], cfg["primary_zones"]
@@ -84,20 +106,7 @@ def main(instrument: str = "ES") -> None:
     _, daily, profiles, _, tick = load_adjusted(instrument, cfg)
     days = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
     days["ok"] = days.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
-    inp = pd.DataFrame({"date": days.date, "lo": np.rint(days.band_lo / tick).astype(int),
-                        "hi": np.rint(days.band_hi / tick).astype(int), "ok": days.ok})
-    zones = build_primary_zones(inp, ov, int(round(zc["merge_max_width_points"] / tick)))
-
-    trade_days = list(daily.date)
-    nxt = {d: trade_days[i + 1] for i, d in enumerate(trade_days[:-1])}
-    z = pd.DataFrame([{
-        "zone_id": k + 1, "lo": p.lo * tick, "hi": p.hi * tick, "width_pts": (p.hi - p.lo) * tick,
-        "formation_days": len(p.days), "start": p.days[0], "last_formation_day": p.days[-1],
-        "fixed_on": p.fixed_on, "available_from": nxt.get(p.fixed_on, pd.NaT) if p.fixed_on is not None else pd.NaT,
-        "confirmations": len(p.confirmations),
-        "first_confirmation": p.confirmations[0] if p.confirmations else pd.NaT,
-        "conf_dates": p.confirmations,
-    } for k, p in enumerate(zones)])
+    z = zone_frame(days, daily, cfg, tick)
     fz = z[z.available_from.notna()].copy()
 
     qual = days[days.ok]

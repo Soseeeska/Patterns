@@ -45,3 +45,15 @@ def test_zone_tests_roles_and_flip():
     assert list(t.result) == ["hold", "break", "hold"]
     assert list(t.after_break) == [False, False, True]
     assert list(t.confirmations_before) == [0, 0, 1]
+
+
+def test_leave_by_va_keeps_zone_open_while_va_overlaps():
+    rows = [(100, 110, True, 90, 120), (200, 210, True, 105, 220), (102, 109, True, 95, 115),
+            (300, 310, False, 290, 320)]
+    days = pd.DataFrame([{"date": D[i], "lo": lo, "hi": hi, "ok": ok, "va_lo": vl, "va_hi": vh}
+                         for i, (lo, hi, ok, vl, vh) in enumerate(rows)])
+    (z,) = build_primary_zones(days, 0.5, 40, leave_by="va")
+    # день 1: HVN далеко, но VA задевает зону — зона открыта, не расширяется
+    assert (z.lo, z.hi, z.days, z.fixed_on) == (100, 110, [D[0], D[2]], D[3])
+    zh = build_primary_zones(days, 0.5, 40, leave_by="hvn")
+    assert zh[0].fixed_on == D[1] and zh[0].confirmations == [D[2]]

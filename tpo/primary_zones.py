@@ -9,11 +9,12 @@ TPO ≥ hvn_share × максимум). «Зачётный» день — мак
       - полоса пересекается ≥ overlap_min с зафиксированной зоной → +1
         подтверждение той, с которой пересечение больше; новой зоны нет;
       - иначе с этого дня начинается новая формирующаяся зона.
-  * Есть формирующаяся зона F, полоса дня (любого) пересекается с F ≥ overlap_min:
-      цена ещё в зоне. Если день зачётный и объединение ≤ max_width — F
+  * Есть формирующаяся зона F и цена ещё в зоне: leave_by="hvn" — полоса
+      дня (любого) пересекается с F ≥ overlap_min; leave_by="va" — VA дня
+      пересекается с F хотя бы одной строкой. Если день зачётный и объединение ≤ max_width — F
       расширяется до объединения и день добавляется в её дни; иначе F не
       меняется.
-  * Полоса дня пересекается с F меньше overlap_min — цена ушла: F
+  * Иначе цена ушла: F
     фиксируется (fixed_on = этот день, доступна со следующего), а день
     разбирается заново как день без формирующейся зоны.
 Зафиксированная зона больше не меняется, только копит подтверждения.
@@ -40,14 +41,20 @@ def _overlap(lo1: int, hi1: int, lo2: int, hi2: int) -> float:
     return max(inter, 0) / min(hi1 - lo1 + 1, hi2 - lo2 + 1)
 
 
-def build_primary_zones(days: pd.DataFrame, overlap_min: float, max_width_ticks: int) -> list[PrimaryZone]:
-    """days: date, lo, hi (полоса в тиках), ok (зачётный), по возрастанию даты."""
+def build_primary_zones(days: pd.DataFrame, overlap_min: float, max_width_ticks: int,
+                        leave_by: str = "hvn") -> list[PrimaryZone]:
+    """days: date, lo, hi (полоса в тиках), ok (зачётный), по возрастанию даты;
+    для leave_by="va" ещё va_lo, va_hi (тики)."""
     fixed: list[PrimaryZone] = []
     cur: PrimaryZone | None = None
     for r in days.itertuples():
         if cur is not None:
-            if _overlap(cur.lo, cur.hi, r.lo, r.hi) >= overlap_min:
-                if r.ok and max(cur.hi, r.hi) - min(cur.lo, r.lo) <= max_width_ticks:
+            if leave_by == "va":
+                stay = r.va_lo <= cur.hi and r.va_hi >= cur.lo
+            else:
+                stay = _overlap(cur.lo, cur.hi, r.lo, r.hi) >= overlap_min
+            if stay:
+                if r.ok and _overlap(cur.lo, cur.hi, r.lo, r.hi) >= overlap_min and max(cur.hi, r.hi) - min(cur.lo, r.lo) <= max_width_ticks:
                     cur.lo, cur.hi = min(cur.lo, r.lo), max(cur.hi, r.hi)
                     cur.days.append(r.date)
                 continue
@@ -89,7 +96,7 @@ def zone_tests(daily: pd.DataFrame, zones: pd.DataFrame, tol: float) -> pd.DataF
         start = np.searchsorted(dates, np.datetime64(z.available_from))
         above, below = o[start:] > z.hi, o[start:] < z.lo
         touch = (above & (l[start:] <= z.hi + tol)) | (below & (h[start:] >= z.lo - tol))
-        conf = np.array(sorted(z.conf_dates), dtype="datetime64[ns]")
+        conf = np.array(sorted(getattr(z, "conf_dates", None) or []), dtype="datetime64[ns]")
         n, broken = 0, False
         for k in np.flatnonzero(touch):
             i = start + k

@@ -88,6 +88,11 @@ primary_zones:                     # первородные зоны (scripts/pr
   placebo_runs: 20
   placebo_shift_widths: [1.5, 3.0] # сдвиг фальш-зоны: U(1.5, 3) × ширина зоны, вверх или вниз
   placebo_min_shift_points: 4.0    # ширина для сдвига не меньше 4 п.
+  placebo_runs_30m: 10             # прогонов фальш-зон для 30m-тестов (они медленнее)
+  clean_day:                       # «чистый» зачётный день
+    poc_pos_range: [0.25, 0.75]    # POC в средней половине VA: (POC − VAL) / (VAH − VAL)
+    late_from_period: 9            # поздние периоды: J–M (с 9-го, счёт с 0)
+    late_share_max: 0.50           # доля TPO HVN-полосы от поздних периодов не больше 50%
 
 day_type:
   avg_range_lookback_days: 20
