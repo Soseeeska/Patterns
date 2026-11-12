@@ -6,7 +6,7 @@
 правила этапа 6, RTH-бары), баров-отторжений до (лонг / шорт), чистота
 (доля отторжений в одну сторону), возраст в днях; у HVN — класс на дату.
 
-Запуск:  python -m scripts.zone_map_export [ES] [ES_ETH] [sessions] [out.json]
+Запуск:  python -m scripts.zone_map_export [ES] [ES_ETH] [sessions=250] [out.json]
 Рядом с JSON пишется готовая страница (<out>.html) из scripts/zone_map_template.html.
 """
 from __future__ import annotations
@@ -27,8 +27,10 @@ from tpo.data import ROOT, load_config
 from tpo.day_context import grey_zones
 from tpo.zone_classes import interaction_types
 
+KIND = {"old_balance": 0, "hvn_S": 1, "hvn_R": 2, "hvn_range": 3, "hvn_new": 4, "grey": 5}
 
-def main(instrument="ES", bars_instrument="ES_ETH", sessions="30", path=None):
+
+def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
     cfg = load_config(instrument=instrument)
     cc, zc = cfg["day_context"], cfg["hvn_zones"]
     share = cfg["wicks"]["class_rejection_share"]
@@ -94,15 +96,18 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="30", path=None):
             if kind == "hvn":
                 kind = ("hvn_new" if tot == 0 else "hvn_S" if nl / tot >= share else
                         "hvn_R" if ns / tot >= share else "hvn_range")
-            st.append([kind, int(np.searchsorted(tdates, dn)), tot,
+            st.append([KIND[kind], int(np.searchsorted(tdates, dn)), tot,
                        round(max(nl, ns) / tot, 3) if tot else None,
                        int((pd.Timestamp(d) - r.available_from).days)])
         # подтверждения: зачётный HVN-день после появления зоны; расстояние полосы HVN до зоны (0 — пересекаются)
         m = q_date >= np.datetime64(r.available_from)
         gap = np.maximum.reduce([np.zeros(m.sum()), q_lo[m] - r.hi, r.lo - q_hi[m]])
         conf = [[ordinal(dt), round(float(g), 2)] for dt, g in zip(q_date[m], gap) if g <= MAX_NEAR]
-        if any(x is not None for x in st):
-            zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "src": r.type, "st": st, "cf": conf})
+        alive = [i for i, x in enumerate(st) if x is not None]
+        if alive:   # хранится только срок жизни: f — первая сессия, st — состояния с неё
+            f0, f1 = alive[0], alive[-1]
+            zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "src": r.type, "f": f0,
+                              "st": st[f0:f1 + 1], "cf": conf})
 
     # бары: время CT как «UTC», чтобы ось показывала Чикаго
     ts = w.ts.dt.tz_localize(None)

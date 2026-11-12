@@ -83,6 +83,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <label><input type="checkbox" id="f-rth" checked> подсветка RTH</label>
       <button class="btn" id="preset-bal" type="button">Только балансы</button>
       <button class="btn" id="reset" type="button">Сбросить фильтры</button>
+      <span class="row" role="group" aria-label="Период на графике" style="gap:4px">
+        <button class="btn" type="button" data-range="5">неделя</button>
+        <button class="btn" type="button" data-range="21">месяц</button>
+        <button class="btn" type="button" data-range="63">3 месяца</button>
+        <button class="btn" type="button" data-range="0">всё</button>
+      </span>
       <span class="count" id="count"></span>
     </div>
   </section>
@@ -99,6 +105,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         <li>Цвет HVN-зоны — её класс на эту сессию по отторжениям хвостом (≥ 60% в одну сторону — поддержка или сопротивление).</li>
         <li>Все метрики посчитаны по RTH-барам строго до сессии. «Ближайших к цене» — по open сессии.</li>
         <li>Оранжевая линия — POC вчерашнего RTH, пунктир — его VAH и VAL. Время — CT.</li>
+        <li>График листается мышью или пальцем, колесо или щипок — масштаб; кнопки над графиком — быстрый выбор периода.</li>
         <li>Подтверждение — зачётный HVN-день (8–10 TPO) после появления зоны, чья HVN-полоса легла в зону или в пределах заданных пунктов от неё.</li>
         <li>«Только балансы»: чистота не больше 60% (отторжения в обе стороны), от 2 подтверждений в пределах 2 п., HVN-зоны и старые балансы.</li>
       </ul>
@@ -131,6 +138,9 @@ const TYPES = [
   ['hvn_S','HVN · поддержка','--z-s'],['hvn_R','HVN · сопротивление','--z-r'],['hvn_range','HVN · проторговка','--z-range'],
   ['hvn_new','HVN · без истории','--z-new'],['old_balance','Старый баланс (VA композита)','--z-ob'],['grey','Серая (single prints)','--z-grey']];
 const NAME = Object.fromEntries(TYPES.map(t=>[t[0],t[1]]));
+const KINDS = ['old_balance','hvn_S','hvn_R','hvn_range','hvn_new','grey'];
+// состояние зоны на сессию s (данные хранят только срок жизни, начиная с z.f)
+const stAt=(z,s)=>{ const i=s-z.f; if(i<0||i>=z.st.length) return null; const x=z.st[i]; return x?[KINDS[x[0]],x[1],x[2],x[3],x[4]]:null; };
 const DEF = {near:6,tests:0,rej:0,pur:0,pmax:100,conf:0,cnear:0,age:0,wmax:60,prev:true,rth:true,
   types:{hvn_S:true,hvn_R:true,hvn_range:true,hvn_new:true,old_balance:false,grey:false}};
 let S = JSON.parse(JSON.stringify(DEF));
@@ -162,6 +172,7 @@ const ctl = {near:['f-near','o-near',v=>v==0?'все':v], tests:['f-tests','o-te
   conf:['f-conf','o-conf',v=>v], cnear:['f-cnear','o-cnear',v=>v==0?'только внутри зоны':v], age:['f-age','o-age',v=>v], wmax:['f-wmax','o-wmax',v=>v>=60?'любая':v]};
 // пределы ползунков — по данным
 let mT=0,mR=0,mA=0; D.zones.forEach(z=>z.st.forEach(s=>{ if(s){ mT=Math.max(mT,s[1]); mR=Math.max(mR,s[2]); mA=Math.max(mA,s[4]); }}));
+mT=Math.min(mT,200); mR=Math.min(mR,300);
 document.getElementById('f-tests').max=Math.max(5,mT); document.getElementById('f-rej').max=Math.max(5,mR);
 document.getElementById('f-age').max=Math.ceil(Math.max(30,mA)/10)*10;
 Object.entries(ctl).forEach(([k,[id,oid,f]])=>{
@@ -197,7 +208,7 @@ document.getElementById('f-conf').max=Math.max(5,mC);
 function visible(s){
   const open=sOpen[s], out=[]; let total=0;
   D.zones.forEach((z,zi)=>{
-    const st=z.st[s]; if(!st) return; total++;
+    const st=stAt(z,s); if(!st) return; total++;
     const [kind,tests,rej,pur,age]=st;
     const conf=confCount(z,s);
     if(conf<S.conf) return;
@@ -215,13 +226,15 @@ function visible(s){
 let VIS=[];
 // зона, прошедшая фильтры хотя бы в одну сессию, рисуется на всём сроке жизни
 // (во все сессии, когда она существует), с метриками и цветом на каждую сессию
-function changed(){
+let pending=false;
+function changed(){ if(pending) return; pending=true; requestAnimationFrame(()=>{ pending=false; recompute(); }); }
+function recompute(){
   save();
   const keep=new Set(); const totals=[];
   sess.forEach((_,s)=>{ const v=visible(s); totals[s]=v.total; v.list.forEach(x=>keep.add(x.zi)); });
   VIS = sess.map((_,s)=>{
     const list=[];
-    D.zones.forEach((z,zi)=>{ const st=z.st[s]; if(!st||!keep.has(zi)) return;
+    D.zones.forEach((z,zi)=>{ if(!keep.has(zi)) return; const st=stAt(z,s); if(!st) return;
       const [kind,tests,rej,pur,age]=st; list.push({zi,z,kind,tests,rej,pur,age,conf:confCount(z,s)}); });
     return {list,total:totals[s]};
   });
@@ -239,7 +252,12 @@ const chart=LightweightCharts.createChart(el,{autoSize:true,
   crosshair:{mode:LightweightCharts.CrosshairMode.Normal}});
 const series=chart.addCandlestickSeries({priceFormat:{type:'price',precision:2,minMove:D.tick}});
 series.setData(bars.map(b=>({time:b[0],open:b[1],high:b[2],low:b[3],close:b[4]})));
-chart.timeScale().setVisibleLogicalRange({from:Math.max(0,bars.length-46*8),to:bars.length+4});
+function showSessions(n){
+  const from = n>0 ? sFirst[Math.max(0,sess.length-n)] : 0;
+  chart.timeScale().setVisibleLogicalRange({from:from-2,to:bars.length+4});
+}
+document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>showSessions(+b.dataset.range));
+showSessions(21);
 function applyTheme(){
   chart.applyOptions({layout:{background:{type:'solid',color:css('--panel')},textColor:css('--muted')},
     grid:{vertLines:{color:css('--grid')},horzLines:{color:css('--grid')}},
@@ -301,11 +319,12 @@ chart.subscribeCrosshairMove(p=>{
   const i=Math.max(0,Math.min(bars.length-1,Math.round(p.logical))), s=bars[i][5];
   const price=series.coordinateToPrice(p.point.y); if(price===null) return;
   const tol=D.tick*2;
+  if(!VIS[s]) return;
   const hit=VIS[s].list.filter(v=>price>=v.z.lo-tol&&price<=v.z.hi+tol);
   const head=`<span>${fmtD(sess[s].date)} · цена ${price.toFixed(2)} · вчера (${fmtD(sess[s].prev)}) VAH ${sess[s].vah.toFixed(2)} · POC ${sess[s].poc.toFixed(2)} · VAL ${sess[s].val.toFixed(2)}</span>`;
   hov.innerHTML = head + (hit.length ? hit.map(v=>`<span class="z">${NAME[v.kind]} ${v.z.lo.toFixed(2)}–${v.z.hi.toFixed(2)} · тестов ${v.tests} · отторжений ${v.rej}${v.pur!==null?' (чистота '+Math.round(v.pur*100)+'%)':''} · подтверждений ${v.conf} · возраст ${v.age} дн.</span>`).join('')
     : '<span>видимых зон на этой цене нет</span>');
 });
-applyTheme(); changed(); loop();
+applyTheme(); recompute(); loop();
 })();
 </script>
