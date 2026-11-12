@@ -12,7 +12,8 @@
 до POC прошлого дня до конца сессии.
 
 Запуск:  python -m scripts.prev_day_rejections [ES] [бары: ES_ETH] [с даты]
-Результат: output/<TAG>_prev_day_rejections.csv
+Два варианта: все события и строгие (open тоже внутри уровня).
+Результат: output/<TAG>_prev_day_rejections.csv, output/<TAG>_prev_day_rejections_strict.csv
 """
 from __future__ import annotations
 
@@ -30,21 +31,27 @@ from tpo.data import ROOT, load_config
 from tpo.intraday import build_bands, placebo_bands
 
 
-def events(bars: pd.DataFrame, daily: pd.DataFrame) -> pd.DataFrame:
-    """Первое отторжение на каждый уровень прошлого RTH-дня в каждой сессии."""
+def events(bars: pd.DataFrame, daily: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
+    """Первое отторжение на каждый уровень прошлого RTH-дня в каждой сессии.
+    strict=True — open бара тоже внутри (наружу выходит только хвост); иначе
+    сюда попадают и возвраты: бар открылся снаружи и закрылся внутри."""
     d = daily[~daily.short_day].sort_values("date")
     rth_dates = d.date.to_numpy()
     b = bars.sort_values("ts").reset_index(drop=True)
+    sessions = np.sort(b.date.unique())
     out = []
-    for date, g in b.groupby("date", sort=True):
+    for j, (date, g) in enumerate(b.groupby("date", sort=True)):
         k = np.searchsorted(rth_dates, np.datetime64(date)) - 1     # последний RTH-день раньше сессии
-        if k < 0:
+        # он должен быть именно предыдущей сессией: иначе (нет RTH-данных, короткий день) пропуск
+        if k < 0 or j == 0 or rth_dates[k] != sessions[j - 1]:
             continue
         p = d.iloc[k]
-        H, L, C = g.high.to_numpy(), g.low.to_numpy(), g.close.to_numpy()
+        O, H, L, C = g.open.to_numpy(), g.high.to_numpy(), g.low.to_numpy(), g.close.to_numpy()
         for level, price, side in (("High", p.high, "выше"), ("VAH", p.vah, "выше"),
                                    ("Low", p.low, "ниже"), ("VAL", p.val, "ниже")):
             m = (H > price) & (C <= price) if side == "выше" else (L < price) & (C >= price)
+            if strict:
+                m &= (O <= price) if side == "выше" else (O >= price)
             idx = np.flatnonzero(m)
             if not len(idx):
                 continue
@@ -90,11 +97,19 @@ def main(instrument: str = "ES", bars_instrument: str | None = None, since: str 
 
     tbars = load_test_bars(bars_instrument or instrument, since)[0] if (bars_instrument or since) else bars
     name = tag(instrument, bars_instrument, since)
-    ev = events(tbars, daily)
+    for strict in (False, True):
+        print("\n" + "=" * 20, "СТРОГО: open тоже внутри, наружу только хвост" if strict else
+              "ВСЕ: хвост за уровнем, close внутри (включая бары, открывшиеся снаружи)", "=" * 20)
+        report(tbars, daily, bands, comps, prim, cfg, tick, tol, pc, strict,
+               out / f"{name}_prev_day_rejections{'_strict' if strict else ''}.csv", name)
+
+
+def report(tbars, daily, bands, comps, prim, cfg, tick, tol, pc, strict, path, name):
+    ev = events(tbars, daily, strict)
     ev["comp_zone"] = at_zone(ev, bands, tol)
     ev["comp_type"] = ev.comp_zone.map(bands.set_index("zone_id").level_type)
     ev["prim_zone"] = at_zone(ev, prim, tol)
-    ev.to_csv(out / f"{name}_prev_day_rejections.csv", index=False)
+    ev.to_csv(path, index=False)
 
     real_levels = np.concatenate([comps.vah.to_numpy(), comps.val.to_numpy(), comps.poc.to_numpy()])
     rng = np.random.default_rng(cfg["stats"]["placebo"]["seed"])
