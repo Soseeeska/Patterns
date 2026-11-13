@@ -11,8 +11,11 @@
   cf — зачётные HVN-дни (8–10 TPO) после появления: [дата, зазор до зоны, п.]
        (0 — полоса HVN пересекла зону), до 10 п.
 По ним страница считает состояние зоны на любой день: тесты, отторжения,
-чистоту, класс HVN-зоны, подтверждения, возраст — в том числе «паспорт»
-после N торговых дней проверки.
+чистоту, класс HVN-зоны, подтверждения, возраст (по исходным границам).
+  ab — границы после подгонки по краям тел 30m-свечей (tpo/zone_align.py) на
+       первых N сессиях после появления зоны, для каждого N из
+       zone_align.map_check_steps; после этих N сессий границы не меняются.
+       Свечи — ETH+RTH, если зона появилась после начала ETH-данных, иначе RTH.
 
 Запуск:  python -m scripts.zone_map_export [ES] [ES_ETH] [sessions=250] [out.json]
 Рядом с JSON пишется готовая страница (<out>.html) из scripts/zone_map_template.html.
@@ -33,6 +36,7 @@ from scripts.zone_wicks import analyze
 from tpo.balance import find_balances
 from tpo.data import ROOT, load_config
 from tpo.day_context import grey_zones
+from tpo.zone_align import align_zone
 from tpo.zone_classes import interaction_types
 
 KIND = {"old_balance": 0, "hvn": 1, "grey": 5}
@@ -84,6 +88,34 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
     q_date = qual.date.to_numpy(dtype="datetime64[ns]")
     q_lo, q_hi = qual.band_lo.to_numpy(), qual.band_hi.to_numpy()
 
+    # подгонка границ: N первых сессий после появления зоны
+    ac = cfg["zone_align"]
+    steps = ac["map_check_steps"]
+    def bar_arrays(bb):
+        bb = bb.sort_values("ts").reset_index(drop=True)
+        ss = np.sort(bb.date.unique())
+        fb = pd.Series(np.arange(len(bb)), index=bb.date).groupby(level=0).min().reindex(ss).to_numpy()
+        return ss, np.r_[fb, len(bb)], [bb[k].to_numpy() for k in ("open", "high", "low", "close")]
+    src_eth, src_rth = bar_arrays(b), bar_arrays(rbars)
+    eth_start = pd.Timestamp(src_eth[0][0])
+
+    def aligned(lo, hi, avail):
+        ss, fb, (o_, h_, l_, c_) = src_eth if avail >= eth_start else src_rth
+        i0 = int(np.searchsorted(ss, np.datetime64(avail)))
+        search = max(ac["search_frac"] * (hi - lo), ac["search_min_points"])
+        max_w = max(ac["max_width_points"], ac["map_max_width_mult"] * (hi - lo))
+        out = []
+        for n in steps:
+            i1 = min(i0 + n, len(ss))
+            if n == 0 or i1 <= i0:
+                out.append([lo, hi])
+                continue
+            a, e = fb[i0], fb[i1]
+            nlo, nhi, _, _ = align_zone(o_[a:e], h_[a:e], l_[a:e], c_[a:e], lo, hi, tick, search, mw,
+                                        ac["w_plain"], ac["min_score"], ac["min_width_ticks"] * tick, max_w)
+            out.append([round(nlo / tick) * tick, round(nhi / tick) * tick])
+        return out
+
     zones_out = []
     for i, r in z.iterrows():
         t_ord = sorted({ordinal(d) for d in tests.date[tests.zone_id == i]})
@@ -100,7 +132,8 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
         zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "k": KIND[r.type], "av": av,
                           "ai": int(np.searchsorted(rth_ord, av)),
                           "fl": None if pd.isna(r.filled) else ordinal(r.filled),
-                          "t": t_ord, "L": lg, "S": sh, "cf": cf})
+                          "t": t_ord, "L": lg, "S": sh, "cf": cf,
+                          "ab": aligned(float(r.lo), float(r.hi), r.available_from)})
 
     # бары: время CT как «UTC», чтобы ось показывала Чикаго
     ts = w.ts.dt.tz_localize(None)
@@ -112,7 +145,8 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
         p = rth.iloc[np.searchsorted(rd, np.datetime64(d)) - 1]
         sess_out.append({"date": f"{pd.Timestamp(d):%Y-%m-%d}", "ord": ordinal(d), "prev": f"{p.date:%Y-%m-%d}",
                          "vah": float(p.vah), "val": float(p.val), "poc": float(p.poc)})
-    data = {"instrument": "ES (ESZ6, back-adjusted)", "tick": tick, "share": cfg["wicks"]["class_rejection_share"],
+    data = {"instrument": "ES (ESZ6, back-adjusted)", "tick": tick, "steps": steps,
+            "eth_start": f"{eth_start:%Y-%m-%d}", "share": cfg["wicks"]["class_rejection_share"],
             "rth_last": f"{rth.date.max():%Y-%m-%d}", "rth": rth_ord,
             "bars": bars_out, "sessions": sess_out, "zones": zones_out}
 

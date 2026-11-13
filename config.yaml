@@ -121,6 +121,8 @@ zone_align:                        # подгонка границ первор�
   min_width_ticks: 2
   max_width_points: 10.0
   placebo_runs: 10
+  map_check_steps: [0, 1, 2, 3, 5, 7, 10, 15, 20, 30, 40, 60]   # карта зон: варианты «дней подгонки» границ
+  map_max_width_mult: 1.5          # на карте ширина после подгонки ≤ max(10 п., 1.5 × исходной) — для широких VA композитов
 
 day_context:                       # сегодня против вчера + карта зон (scripts/day_context.py)
   spike_min_ticks: 8               # спайк: последний период (M) вышел за экстремум A–L на ≥ 2 п.
