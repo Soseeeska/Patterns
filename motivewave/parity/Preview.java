@@ -107,13 +107,9 @@ public class Preview {
             if (x1 < 0) continue;
             double y0 = ty.applyAsDouble(r.z.bhi), y1 = ty.applyAsDouble(r.z.blo);
             Color c = base.get(r.kind);
-            int op = r.kind == Kind.OLD_BALANCE ? 10 : r.kind == Kind.GREY ? 14 : 24;
+            int op = 30;                                   // заливка по умолчанию в индикаторе, границ нет
             g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.round(op * 2.55f)));
             g.fill(new java.awt.geom.Rectangle2D.Double(x0, y0, x1 - x0, Math.max(2, y1 - y0)));
-            g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 217));
-            g.setStroke(new BasicStroke(1f));
-            g.draw(new java.awt.geom.Line2D.Double(x0, y0, x1, y0));
-            g.draw(new java.awt.geom.Line2D.Double(x0, y1, x1, y1));
         }
         Color up = new Color(0xc9ced3), dn = new Color(0xc9ced3), upFill = new Color(0x15181c);
         for (int i = f0; i < n; i++) {

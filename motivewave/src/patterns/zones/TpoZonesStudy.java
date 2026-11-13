@@ -64,7 +64,8 @@ public class TpoZonesStudy extends Study {
             SESSIONS = "sessions", NEAR = "near", ALIGN = "align", PROMOTE = "promote", MIN_REJ = "minRej",
             PUR_MIN = "purMin", PUR_MAX = "purMax", MIN_CONF = "minConf", CONF_NEAR = "confNear",
             MIN_AGE = "minAge", MAX_W = "maxW", EDGES = "edges", PREV = "prev", PREV_VA = "prevVaColor",
-            PREV_POC = "prevPocColor", OP_MAIN = "opMain", OP_OLD = "opOld", OP_GREY = "opGrey", OP_EDGE = "opEdge";
+            PREV_POC = "prevPocColor", OP_MAIN = "opMain", OP_OLD = "opOld", OP_GREY = "opGrey", OP_EDGE = "opEdge",
+            HL = "hl", HL_SESS = "hlSessions", HL_COUNT = "hlCount", HL_COLOR = "hlColor", HL_LABELS = "hlLabels";
     static final Map<Kind, String> SHOW = new EnumMap<>(Kind.class), COLOR = new EnumMap<>(Kind.class);
     static final Map<Kind, Color> DEF_COLOR = new EnumMap<>(Kind.class);
     static {
@@ -103,14 +104,21 @@ public class TpoZonesStudy extends Study {
         g.addRow(new IntegerDescriptor(MIN_AGE, "Возраст зоны не меньше, дн.", 0, 0, 3000, 1));
         g.addRow(new DoubleDescriptor(MAX_W, "Ширина зоны до, п. (60 — любая)", 60, 1, 60, 0.5));
 
+        g = tab.addGroup("Подсветка проторгованных зон");
+        g.addRow(new BooleanDescriptor(HL, "Обводить пунктиром зоны с наибольшим числом отторжений", true));
+        g.addRow(new IntegerDescriptor(HL_SESS, "За последние сессий (ETH + RTH)", 5, 1, 100, 1));
+        g.addRow(new IntegerDescriptor(HL_COUNT, "Сколько зон выделять", 5, 1, 50, 1));
+        g.addRow(new BooleanDescriptor(HL_LABELS, "Подписи: отторжения и тесты", true));
+        g.addRow(new ColorDescriptor(HL_COLOR, "Цвет пунктира", new Color(0xffd23f)));
+
         tab = sd.addTab("Вид");
         g = tab.addGroup("Цвета зон");
         for (Kind k : Kind.values()) g.addRow(new ColorDescriptor(COLOR.get(k), k.title, DEF_COLOR.get(k)));
         g = tab.addGroup("Заливка, %");
-        g.addRow(new IntegerDescriptor(OP_MAIN, "HVN-зоны", 24, 0, 100, 1));
-        g.addRow(new IntegerDescriptor(OP_OLD, "Старые балансы", 10, 0, 100, 1));
-        g.addRow(new IntegerDescriptor(OP_GREY, "Серые", 14, 0, 100, 1));
-        g.addRow(new BooleanDescriptor(EDGES, "Линии границ", true));
+        g.addRow(new IntegerDescriptor(OP_MAIN, "HVN-зоны", 30, 0, 100, 1));
+        g.addRow(new IntegerDescriptor(OP_OLD, "Старые балансы", 30, 0, 100, 1));
+        g.addRow(new IntegerDescriptor(OP_GREY, "Серые", 30, 0, 100, 1));
+        g.addRow(new BooleanDescriptor(EDGES, "Линии границ", false));
         g.addRow(new IntegerDescriptor(OP_EDGE, "Непрозрачность границ, %", 85, 0, 100, 5));
         g = tab.addGroup("Вчерашний RTH-профиль");
         g.addRow(new BooleanDescriptor(PREV, "Показывать VAH / VAL / POC вчера", true));
@@ -143,7 +151,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new IntegerDescriptor(WICK, "Хвост от, тиков", 2, 1, 20, 1));
 
         RuntimeDescriptor rd = createRD();
-        rd.setLabelSettings(NEAR, ALIGN);
+        rd.setLabelSettings(NEAR, HL_SESS, HL_COUNT);
     }
 
     @Override
@@ -171,7 +179,7 @@ public class TpoZonesStudy extends Study {
             Result res = ZoneEngine.run(bars, p);
             if (res.sessions.isEmpty()) return;
             computedFor = res.sessions.get(res.sessions.size() - 1).date;
-            draw(res, p);
+            draw(res, p, bars);
             info("TPO Zones: RTH-дней " + res.rthDays + " (полных " + res.fullDays + "), зон " + res.zones.size()
                     + ", сессий на графике " + res.sessions.size() + (res.note.isEmpty() ? "" : " — " + res.note));
         } catch (Exception e) {
@@ -247,16 +255,16 @@ public class TpoZonesStudy extends Study {
     }
 
     // ------------------------------------------------------------------ отрисовка
-    private void draw(Result res, Params p) {
+    private void draw(Result res, Params p, List<ZoneEngine.Bar> bars) {
         Settings st = getSettings();
         ZonePlan plan = ZonePlan.of(res, p);
-        boolean edges = st.getBoolean(EDGES, true);
+        boolean edges = st.getBoolean(EDGES, false);
         int edgeA = st.getInteger(OP_EDGE, 85);
         Map<Kind, Color> fill = new EnumMap<>(Kind.class), line = new EnumMap<>(Kind.class);
         for (Kind k : Kind.values()) {
             Color c = st.getColor(COLOR.get(k));
             if (c == null) c = DEF_COLOR.get(k);
-            int op = k == Kind.OLD_BALANCE ? st.getInteger(OP_OLD, 10) : k == Kind.GREY ? st.getInteger(OP_GREY, 14) : st.getInteger(OP_MAIN, 24);
+            int op = k == Kind.OLD_BALANCE ? st.getInteger(OP_OLD, 30) : k == Kind.GREY ? st.getInteger(OP_GREY, 30) : st.getInteger(OP_MAIN, 30);
             fill.put(k, alpha(c, op));
             line.put(k, alpha(c, edgeA));
         }
@@ -290,7 +298,42 @@ public class TpoZonesStudy extends Study {
                 figs.add(ln);
             }
         }
+        if (st.getBoolean(HL, true)) highlight(res, p, bars, figs);
         addFigures(figs);
+    }
+
+    /** Топ зон по отторжениям хвостом за последние N сессий (все бары ETH + RTH) — пунктирная рамка. */
+    private void highlight(Result res, Params p, List<ZoneEngine.Bar> bars, List<Figure> figs) {
+        Settings st = getSettings();
+        int nSess = st.getInteger(HL_SESS, 5), count = st.getInteger(HL_COUNT, 5);
+        boolean labels = st.getBoolean(HL_LABELS, true);
+        Color c = st.getColor(HL_COLOR);
+        if (c == null) c = new Color(0xffd23f);
+        List<ZoneEngine.Recent> top = ZoneEngine.recent(bars, res, p, nSess);
+        int n = res.sessions.size();
+        long t0 = res.sessions.get(Math.max(0, n - nSess)).startMs;
+        long t1 = res.sessions.get(n - 1).date.atTime(LocalTime.of(16, 0)).atZone(p.tz).toInstant().toEpochMilli();
+        t1 = Math.max(t1, res.sessions.get(n - 1).endMs);
+        Stroke dash = new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{8f, 5f}, 0f);
+        java.awt.Font font = new java.awt.Font("SansSerif", java.awt.Font.BOLD, 11);
+        for (int i = 0; i < Math.min(count, top.size()); i++) {
+            ZoneEngine.Recent r = top.get(i);
+            if (r.rejections() == 0) break;
+            String txt = String.format(java.util.Locale.ROOT, "#%d  отторжений %d (L %d / S %d) · тестов %d",
+                    i + 1, r.rejections(), r.longs, r.shorts, r.tests);
+            String tip = txt + " за " + nSess + " сесс.\n" + r.z.blo + " – " + r.z.bhi + ", появилась " + r.z.av;
+            Box b = new Box(t0, r.z.bhi, t1, r.z.blo);
+            b.setFillColor(new Color(0, 0, 0, 0));
+            b.setLineColor(c);
+            b.setStroke(dash);
+            b.setPopupMessage(tip);
+            figs.add(b);
+            if (labels) {
+                Line ln = new Line(t0, r.z.bhi, t1, r.z.bhi);
+                ln.setColor(c); ln.setStroke(dash); ln.setText(txt, font); ln.setPopupMessage(tip);
+                figs.add(ln);
+            }
+        }
     }
 
     private static Color alpha(Color c, int pct) {
