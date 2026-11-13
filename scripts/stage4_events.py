@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import sys
 
-import numpy as np
 import pandas as pd
 
 from scripts.stage1_profiles import load_adjusted
@@ -31,7 +30,7 @@ def build_all(instrument: str, cfg: dict):
 
 
 def main(instrument: str = "ES") -> None:
-    cfg = load_config()
+    cfg = load_config(instrument=instrument)
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     _, days, comps, ev, _ = build_all(instrument, cfg)

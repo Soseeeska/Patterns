@@ -47,16 +47,20 @@ def test_roll_dates_tuesday_before_third_friday():
     assert [x.strftime("%m-%d") for x in d] == ["03-12", "06-18", "09-17", "12-17"]
 
 
-def test_back_adjust_shifts_only_before_roll():
+def test_back_adjust_shifts_only_before_switch():
     import pandas as pd
-    from tpo.rolls import back_adjust
-    bars = pd.DataFrame({"date": pd.to_datetime(["2024-03-11", "2024-03-12"]),
-                         "open": [100.0, 150.0], "high": [101.0, 151.0],
-                         "low": [99.0, 149.0], "close": [100.0, 150.0]})
-    rolls = pd.DataFrame({"roll_date": [pd.Timestamp("2024-03-12")], "spread": [50.0]})
+    from tpo.rolls import back_adjust, switch_ts
+    cfg = {"roll": {"switch_time_ct": "15:00"}, "data": {"timezone": "America/Chicago"}}
+    sw = switch_ts(pd.Timestamp("2024-03-12"), cfg)
+    assert str(sw) == "2024-03-11 15:00:00-05:00"
+    ts = pd.to_datetime(["2024-03-11 14:30", "2024-03-11 15:00", "2024-03-12 08:30"]).tz_localize("America/Chicago")
+    bars = pd.DataFrame({"ts": ts, "date": pd.to_datetime(["2024-03-11", "2024-03-12", "2024-03-12"]),
+                         "open": [100.0, 150.0, 150.0], "high": [101.0, 151.0, 151.0],
+                         "low": [99.0, 149.0, 149.0], "close": [100.0, 150.0, 150.0]})
+    rolls = pd.DataFrame({"roll_date": [pd.Timestamp("2024-03-12")], "switch_ts": [sw], "spread": [50.0]})
     out = back_adjust(bars, rolls)
-    assert out["close"].tolist() == [150.0, 150.0]
-    assert out["close_raw"].tolist() == [100.0, 150.0]
+    assert out["close"].tolist() == [150.0, 150.0, 150.0]
+    assert out["close_raw"].tolist() == [100.0, 150.0, 150.0]
 
 
 def test_internal_single_gap_ignores_tails():

@@ -4,6 +4,18 @@
 data:
   instruments:
     ES: {file: data/ES_30m_RTH.csv, tick_size: 0.25}
+    ES_ETH:                        # та же выгрузка ESZ6, полная сессия Globex (ETH + RTH);
+                                   # используется только как бары для тестов зон, профили — по RTH
+      file: data/ES_30m_ETH.csv
+      tick_size: 0.25
+      overrides:                   # накладываются поверх общих параметров (load_config(instrument=...))
+        data:
+          rth_start: "17:00"       # сессия 17:00–16:00 CT, дата — по дню закрытия
+          rth_end: "16:00"
+          expected_periods_per_day: 46
+          min_periods_full_day: 46
+        roll:
+          min_volume_ratio: 1.3      # ночной объём размывает скачок: 2026-03-17 даёт 1.34
   source_timezone: Europe/Berlin   # таймзона timestamp в выгрузке (15:30 = 09:30 ET)
   timezone: America/Chicago        # во что переводим для расчётов
   timestamp_is_bar_start: true     # timestamp = начало 30-минутного бара
@@ -15,6 +27,7 @@ data:
 
 roll:
   rule: tuesday_before_third_friday   # день, когда выгрузка переходит на новый контракт
+  switch_time_ct: "15:00"             # переход — в понедельник накануне в 15:00 CT (виден по гэпу в ETH)
   min_volume_ratio: 1.4               # проверка: объём в день ролла / объём накануне
   days_to_next_expiry: 91
   # Ожидаемая ставка ФРС на квартал после ролла, % (по ролловерам Mar/Jun/Sep/Dec).
@@ -75,6 +88,52 @@ intraday:                          # этап 6: реакция на зоны п
   hvn_share: 0.70                  # HVN-полоса: строки вокруг POC с TPO ≥ 70% от максимума
   reaction_bars_after: 2           # реакция меряется до конца теста + 2 бара
   placebo_min_dist_ticks: 8        # фальш-зона не ближе 8 тиков к любому реальному VAH/VAL/POC
+
+hvn_zones:                         # зоны из дневных HVN (scripts/hvn_zones.py)
+  min_tpo: 8                       # берём дни, где HVN в VA = 8..10 TPO в строке
+  max_tpo: 10
+  # зона дня = HVN-полоса вокруг POC (строки ≥ intraday.hvn_share × максимум)
+  merge_overlap_min: 0.50          # доля пересечения от более узкой зоны
+  merge_max_width_points: 10.0     # склейка только если итоговая зона ≤ 10 п.
+  # зона доступна со следующего дня после дня, в котором она построена
+
+primary_zones:                     # первородные зоны (scripts/primary_zones.py), пороги — из hvn_zones
+  placebo_runs: 20
+  placebo_shift_widths: [1.5, 3.0] # сдвиг фальш-зоны: U(1.5, 3) × ширина зоны, вверх или вниз
+  placebo_min_shift_points: 4.0    # ширина для сдвига не меньше 4 п.
+  placebo_runs_30m: 10             # прогонов фальш-зон для 30m-тестов (они медленнее)
+  clean_day:                       # «чистый» зачётный день
+    poc_pos_range: [0.25, 0.75]    # POC в средней половине VA: (POC − VAL) / (VAH − VAL)
+    late_from_period: 9            # поздние периоды: J–M (с 9-го, счёт с 0)
+    late_share_max: 0.50           # доля TPO HVN-полосы от поздних периодов не больше 50%
+
+wicks:                             # хвосты 30m-свечей у первородных зон (scripts/zone_wicks.py)
+  min_wick_ticks: 2                # хвост короче 2 тиков не считается
+  placebo_runs: 10
+  class_rejection_share: 0.60      # вариант классов «по отторжениям»: ≥ 60% отторжений в одну сторону
+
+zone_align:                        # подгонка границ первородных зон по краям тел 30m (scripts/zone_align_test.py)
+  calib_sessions: 20               # подгонка — по первым 20 сессиям после появления зоны, проверка — после
+  search_frac: 0.5                 # окно поиска границы: ± max(0.5 ширины зоны, 2 п.)
+  search_min_points: 2.0
+  w_plain: 0.5                     # край тела без хвоста дальше — вес 0.5 (с хвостом — 1)
+  min_score: 3                     # меньше очков — граница не двигается
+  min_width_ticks: 2
+  max_width_points: 10.0
+  placebo_runs: 10
+  map_check_steps: [0, 1, 2, 3, 5, 7, 10, 15, 20, 30, 40, 60]   # карта зон: варианты «дней подгонки» границ
+  map_max_width_mult: 1.5          # на карте ширина после подгонки ≤ max(10 п., 1.5 × исходной) — для широких VA композитов
+
+day_context:                       # сегодня против вчера + карта зон (scripts/day_context.py)
+  spike_min_ticks: 8               # спайк: последний период (M) вышел за экстремум A–L на ≥ 2 п.
+  long_tail_ticks: 20              # хвост ≥ 5 п. — «длинный», короче — «короткий»
+  grey_min_ticks: 8                # серая зона: незаполненные single prints прошлого дня, ≥ 2 п.
+  ib_width_bands: [0.75, 1.25]     # IB уже 0.75 среднего — узкий, шире 1.25 — широкий (среднее за 20 дней)
+  zone_tolerance_ticks: 2          # касание / остановка у края зоны ± 2 тика
+  split_date: "2025-01-01"         # поиск закономерностей — до, проверка — после
+  placebo_runs: 20
+  hidden_lookahead_days: 20        # скрытый уровень: прошит сингл-принтами / тейлом в течение 20 дней
+  hidden_control_min_dist_ticks: 4 # контрольная точка в той же зоне single prints — не ближе 1 п. к уровню
 
 patterns:                          # этап 7: статистика по торговым заметкам
   lookback_days: 20

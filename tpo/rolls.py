@@ -6,6 +6,11 @@
 
     spread = close_перед_роллом * (r - q) * days_to_next_expiry / 365
 
+Переключение на новый контракт — в понедельник накануне ролла в
+roll.switch_time_ct (15:00 CT, сразу после закрытия RTH): это видно по
+гэпу 50–75 п. на баре 15:00 в ETH-выгрузке. В RTH-выгрузке баров после
+15:00 нет, поэтому для неё это то же самое, что «с дня ролла».
+
 Сырой гэп в день ролла не годится: в нём ещё и ночное движение рынка
 (std ~32 п., CPI-дни до ±150 п.). Ручные значения из config.roll.overrides
 имеют приоритет над моделью.
@@ -29,6 +34,12 @@ def roll_dates(start: pd.Timestamp, end: pd.Timestamp) -> list[pd.Timestamp]:
     return out
 
 
+def switch_ts(roll_date: pd.Timestamp, cfg: dict) -> pd.Timestamp:
+    """Момент перехода на новый контракт (tz-aware, timezone из data)."""
+    t = pd.Timedelta(cfg["roll"]["switch_time_ct"] + ":00")
+    return (roll_date - pd.Timedelta(days=1) + t).tz_localize(cfg["data"]["timezone"])
+
+
 def roll_table(bars: pd.DataFrame, cfg: dict, tick: float) -> pd.DataFrame:
     rcfg = cfg["roll"]
     day = bars.groupby("date").agg(open=("open", "first"), close=("close", "last"),
@@ -40,15 +51,18 @@ def roll_table(bars: pd.DataFrame, cfg: dict, tick: float) -> pd.DataFrame:
             raise ValueError(f"Нет торгового дня в дату ролла {d.date()}")
         i = day.index.get_loc(d)
         prev, cur = day.iloc[i - 1], day.iloc[i]
+        sw = switch_ts(d, cfg)
+        prev_close = bars.loc[bars["ts"] < sw].sort_values("ts")["close"].iloc[-1]
         q_idx = (d.month - 1) // 3
         r = rcfg["policy_rate_pct"][d.year][q_idx]
         q = rcfg["dividend_yield_pct"][d.year]
-        model = prev.close * (r - q) / 100 * rcfg["days_to_next_expiry"] / 365
+        model = prev_close * (r - q) / 100 * rcfg["days_to_next_expiry"] / 365
         spread = overrides.get(d, model)
         rows.append({
             "roll_date": d,
+            "switch_ts": sw,
             "volume_ratio": cur.volume / prev.volume,
-            "raw_gap": cur.open - prev.close,
+            "raw_gap": bars.loc[bars["ts"] >= sw].sort_values("ts")["open"].iloc[0] - prev_close,
             "model_spread": model,
             "spread": round(spread / tick) * tick,
             "source": "override" if d in overrides else "carry_model",
@@ -66,7 +80,7 @@ def back_adjust(bars: pd.DataFrame, rolls: pd.DataFrame) -> pd.DataFrame:
     out = bars.copy()
     shift = pd.Series(0.0, index=out.index)
     for _, r in rolls.iterrows():
-        shift[out["date"] < r.roll_date] += r.spread
+        shift[out["ts"] < r.switch_ts] += r.spread
     for c in PRICE_COLS:
         out[f"{c}_raw"] = out[c]
         out[c] = out[c] + shift
