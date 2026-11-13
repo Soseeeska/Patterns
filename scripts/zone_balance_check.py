@@ -22,7 +22,7 @@ from scripts.day_context import hvn_class_table
 from scripts.hvn_va_stats import per_day
 from scripts.primary_zones import placebo, zone_frame
 from scripts.stage1_profiles import load_adjusted
-from tpo.data import ROOT, load_config
+from tpo.data import load_config
 
 
 def pairs(daily, zones, cls_tab, q, tick, tol):

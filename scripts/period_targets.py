@@ -186,7 +186,7 @@ def main(instrument: str = "ES") -> None:
     grey = grey_zones(daily, profiles, tick, cc["grey_min_ticks"])
     share = cfg["wicks"]["class_rejection_share"]
     cls_tab = hvn_class_table(bars, prim, cfg["wicks"]["min_wick_ticks"] * tick, share)
-    zmap = zone_map(comps, prim, grey, cls_tab, share)
+    zmap = zone_map(comps, prim, grey)
     split = pd.Timestamp(cc["split_date"])
 
     df = build_panel(bars, daily, cfg, tick, zmap, cls_tab)

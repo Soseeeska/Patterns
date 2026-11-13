@@ -36,7 +36,7 @@ from tpo.balance import find_balances
 from tpo.data import ROOT, load_config
 from tpo.day_context import (bucket_rel, grey_zones, loc_vs_va, open_location, spike, tail_bucket)
 from tpo.day_type import classify_days
-from tpo.zone_classes import RANGE, RESISTANCE, SUPPORT, interaction_types
+from tpo.zone_classes import interaction_types
 
 OPEN_ORDER = ["выше High", "VAH–High", "внутри VA", "Low–VAL", "ниже Low"]
 ZTYPES = ["old_balance", "hvn_S", "hvn_R", "hvn_range", "hvn_new", "grey"]
@@ -76,7 +76,7 @@ def hvn_class_on(cls_tab, zone_id, date, share):
     return "hvn_range"
 
 
-def zone_map(comps, prim, grey, cls_tab, share):
+def zone_map(comps, prim, grey):
     """Единая таблица зон: type, lo, hi, available_from, filled (NaT — не заполняется), zone_id."""
     ob = pd.DataFrame({"type": "old_balance", "lo": comps.val, "hi": comps.vah,
                        "available_from": comps.available_from, "filled": pd.NaT, "zone_id": -1})
@@ -142,7 +142,7 @@ def build(bars, daily, profiles, cfg, tick, zmap, cls_tab, zones_only=False):
     ib_avg = (d.ib_high - d.ib_low).where(~d.short_day).rolling(20, min_periods=10).mean().shift(1)
     rows = []
     for i in range(2, len(d)):
-        y, t, yy = d.iloc[i - 1], d.iloc[i], d.iloc[i - 2]
+        y, t = d.iloc[i - 1], d.iloc[i]
         if t.short_day or y.short_day:
             continue
         g = by_day[t.date]
@@ -245,7 +245,7 @@ def main(instrument: str = "ES", zones: str = "1") -> None:
     mw = cfg["wicks"]["min_wick_ticks"] * tick
     share = cfg["wicks"]["class_rejection_share"]
     cls_tab = hvn_class_table(bars, prim, mw, share)
-    zmap = zone_map(comps, prim, grey, cls_tab, share)
+    zmap = zone_map(comps, prim, grey)
     split = pd.Timestamp(cc["split_date"])
 
     df = build(bars, daily, profiles, cfg, tick, zmap, cls_tab)
@@ -334,7 +334,7 @@ def main(instrument: str = "ES", zones: str = "1") -> None:
     print("\nБлижайшая зона по ходу (сверху / снизу от open):")
     for side, nm in (("up", "сверху"), ("dn", "снизу")):
         cmp(f"дошли до ближайшей зоны {nm}", lambda x, s=side: x[f"{s}_reached"][x[f"{s}_type"] != "нет"].mean())
-        cmp(f"  из дошедших — экстремум дня остановился в зоне", lambda x, s=side: x[f"{s}_stopped"][x[f"{s}_reached"]].mean())
+        cmp("  из дошедших — экстремум дня остановился в зоне", lambda x, s=side: x[f"{s}_stopped"][x[f"{s}_reached"]].mean())
         for t in ZTYPES:
             cmp(f"  … зона «{ZNAME[t]}»: остановился (из дошедших)",
                 lambda x, s=side, t=t: x[f"{s}_stopped"][x[f"{s}_reached"] & (x[f"{s}_type"] == t)].mean())

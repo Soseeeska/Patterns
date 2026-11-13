@@ -35,6 +35,7 @@ h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
 .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
 .sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 18px}
 .ctl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ctl.wide{max-width:640px}
 .ctl label{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted)}
 .ctl output{font-family:var(--f-num);color:var(--ink);font-variant-numeric:tabular-nums}
 input[type=range]{width:100%;accent-color:var(--accent)}
@@ -67,6 +68,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
   <section class="filters" aria-label="Фильтры зон">
     <div class="chips" id="types"></div>
+    <div class="ctl wide"><label for="f-check">Дней проверки зоны, потом — свободное плавание<output id="o-check"></output></label><input type="range" id="f-check" min="0" max="120" step="1" value="0"></div>
     <div class="sliders">
       <div class="ctl"><label for="f-near">Ближайших к цене (на сессию)<output id="o-near"></output></label><input type="range" id="f-near" min="0" max="20" step="1" value="6"></div>
       <div class="ctl"><label for="f-tests">Тестов до сессии, не меньше<output id="o-tests"></output></label><input type="range" id="f-tests" min="0" max="60" step="1" value="0"></div>
@@ -81,6 +83,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="row">
       <label><input type="checkbox" id="f-prev" checked> VA и POC вчерашнего RTH</label>
       <label><input type="checkbox" id="f-rth" checked> подсветка RTH</label>
+      <label><input type="checkbox" id="f-showcheck" checked> зона на проверке — контуром</label>
       <button class="btn" id="preset-bal" type="button">Только балансы</button>
       <button class="btn" id="reset" type="button">Сбросить фильтры</button>
       <span class="row" role="group" aria-label="Период на графике" style="gap:4px">
@@ -102,6 +105,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <ul>
         <li>Зона показана только в те сессии, когда она уже была известна: с дня появления, серые — до проторговки.</li>
         <li>Если зона прошла фильтры хотя бы в одну сессию, она видна на всём сроке своей жизни; цвет и метрики — на каждую сессию.</li>
+        <li>«Дней проверки»: зона N торговых дней после появления копит тесты, отторжения и подтверждения, затем её состояние замораживается («паспорт») и фильтры применяются к нему. Пока зона на проверке, она рисуется пунктирным контуром. Меняя N, видишь разные версии одной зоны.</li>
         <li>Цвет HVN-зоны — её класс на эту сессию по отторжениям хвостом (≥ 60% в одну сторону — поддержка или сопротивление).</li>
         <li>Все метрики посчитаны по RTH-барам строго до сессии. «Ближайших к цене» — по open сессии.</li>
         <li>Оранжевая линия — POC вчерашнего RTH, пунктир — его VAH и VAL. Время — CT.</li>
@@ -138,10 +142,8 @@ const TYPES = [
   ['hvn_S','HVN · поддержка','--z-s'],['hvn_R','HVN · сопротивление','--z-r'],['hvn_range','HVN · проторговка','--z-range'],
   ['hvn_new','HVN · без истории','--z-new'],['old_balance','Старый баланс (VA композита)','--z-ob'],['grey','Серая (single prints)','--z-grey']];
 const NAME = Object.fromEntries(TYPES.map(t=>[t[0],t[1]]));
-const KINDS = ['old_balance','hvn_S','hvn_R','hvn_range','hvn_new','grey'];
-// состояние зоны на сессию s (данные хранят только срок жизни, начиная с z.f)
-const stAt=(z,s)=>{ const i=s-z.f; if(i<0||i>=z.st.length) return null; const x=z.st[i]; return x?[KINDS[x[0]],x[1],x[2],x[3],x[4]]:null; };
-const DEF = {near:6,tests:0,rej:0,pur:0,pmax:100,conf:0,cnear:0,age:0,wmax:60,prev:true,rth:true,
+const KINDS = {0:'old_balance',5:'grey'};
+const DEF = {check:0,showcheck:true,near:6,tests:0,rej:0,pur:0,pmax:100,conf:0,cnear:0,age:0,wmax:60,prev:true,rth:true,
   types:{hvn_S:true,hvn_R:true,hvn_range:true,hvn_new:true,old_balance:false,grey:false}};
 let S = JSON.parse(JSON.stringify(DEF));
 try{ const s = JSON.parse(localStorage.getItem('zonemap-filters')||'null'); if(s) S = Object.assign(S,s,{types:Object.assign({},DEF.types,s.types||{})}); }catch(e){}
@@ -154,9 +156,23 @@ const sFirst = [], sLast = [], sOpen = [];
 bars.forEach((b,i)=>{ const s=b[5]; if(sFirst[s]===undefined){sFirst[s]=i; sOpen[s]=b[1];} sLast[s]=i; });
 const lastS = sess.length-1;
 const fmtD = d => { const x=new Date(d+'T12:00:00Z'); return x.toLocaleDateString('ru-RU',{weekday:'short',day:'2-digit',month:'2-digit',timeZone:'UTC'}); };
+const fmtO = o => fmtD(new Date(o*86400000).toISOString().slice(0,10));
 document.getElementById('sub').textContent =
   `${D.instrument} · ${sess.length} сессий ETH+RTH, ${fmtD(sess[0].date)} – ${fmtD(sess[lastS].date)} · RTH-профили по ${fmtD(D.rth_last)}`;
 const rthMask = bars.map(b=>{ const d=new Date(b[0]*1000); const m=d.getUTCHours()*60+d.getUTCMinutes(); return m>=510 && m<900; });
+
+// состояние зоны на день o (дни от 1970-01-01): события строго раньше o
+const below=(a,o)=>{ let lo=0,hi=a.length; while(lo<hi){ const m=(lo+hi)>>1; if(a[m]<o) lo=m+1; else hi=m; } return lo; };
+const alive=(z,o)=> z.av<=o && (z.fl===null || z.fl>=o);
+function stateAt(z,o){
+  const nl=below(z.L,o), ns=below(z.S,o), tot=nl+ns;
+  let kind=KINDS[z.k];
+  if(!kind) kind = tot===0 ? 'hvn_new' : nl/tot>=D.share ? 'hvn_S' : ns/tot>=D.share ? 'hvn_R' : 'hvn_range';
+  let conf=0; for(const [d,g] of z.cf){ if(d>=o) break; if(g<=S.cnear) conf++; }
+  return {kind, tests:below(z.t,o), rej:tot, pur: tot>=1 ? Math.max(nl,ns)/tot : null, age:o-z.av, conf};
+}
+// «паспорт»: день, на который зона замораживается после S.check торговых дней проверки
+const releaseOrd = z => S.check>0 ? (D.rth[z.ai+S.check] ?? Infinity) : null;
 
 // типы
 const typesEl = document.getElementById('types');
@@ -167,65 +183,63 @@ TYPES.forEach(([k,label,v])=>{
   b.onclick=()=>{ S.types[k]=!S.types[k]; b.setAttribute('aria-pressed',S.types[k]?'true':'false'); changed(); };
   typesEl.appendChild(b);
 });
-const ctl = {near:['f-near','o-near',v=>v==0?'все':v], tests:['f-tests','o-tests',v=>v], rej:['f-rej','o-rej',v=>v],
+const ctl = {check:['f-check','o-check',v=>v==0?'нет — состояние на каждую сессию':v+' торг. дн.'],
+  near:['f-near','o-near',v=>v==0?'все':v], tests:['f-tests','o-tests',v=>v], rej:['f-rej','o-rej',v=>v],
   pur:['f-pur','o-pur',v=>v==0?'любая':v+'%'], pmax:['f-pmax','o-pmax',v=>v>=100?'любая':v+'%'],
-  conf:['f-conf','o-conf',v=>v], cnear:['f-cnear','o-cnear',v=>v==0?'только внутри зоны':v], age:['f-age','o-age',v=>v], wmax:['f-wmax','o-wmax',v=>v>=60?'любая':v]};
-// пределы ползунков — по данным
-let mT=0,mR=0,mA=0; D.zones.forEach(z=>z.st.forEach(s=>{ if(s){ mT=Math.max(mT,s[1]); mR=Math.max(mR,s[2]); mA=Math.max(mA,s[4]); }}));
-mT=Math.min(mT,200); mR=Math.min(mR,300);
-document.getElementById('f-tests').max=Math.max(5,mT); document.getElementById('f-rej').max=Math.max(5,mR);
-document.getElementById('f-age').max=Math.ceil(Math.max(30,mA)/10)*10;
+  conf:['f-conf','o-conf',v=>v], cnear:['f-cnear','o-cnear',v=>v==0?'только внутри зоны':v],
+  age:['f-age','o-age',v=>v], wmax:['f-wmax','o-wmax',v=>v>=60?'любая':v]};
+// пределы ползунков — по состоянию на последнюю сессию
+{ const o=sess[lastS].ord+1, keep=S.cnear; S.cnear=10; let mT=0,mR=0,mA=0,mC=0;
+  D.zones.forEach(z=>{ if(z.av>o) return; const st=stateAt(z,o); mT=Math.max(mT,st.tests); mR=Math.max(mR,st.rej); mA=Math.max(mA,st.age); mC=Math.max(mC,st.conf); });
+  S.cnear=keep;
+  document.getElementById('f-tests').max=Math.max(5,Math.min(mT,200)); document.getElementById('f-rej').max=Math.max(5,Math.min(mR,300));
+  document.getElementById('f-age').max=Math.ceil(Math.max(30,mA)/10)*10; document.getElementById('f-conf').max=Math.max(5,mC); }
 Object.entries(ctl).forEach(([k,[id,oid,f]])=>{
   const el=document.getElementById(id), o=document.getElementById(oid);
   el.value=S[k]; o.textContent=f(+el.value);
   el.addEventListener('input',()=>{ S[k]=+el.value; o.textContent=f(S[k]); changed(); });
 });
-['prev','rth'].forEach(k=>{ const el=document.getElementById('f-'+k); el.checked=S[k]; el.onchange=()=>{S[k]=el.checked; changed();}; });
+const CHECKS=['prev','rth','showcheck'];
+CHECKS.forEach(k=>{ const el=document.getElementById('f-'+k); el.checked=S[k]; el.onchange=()=>{S[k]=el.checked; changed();}; });
 function syncControls(){
   Object.entries(ctl).forEach(([k,[id,oid,f]])=>{ const el=document.getElementById(id); el.value=S[k]; document.getElementById(oid).textContent=f(S[k]); });
-  ['prev','rth'].forEach(k=>document.getElementById('f-'+k).checked=S[k]);
+  CHECKS.forEach(k=>document.getElementById('f-'+k).checked=S[k]);
   TYPES.forEach(([k])=>document.getElementById('t-'+k).setAttribute('aria-pressed',S.types[k]?'true':'false'));
 }
 document.getElementById('preset-bal').onclick=()=>{
-  S=Object.assign(JSON.parse(JSON.stringify(DEF)),{pmax:60,conf:2,cnear:2,near:8,
+  S=Object.assign(JSON.parse(JSON.stringify(DEF)),{check:S.check,pmax:60,conf:2,cnear:2,near:8,
     types:{hvn_S:true,hvn_R:true,hvn_range:true,hvn_new:false,old_balance:true,grey:false}});
   syncControls(); changed();
 };
-document.getElementById('reset').onclick=()=>{
-  S=JSON.parse(JSON.stringify(DEF));
-  Object.entries(ctl).forEach(([k,[id,oid,f]])=>{ const el=document.getElementById(id); el.value=S[k]; document.getElementById(oid).textContent=f(S[k]); });
-  ['prev','rth'].forEach(k=>document.getElementById('f-'+k).checked=S[k]);
-  TYPES.forEach(([k])=>document.getElementById('t-'+k).setAttribute('aria-pressed',S.types[k]?'true':'false'));
-  changed();
-};
+document.getElementById('reset').onclick=()=>{ S=JSON.parse(JSON.stringify(DEF)); syncControls(); changed(); };
 
-// подтверждения: зачётные HVN-дни до сессии в пределах cnear пунктов от зоны
-const confCount=(z,s)=>{ let n=0; const o=sess[s].ord; for(const [d,g] of z.cf){ if(d<o && g<=S.cnear) n++; } return n; };
-let mC=0; D.zones.forEach(z=>{ S.cnear=10; mC=Math.max(mC,confCount(z,lastS)); }); S.cnear=DEF.cnear;
-try{ const s=JSON.parse(localStorage.getItem('zonemap-filters')||'null'); if(s&&s.cnear!==undefined) S.cnear=s.cnear; }catch(e){}
-document.getElementById('f-conf').max=Math.max(5,mC);
-// какие зоны видны в сессию s
+// фильтр: проходит ли зона по состоянию st
+function passes(z,st){
+  if(!S.types[st.kind]) return false;
+  if(st.conf<S.conf || st.tests<S.tests || st.rej<S.rej || st.age<S.age) return false;
+  if(S.pur>0 && (st.pur===null || st.pur*100<S.pur)) return false;
+  if(S.pmax<100 && (st.pur===null || st.pur*100>S.pmax)) return false;
+  if(S.wmax<60 && z.hi-z.lo>S.wmax) return false;
+  return true;
+}
+// какие зоны проходят в сессию s (с учётом «ближайших к цене»)
 function visible(s){
-  const open=sOpen[s], out=[]; let total=0;
+  const o=sess[s].ord, open=sOpen[s], out=[]; let total=0;
   D.zones.forEach((z,zi)=>{
-    const st=stAt(z,s); if(!st) return; total++;
-    const [kind,tests,rej,pur,age]=st;
-    const conf=confCount(z,s);
-    if(conf<S.conf) return;
-    if(S.pmax<100 && (pur===null || pur*100>S.pmax)) return;
-    if(!S.types[kind]) return;
-    if(tests<S.tests || rej<S.rej || age<S.age) return;
-    if(S.pur>0 && (pur===null || pur*100<S.pur)) return;
-    if(S.wmax<60 && z.hi-z.lo>S.wmax) return;
+    if(!alive(z,o)) return; total++;
+    const rel=releaseOrd(z);
+    if(rel!==null && o<rel) return;                     // ещё на проверке
+    const st=stateAt(z, rel===null ? o : rel);
+    if(!passes(z,st)) return;
     const dist = open<z.lo ? z.lo-open : open>z.hi ? open-z.hi : 0;
-    out.push({zi,z,kind,tests,rej,pur,age,dist,conf});
+    out.push({zi,dist});
   });
   out.sort((a,b)=>a.dist-b.dist);
   return {list: S.near>0 ? out.slice(0,S.near) : out, total};
 }
 let VIS=[];
-// зона, прошедшая фильтры хотя бы в одну сессию, рисуется на всём сроке жизни
-// (во все сессии, когда она существует), с метриками и цветом на каждую сессию
+// зона, прошедшая фильтры хотя бы в одну сессию, рисуется на всём сроке жизни;
+// при проверке N дней — до выпуска контуром (если включено), после — по «паспорту»
 let pending=false;
 function changed(){ if(pending) return; pending=true; requestAnimationFrame(()=>{ pending=false; recompute(); }); }
 function recompute(){
@@ -233,13 +247,17 @@ function recompute(){
   const keep=new Set(); const totals=[];
   sess.forEach((_,s)=>{ const v=visible(s); totals[s]=v.total; v.list.forEach(x=>keep.add(x.zi)); });
   VIS = sess.map((_,s)=>{
-    const list=[];
-    D.zones.forEach((z,zi)=>{ if(!keep.has(zi)) return; const st=stAt(z,s); if(!st) return;
-      const [kind,tests,rej,pur,age]=st; list.push({zi,z,kind,tests,rej,pur,age,conf:confCount(z,s)}); });
+    const o=sess[s].ord, list=[];
+    keep.forEach(zi=>{ const z=D.zones[zi]; if(!alive(z,o)) return;
+      const rel=releaseOrd(z), inCheck = rel!==null && o<rel;
+      if(inCheck && !S.showcheck) return;
+      const st=stateAt(z, rel===null||inCheck ? o : rel);
+      list.push(Object.assign({zi,z,inCheck,rel},st)); });
     return {list,total:totals[s]};
   });
-  const v=VIS[lastS];
-  document.getElementById('count').innerHTML = `последняя сессия (${fmtD(sess[lastS].date)}): видно <b>${v.list.length}</b> из ${v.total} зон`;
+  const v=VIS[lastS], shown=v.list.filter(x=>!x.inCheck).length;
+  document.getElementById('count').innerHTML = `последняя сессия (${fmtD(sess[lastS].date)}): видно <b>${shown}</b> из ${v.total} зон`
+    + (S.check>0 ? ` · паспорт после ${S.check} торг. дн. проверки` : '');
   dirty=true;
 }
 
@@ -296,8 +314,8 @@ function draw(){
     for(const v of VIS[s].list){
       const y1=series.priceToCoordinate(v.z.hi), y2=series.priceToCoordinate(v.z.lo); if(y1===null||y2===null) continue;
       const c=col[v.kind], h=Math.max(2,y2-y1);
-      ctx.fillStyle=hexA(c, v.kind==='old_balance'?0.10:v.kind==='grey'?0.14:0.24); ctx.fillRect(x0,y1,x1-x0,h);
-      ctx.strokeStyle=hexA(c,0.85); ctx.lineWidth=1; ctx.setLineDash(v.kind==='grey'||v.kind==='old_balance'?[4,3]:[]);
+      if(!v.inCheck){ ctx.fillStyle=hexA(c, v.kind==='old_balance'?0.10:v.kind==='grey'?0.14:0.24); ctx.fillRect(x0,y1,x1-x0,h); }
+      ctx.strokeStyle=hexA(c,v.inCheck?0.6:0.85); ctx.lineWidth=1; ctx.setLineDash(v.inCheck?[2,3]:v.kind==='grey'||v.kind==='old_balance'?[4,3]:[]);
       ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x1,y1); ctx.moveTo(x0,y1+h); ctx.lineTo(x1,y1+h); ctx.stroke();
     }
     if(S.prev){
@@ -322,7 +340,8 @@ chart.subscribeCrosshairMove(p=>{
   if(!VIS[s]) return;
   const hit=VIS[s].list.filter(v=>price>=v.z.lo-tol&&price<=v.z.hi+tol);
   const head=`<span>${fmtD(sess[s].date)} · цена ${price.toFixed(2)} · вчера (${fmtD(sess[s].prev)}) VAH ${sess[s].vah.toFixed(2)} · POC ${sess[s].poc.toFixed(2)} · VAL ${sess[s].val.toFixed(2)}</span>`;
-  hov.innerHTML = head + (hit.length ? hit.map(v=>`<span class="z">${NAME[v.kind]} ${v.z.lo.toFixed(2)}–${v.z.hi.toFixed(2)} · тестов ${v.tests} · отторжений ${v.rej}${v.pur!==null?' (чистота '+Math.round(v.pur*100)+'%)':''} · подтверждений ${v.conf} · возраст ${v.age} дн.</span>`).join('')
+  const tag=v=> v.inCheck ? ' · на проверке до '+fmtO(v.rel) : v.rel ? ' · паспорт на '+fmtO(v.rel) : '';
+  hov.innerHTML = head + (hit.length ? hit.map(v=>`<span class="z">${NAME[v.kind]} ${v.z.lo.toFixed(2)}–${v.z.hi.toFixed(2)} · появилась ${fmtO(v.z.av)} · тестов ${v.tests} · отторжений ${v.rej}${v.pur!==null?' (чистота '+Math.round(v.pur*100)+'%)':''} · подтверждений ${v.conf} · возраст ${v.age} дн.${tag(v)}</span>`).join('')
     : '<span>видимых зон на этой цене нет</span>');
 });
 applyTheme(); recompute(); loop();

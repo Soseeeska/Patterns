@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import sys
 
-import numpy as np
 import pandas as pd
 
 from scripts.stage1_profiles import load_adjusted

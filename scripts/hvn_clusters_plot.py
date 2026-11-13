@@ -65,7 +65,6 @@ def draw_cluster(ax, lad, zc: pd.DataFrame, daily: pd.DataFrame, bars: pd.DataFr
     win = daily.iloc[i0:i1 + 1]
     pad = max(8.0, 0.25 * (zc.hi.max() - zc.lo.min()))
     y0, y1 = zc.lo.min() - pad, zc.hi.max() + pad
-    xs = range(len(win))
 
     bars_on_days(ax, bars, list(win.date), periods, color=MUTED, lw=0.5, alpha=0.7)
     right = len(win) - 0.5

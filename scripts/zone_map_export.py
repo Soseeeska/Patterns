@@ -1,10 +1,18 @@
-"""Данные для интерактивной карты зон (artifact): 30m-свечи последних N сессий
-и зоны с метриками силы на каждую сессию (только история до неё).
+"""Данные и страница интерактивной карты зон: 30m-свечи последних N сессий
+и все зоны в их ценовом диапазоне с датами событий.
 
 Зоны (по RTH-профилям): старые балансы (VA композитов), первородные HVN-зоны,
-серые (незаполненные single prints). Метрики на сессию: тестов до (30m,
-правила этапа 6, RTH-бары), баров-отторжений до (лонг / шорт), чистота
-(доля отторжений в одну сторону), возраст в днях; у HVN — класс на дату.
+серые (незаполненные single prints). Для каждой зоны хранятся даты (в днях
+от 1970-01-01):
+  av — когда стала доступна, ai — её номер в списке RTH-дней, fl — когда
+       проторговалась (серые) или null;
+  t  — тесты (30m, правила этапа 6, RTH-бары), L / S — бары-отторжения
+       хвостом вверх (лонг) / вниз (шорт);
+  cf — зачётные HVN-дни (8–10 TPO) после появления: [дата, зазор до зоны, п.]
+       (0 — полоса HVN пересекла зону), до 10 п.
+По ним страница считает состояние зоны на любой день: тесты, отторжения,
+чистоту, класс HVN-зоны, подтверждения, возраст — в том числе «паспорт»
+после N торговых дней проверки.
 
 Запуск:  python -m scripts.zone_map_export [ES] [ES_ETH] [sessions=250] [out.json]
 Рядом с JSON пишется готовая страница (<out>.html) из scripts/zone_map_template.html.
@@ -17,7 +25,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from scripts.day_context import zone_map, hvn_class_table
+from scripts.day_context import zone_map
 from scripts.hvn_va_stats import per_day
 from scripts.primary_zones import zone_frame
 from scripts.stage1_profiles import load_adjusted, load_test_bars
@@ -27,14 +35,18 @@ from tpo.data import ROOT, load_config
 from tpo.day_context import grey_zones
 from tpo.zone_classes import interaction_types
 
-KIND = {"old_balance": 0, "hvn_S": 1, "hvn_R": 2, "hvn_range": 3, "hvn_new": 4, "grey": 5}
+KIND = {"old_balance": 0, "hvn": 1, "grey": 5}
+MAX_NEAR = 10.0                      # подтверждения дальше 10 п. от зоны не хранятся
+EPOCH = np.datetime64("1970-01-01", "D")
 
 
-def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
-    cfg = load_config(instrument=instrument)
+def ordinal(x) -> int:
+    return int((np.datetime64(x, "D") - EPOCH).astype(int))
+
+
+def build_zones(cfg, rbars, daily, profiles, tick):
+    """Карта зон (без классов: класс страница считает по датам отторжений)."""
     cc, zc = cfg["day_context"], cfg["hvn_zones"]
-    share = cfg["wicks"]["class_rejection_share"]
-    rbars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
     comps, _ = find_balances(rbars, daily, profiles, cfg, tick)
     comps = comps[(comps.end_reason != "open") & (comps.n_days >= cfg["zones"].get("min_composite_days", 0))]
     dd = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
@@ -42,88 +54,68 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
     prim = zone_frame(dd, daily, cfg, tick)
     prim = prim[prim.available_from.notna()].reset_index(drop=True)
     grey = grey_zones(daily, profiles, tick, cc["grey_min_ticks"])
-    cls_tab = hvn_class_table(rbars, prim, cfg["wicks"]["min_wick_ticks"] * tick, share)
-    zm = zone_map(comps, prim, grey, cls_tab, share)
+    return zone_map(comps, prim, grey), dd[dd.ok]
 
-    b = load_test_bars(bars_instrument)[0].sort_values("ts").reset_index(drop=True)
+
+def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
+    cfg = load_config(instrument=instrument)
+    rbars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
+    zm, qual = build_zones(cfg, rbars, daily, profiles, tick)
+
+    b = load_test_bars(bars_instrument)[0] if bars_instrument != instrument else rbars
+    b = b.sort_values("ts").reset_index(drop=True)
     sess = np.sort(b.date.unique())[-int(sessions):]
     w = b[b.date.isin(sess)].reset_index(drop=True)
     lo_p, hi_p = w.low.min() - 40, w.high.max() + 40
     s_first, s_last = pd.Timestamp(sess[0]), pd.Timestamp(sess[-1])
     z = zm[(zm.available_from <= s_last) & (zm.filled.isna() | (zm.filled >= s_first))
            & (zm.hi >= lo_p) & (zm.lo <= hi_p)].reset_index(drop=True)
-    z["zid"] = np.arange(len(z))
 
-    # тесты и отторжения по RTH-барам — даты, чтобы считать «до сессии»
-    zz = z.rename(columns={"zid": "zone_id_tmp"})
-    zz = pd.DataFrame({"zone_id": z.zid, "lo": z.lo, "hi": z.hi, "available_from": z.available_from})
-    _, tests, _ = analyze(rbars, zz, cfg, tick)
+    # события по RTH-барам: тесты и бары-отторжения с датами
+    zt = pd.DataFrame({"zone_id": np.arange(len(z)), "lo": z.lo, "hi": z.hi, "available_from": z.available_from})
+    _, tests, _ = analyze(rbars, zt, cfg, tick)
     rb = rbars.sort_values("ts").reset_index(drop=True)
     O, H, L, C = (rb[k].to_numpy() for k in ("open", "high", "low", "close"))
     D = rb.date.to_numpy()
     first = pd.Series(np.arange(len(rb)), index=rb.date).groupby(level=0).min()
     mw = cfg["wicks"]["min_wick_ticks"] * tick
-
     rth = daily[~daily.short_day].sort_values("date").reset_index(drop=True)
-    rd = rth.date.to_numpy()
-    # зачётные HVN-дни (8–10 TPO): полоса HVN и дата — для подтверждений зон
-    q = dd[dd.ok]
-    q_date = q.date.to_numpy(dtype="datetime64[ns]")
-    q_lo, q_hi = q.band_lo.to_numpy(), q.band_hi.to_numpy()
-    MAX_NEAR = 10.0
-    day0 = np.datetime64("1970-01-01")
-    def ordinal(x):
-        return int((np.datetime64(x, "D") - day0).astype(int))
+    rth_ord = [ordinal(d) for d in rth.date]
+    q_date = qual.date.to_numpy(dtype="datetime64[ns]")
+    q_lo, q_hi = qual.band_lo.to_numpy(), qual.band_hi.to_numpy()
+
     zones_out = []
-    for r in z.itertuples():
-        tdates = np.sort(tests.date[tests.zone_id == r.zid].to_numpy(dtype="datetime64[ns]"))
+    for i, r in z.iterrows():
+        t_ord = sorted({ordinal(d) for d in tests.date[tests.zone_id == i]})
+        lg = sh = []
         if r.available_from in first.index:
             s = int(first[r.available_from])
-            t = interaction_types(O[s:], H[s:], L[s:], C[s:], r.lo, r.hi, mw)
-            lg, sh = np.sort(D[s:][t == "long"]), np.sort(D[s:][t == "short"])
-        else:
-            lg = sh = np.array([], "datetime64[ns]")
-        st = []
-        for i, d in enumerate(sess):
-            dn = np.datetime64(d)
-            alive = r.available_from <= pd.Timestamp(d) and (pd.isna(r.filled) or r.filled >= pd.Timestamp(d))
-            if not alive:
-                st.append(None)
-                continue
-            nl, ns = int(np.searchsorted(lg, dn)), int(np.searchsorted(sh, dn))
-            tot = nl + ns
-            kind = r.type
-            if kind == "hvn":
-                kind = ("hvn_new" if tot == 0 else "hvn_S" if nl / tot >= share else
-                        "hvn_R" if ns / tot >= share else "hvn_range")
-            st.append([KIND[kind], int(np.searchsorted(tdates, dn)), tot,
-                       round(max(nl, ns) / tot, 3) if tot else None,
-                       int((pd.Timestamp(d) - r.available_from).days)])
-        # подтверждения: зачётный HVN-день после появления зоны; расстояние полосы HVN до зоны (0 — пересекаются)
+            it = interaction_types(O[s:], H[s:], L[s:], C[s:], r.lo, r.hi, mw)
+            lg = [ordinal(d) for d in D[s:][it == "long"]]
+            sh = [ordinal(d) for d in D[s:][it == "short"]]
         m = q_date >= np.datetime64(r.available_from)
         gap = np.maximum.reduce([np.zeros(m.sum()), q_lo[m] - r.hi, r.lo - q_hi[m]])
-        conf = [[ordinal(dt), round(float(g), 2)] for dt, g in zip(q_date[m], gap) if g <= MAX_NEAR]
-        alive = [i for i, x in enumerate(st) if x is not None]
-        if alive:   # хранится только срок жизни: f — первая сессия, st — состояния с неё
-            f0, f1 = alive[0], alive[-1]
-            zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "src": r.type, "f": f0,
-                              "st": st[f0:f1 + 1], "cf": conf})
+        cf = [[ordinal(d), round(float(g), 2)] for d, g in zip(q_date[m], gap) if g <= MAX_NEAR]
+        av = ordinal(r.available_from)
+        zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "k": KIND[r.type], "av": av,
+                          "ai": int(np.searchsorted(rth_ord, av)),
+                          "fl": None if pd.isna(r.filled) else ordinal(r.filled),
+                          "t": t_ord, "L": lg, "S": sh, "cf": cf})
 
     # бары: время CT как «UTC», чтобы ось показывала Чикаго
     ts = w.ts.dt.tz_localize(None)
     bars_out = [[int(t.timestamp()), float(o), float(h), float(l), float(c), int(np.searchsorted(sess, d))]
                 for t, o, h, l, c, d in zip(ts, w.open, w.high, w.low, w.close, w.date.to_numpy())]
+    rd = rth.date.to_numpy()
     sess_out = []
     for d in sess:
-        k = np.searchsorted(rd, np.datetime64(d)) - 1
-        p = rth.iloc[k]
-        sess_out.append({"date": f"{pd.Timestamp(d):%Y-%m-%d}", "prev": f"{p.date:%Y-%m-%d}",
-                         "vah": float(p.vah), "val": float(p.val), "poc": float(p.poc),
-                         "high": float(p.high), "low": float(p.low)})
-    for so, d in zip(sess_out, sess):
-        so["ord"] = ordinal(d)
-    data = {"instrument": "ES (ESZ6, back-adjusted)", "bars": bars_out, "sessions": sess_out, "zones": zones_out,
-            "rth_last": f"{rth.date.max():%Y-%m-%d}", "tick": tick}
+        p = rth.iloc[np.searchsorted(rd, np.datetime64(d)) - 1]
+        sess_out.append({"date": f"{pd.Timestamp(d):%Y-%m-%d}", "ord": ordinal(d), "prev": f"{p.date:%Y-%m-%d}",
+                         "vah": float(p.vah), "val": float(p.val), "poc": float(p.poc)})
+    data = {"instrument": "ES (ESZ6, back-adjusted)", "tick": tick, "share": cfg["wicks"]["class_rejection_share"],
+            "rth_last": f"{rth.date.max():%Y-%m-%d}", "rth": rth_ord,
+            "bars": bars_out, "sessions": sess_out, "zones": zones_out}
+
     path = path or str(ROOT / "output" / "zone_map_data.json")
     raw = json.dumps(data, separators=(",", ":"))
     with open(path, "w") as f:
