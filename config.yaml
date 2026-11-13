@@ -127,13 +127,22 @@ zone_align:                        # подгонка границ первор�
 day_context:                       # сегодня против вчера + карта зон (scripts/day_context.py)
   spike_min_ticks: 8               # спайк: последний период (M) вышел за экстремум A–L на ≥ 2 п.
   long_tail_ticks: 20              # хвост ≥ 5 п. — «длинный», короче — «короткий»
-  grey_min_ticks: 8                # серая зона: незаполненные single prints прошлого дня, ≥ 2 п.
+  single_print_min_ticks: 8        # участок single prints / тейл для скрытых уровней — от 2 п.
   ib_width_bands: [0.75, 1.25]     # IB уже 0.75 среднего — узкий, шире 1.25 — широкий (среднее за 20 дней)
   zone_tolerance_ticks: 2          # касание / остановка у края зоны ± 2 тика
   split_date: "2025-01-01"         # поиск закономерностей — до, проверка — после
   placebo_runs: 20
   hidden_lookahead_days: 20        # скрытый уровень: прошит сингл-принтами / тейлом в течение 20 дней
   hidden_control_min_dist_ticks: 4 # контрольная точка в той же зоне single prints — не ближе 1 п. к уровню
+
+grey_zones:                        # серые зоны: похожи на зоны, но мало истории или узкие (tpo/grey_zones.py)
+  composite_min_days: 2            # композиты короче zones.min_composite_days (2 дня); зона — HVN-полоса композита
+  hvn_tpo: [5, 7]                  # первородные зоны из дней с HVN в VA ниже hvn_zones.min_tpo
+  min_history_days: 2              # нормальная первородная зона серая, пока формирование + подтверждения < 2 дней
+  min_width_points: 1.0            # узкие зоны тоже берутся — от 1 п.
+  max_width_points: 10.0
+  placebo_runs: 20
+  near_points: 60.0                # проверка «пустот»: нормальные зоны в пределах ±60 п. от серой
 
 patterns:                          # этап 7: статистика по торговым заметкам
   lookback_days: 20

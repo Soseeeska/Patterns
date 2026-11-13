@@ -1,12 +1,7 @@
-"""Сегодняшний RTH-день против вчерашнего и против карты зон.
+"""Сегодняшний RTH-день против вчерашнего: признаки дня из профиля и 30m-баров.
 
 Признаки известны к моменту решения (open / после A / после IB), исходы —
-по итогу дня. Зоны карты (все — по RTH-профилям прошлых дней):
-  * old_balance — VA композитов баланса [VAL, VAH], доступны со дня после конца;
-  * hvn_S / hvn_R / hvn_range / hvn_new — первородные HVN-зоны с классом на дату
-    (по отторжениям на 30m-барах строго до этого дня; «new» — ещё не было отторжений);
-  * grey — незаполненные single prints прошлых дней (≥ grey_min_ticks); зона
-    живёт, пока диапазон какого-нибудь дня не пройдёт её целиком.
+по итогу дня. Карта зон — scripts/day_context.py (build_zone_map).
 """
 from __future__ import annotations
 
@@ -43,23 +38,6 @@ def single_runs(counts: np.ndarray, low: int, row: int, min_rows: int) -> list[t
         else:
             i += 1
     return out
-
-
-def grey_zones(daily: pd.DataFrame, profiles: dict, tick: float, min_ticks: int) -> pd.DataFrame:
-    """Single prints прошлых дней и дата заполнения (первый день, чей диапазон
-    покрыл участок целиком)."""
-    d = daily[~daily.short_day].sort_values("date").reset_index(drop=True)
-    dates, H, L = d.date.to_numpy(), d.high.to_numpy(), d.low.to_numpy()
-    rows = []
-    for i, r in d.iterrows():
-        p = profiles[r.date]
-        for lo_t, hi_t in single_runs(p.counts, p.low, p.row, max(1, min_ticks // p.row)):
-            lo, hi = lo_t * tick, hi_t * tick
-            later = np.flatnonzero((L[i + 1:] <= lo) & (H[i + 1:] >= hi))
-            filled = dates[i + 1 + later[0]] if len(later) else np.datetime64("NaT", "ns")
-            avail = dates[i + 1] if i + 1 < len(d) else np.datetime64("NaT", "ns")
-            rows.append({"lo": lo, "hi": hi, "formed": r.date, "available_from": avail, "filled": filled})
-    return pd.DataFrame(rows)
 
 
 def open_location(o: float, p) -> str:

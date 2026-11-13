@@ -140,7 +140,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 const D = JSON.parse(document.getElementById('zone-data').textContent);
 const TYPES = [
   ['hvn_S','HVN · поддержка','--z-s'],['hvn_R','HVN · сопротивление','--z-r'],['hvn_range','HVN · проторговка','--z-range'],
-  ['hvn_new','HVN · без истории','--z-new'],['old_balance','Старый баланс (VA композита)','--z-ob'],['grey','Серая (single prints)','--z-grey']];
+  ['hvn_new','HVN · без истории','--z-new'],['old_balance','Старый баланс (VA композита)','--z-ob'],['grey','Серая (мало истории / узкая)','--z-grey']];
 const NAME = Object.fromEntries(TYPES.map(t=>[t[0],t[1]]));
 const KINDS = {0:'old_balance',5:'grey'};
 const DEF = {check:0,near:6,tests:0,rej:0,pur:0,pmax:100,conf:0,cnear:0,age:0,wmax:60,prev:true,rth:true,
@@ -163,10 +163,11 @@ const rthMask = bars.map(b=>{ const d=new Date(b[0]*1000); const m=d.getUTCHours
 
 // состояние зоны на день o (дни от 1970-01-01): события строго раньше o
 const below=(a,o)=>{ let lo=0,hi=a.length; while(lo<hi){ const m=(lo+hi)>>1; if(a[m]<o) lo=m+1; else hi=m; } return lo; };
-const alive=(z,o)=> z.av<=o && (z.fl===null || z.fl>=o);
+const alive=(z,o)=> z.av<=o;
 function stateAt(z,o){
   const nl=below(z.L,o), ns=below(z.S,o), tot=nl+ns;
   let kind=KINDS[z.k];
+  if(!kind && 'gu' in z && (z.gu===null || o<z.gu)) kind='grey';
   if(!kind) kind = tot===0 ? 'hvn_new' : nl/tot>=D.share ? 'hvn_S' : ns/tot>=D.share ? 'hvn_R' : 'hvn_range';
   let conf=0; for(const [d,g] of z.cf){ if(d>=o) break; if(g<=S.cnear) conf++; }
   return {kind, tests:below(z.t,o), rej:tot, pur: tot>=1 ? Math.max(nl,ns)/tot : null, age:o-z.av, conf};

@@ -3,8 +3,8 @@
 Свечи — набор баров (по умолчанию ES_ETH, ETH+RTH), RTH-часы подсвечены.
 Зоны (по RTH-профилям, scripts/day_context.zone_map) рисуются по сессиям —
 только те, что были известны в эту сессию; HVN-зоны окрашены по классу на
-этот день (поддержка / сопротивление / проторговка / без истории), серые
-(незаполненные single prints) исчезают после проторговки. Для каждой
+этот день (поддержка / сопротивление / проторговка / без истории); серые —
+мало истории или узкие (tpo/grey_zones.py), молодая HVN-зона серая до подтверждения. Для каждой
 сессии — VAH / VAL / POC предыдущего RTH-дня.
 
 Запуск:  python -m scripts.zone_map_plot [ES] [ES_ETH] [sessions] [full|clean]
@@ -23,14 +23,10 @@ import pandas as pd
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-from scripts.day_context import active, hvn_class_table, zone_map
-from scripts.hvn_va_stats import per_day
-from scripts.primary_zones import zone_frame
+from scripts.day_context import active, build_zone_map, hvn_class_table
 from scripts.stage1_profiles import load_adjusted, load_test_bars, tag
 from scripts.top_zones_plot import INK, MUTED, SURFACE, _clean, candles
-from tpo.balance import find_balances
 from tpo.data import ROOT, load_config
-from tpo.day_context import grey_zones
 
 STYLE = {  # цвет, прозрачность, штриховка, подпись
     "old_balance": ("#2a78d6", 0.10, None, "старый баланс (VA композита)"),
@@ -38,7 +34,7 @@ STYLE = {  # цвет, прозрачность, штриховка, подпи�
     "hvn_R": ("#e34948", 0.30, None, "HVN · сопротивление"),
     "hvn_range": ("#6250d6", 0.25, None, "HVN · проторговка"),
     "hvn_new": ("#8a8984", 0.25, None, "HVN · без истории"),
-    "grey": ("#8a8984", 0.18, "////", "серая (незаполненные single prints)"),
+    "grey": ("#8a8984", 0.18, "////", "серая (мало истории / узкая)"),
 }
 ORDER = ["old_balance", "grey", "hvn_new", "hvn_range", "hvn_S", "hvn_R"]
 
@@ -46,20 +42,12 @@ ORDER = ["old_balance", "grey", "hvn_new", "hvn_range", "hvn_S", "hvn_R"]
 def main(instrument: str = "ES", bars_instrument: str = "ES_ETH", sessions: str = "10", view: str = "full") -> None:
     """view: full — все зоны; clean — HVN-зоны с классами, старые балансы контуром, без серых."""
     cfg = load_config(instrument=instrument)
-    cc, zc = cfg["day_context"], cfg["hvn_zones"]
     out = ROOT / "output"
     n_s = int(sessions)
     rbars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
-    comps, _ = find_balances(rbars, daily, profiles, cfg, tick)
-    comps = comps[(comps.end_reason != "open") & (comps.n_days >= cfg["zones"].get("min_composite_days", 0))]
-    dd = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
-    dd["ok"] = dd.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
-    prim = zone_frame(dd, daily, cfg, tick)
-    prim = prim[prim.available_from.notna()].reset_index(drop=True)
-    grey = grey_zones(daily, profiles, tick, cc["grey_min_ticks"])
+    zmap, prim, _ = build_zone_map(cfg, rbars, daily, profiles, tick)
     share = cfg["wicks"]["class_rejection_share"]
     cls_tab = hvn_class_table(rbars, prim, cfg["wicks"]["min_wick_ticks"] * tick, share)
-    zmap = zone_map(comps, prim, grey)
 
     b = (load_test_bars(bars_instrument)[0] if bars_instrument != instrument else rbars)
     b = b.sort_values("ts").reset_index(drop=True)

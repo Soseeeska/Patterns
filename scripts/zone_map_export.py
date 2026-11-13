@@ -2,10 +2,12 @@
 и все зоны в их ценовом диапазоне с датами событий.
 
 Зоны (по RTH-профилям): старые балансы (VA композитов), первородные HVN-зоны,
-серые (незаполненные single prints). Для каждой зоны хранятся даты (в днях
-от 1970-01-01):
-  av — когда стала доступна, ai — её номер в списке RTH-дней, fl — когда
-       проторговалась (серые) или null;
+серые (tpo/grey_zones.py: мало истории или узкие). Для каждой зоны хранятся даты
+(в днях от 1970-01-01):
+  av — когда стала доступна, ai — её номер в списке RTH-дней;
+  gu — только у молодых первородных: до какой даты (не включая) зона серая,
+       null — серая до конца данных;
+  g  — источник серой зоны: comp / hvn;
   t  — тесты (30m, правила этапа 6, RTH-бары), L / S — бары-отторжения
        хвостом вверх (лонг) / вниз (шорт);
   cf — зачётные HVN-дни (8–10 TPO) после появления: [дата, зазор до зоны, п.]
@@ -28,14 +30,10 @@ import sys
 import numpy as np
 import pandas as pd
 
-from scripts.day_context import zone_map
-from scripts.hvn_va_stats import per_day
-from scripts.primary_zones import zone_frame
+from scripts.day_context import build_zone_map
 from scripts.stage1_profiles import load_adjusted, load_test_bars
 from scripts.zone_wicks import analyze
-from tpo.balance import find_balances
 from tpo.data import ROOT, load_config
-from tpo.day_context import grey_zones
 from tpo.zone_align import align_zone
 from tpo.zone_classes import interaction_types
 
@@ -50,15 +48,8 @@ def ordinal(x) -> int:
 
 def build_zones(cfg, rbars, daily, profiles, tick):
     """Карта зон (без классов: класс страница считает по датам отторжений)."""
-    cc, zc = cfg["day_context"], cfg["hvn_zones"]
-    comps, _ = find_balances(rbars, daily, profiles, cfg, tick)
-    comps = comps[(comps.end_reason != "open") & (comps.n_days >= cfg["zones"].get("min_composite_days", 0))]
-    dd = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
-    dd["ok"] = dd.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
-    prim = zone_frame(dd, daily, cfg, tick)
-    prim = prim[prim.available_from.notna()].reset_index(drop=True)
-    grey = grey_zones(daily, profiles, tick, cc["grey_min_ticks"])
-    return zone_map(comps, prim, grey), dd[dd.ok]
+    zm, _, dd = build_zone_map(cfg, rbars, daily, profiles, tick)
+    return zm, dd[dd.ok]
 
 
 def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
@@ -71,9 +62,8 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
     sess = np.sort(b.date.unique())[-int(sessions):]
     w = b[b.date.isin(sess)].reset_index(drop=True)
     lo_p, hi_p = w.low.min() - 40, w.high.max() + 40
-    s_first, s_last = pd.Timestamp(sess[0]), pd.Timestamp(sess[-1])
-    z = zm[(zm.available_from <= s_last) & (zm.filled.isna() | (zm.filled >= s_first))
-           & (zm.hi >= lo_p) & (zm.lo <= hi_p)].reset_index(drop=True)
+    s_last = pd.Timestamp(sess[-1])
+    z = zm[(zm.available_from <= s_last) & (zm.hi >= lo_p) & (zm.lo <= hi_p)].reset_index(drop=True)
 
     # события по RTH-барам: тесты и бары-отторжения с датами
     zt = pd.DataFrame({"zone_id": np.arange(len(z)), "lo": z.lo, "hi": z.hi, "available_from": z.available_from})
@@ -129,11 +119,15 @@ def main(instrument="ES", bars_instrument="ES_ETH", sessions="250", path=None):
         gap = np.maximum.reduce([np.zeros(m.sum()), q_lo[m] - r.hi, r.lo - q_hi[m]])
         cf = [[ordinal(d), round(float(g), 2)] for d, g in zip(q_date[m], gap) if g <= MAX_NEAR]
         av = ordinal(r.available_from)
-        zones_out.append({"lo": float(r.lo), "hi": float(r.hi), "k": KIND[r.type], "av": av,
-                          "ai": int(np.searchsorted(rth_ord, av)),
-                          "fl": None if pd.isna(r.filled) else ordinal(r.filled),
-                          "t": t_ord, "L": lg, "S": sh, "cf": cf,
-                          "ab": aligned(float(r.lo), float(r.hi), r.available_from)})
+        zo = {"lo": float(r.lo), "hi": float(r.hi), "k": KIND[r.type], "av": av,
+              "ai": int(np.searchsorted(rth_ord, av)),
+              "t": t_ord, "L": lg, "S": sh, "cf": cf,
+              "ab": aligned(float(r.lo), float(r.hi), r.available_from)}
+        if r.young:
+            zo["gu"] = None if pd.isna(r.grey_until) else ordinal(r.grey_until)
+        if r.type == "grey":
+            zo["g"] = r.src
+        zones_out.append(zo)
 
     # бары: время CT как «UTC», чтобы ось показывала Чикаго
     ts = w.ts.dt.tz_localize(None)

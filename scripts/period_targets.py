@@ -27,13 +27,10 @@ import sys
 import numpy as np
 import pandas as pd
 
-from scripts.day_context import active, hvn_class_table, shift_zones, zone_map
-from scripts.hvn_va_stats import per_day
-from scripts.primary_zones import zone_frame
+from scripts.day_context import active, build_zone_map, hvn_class_table, shift_zones
 from scripts.stage1_profiles import load_adjusted
-from tpo.balance import find_balances
 from tpo.data import ROOT, load_config
-from tpo.day_context import LETTERS, grey_zones, open_location
+from tpo.day_context import LETTERS, open_location
 from tpo.day_type import classify_days
 from tpo.profile import build_profile, poc_index
 
@@ -173,20 +170,13 @@ def evaluate(df, split, feats):
 
 def main(instrument: str = "ES") -> None:
     cfg = load_config(instrument=instrument)
-    cc, zc = cfg["day_context"], cfg["hvn_zones"]
+    cc = cfg["day_context"]
     out = ROOT / "output"
     bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
     daily = classify_days(daily, profiles, cfg, tick)
-    comps, _ = find_balances(bars, daily, profiles, cfg, tick)
-    comps = comps[(comps.end_reason != "open") & (comps.n_days >= cfg["zones"].get("min_composite_days", 0))]
-    dd = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
-    dd["ok"] = dd.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
-    prim = zone_frame(dd, daily, cfg, tick)
-    prim = prim[prim.available_from.notna()].reset_index(drop=True)
-    grey = grey_zones(daily, profiles, tick, cc["grey_min_ticks"])
+    zmap, prim, _ = build_zone_map(cfg, bars, daily, profiles, tick)
     share = cfg["wicks"]["class_rejection_share"]
     cls_tab = hvn_class_table(bars, prim, cfg["wicks"]["min_wick_ticks"] * tick, share)
-    zmap = zone_map(comps, prim, grey)
     split = pd.Timestamp(cc["split_date"])
 
     df = build_panel(bars, daily, cfg, tick, zmap, cls_tab)

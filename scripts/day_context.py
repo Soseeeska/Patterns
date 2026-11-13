@@ -6,11 +6,11 @@
   open    — где open относительно вчера, относительно вчерашнего спайка, в какой зоне;
   после A — где close A относительно вчерашнего VA;
   после IB — ширина IB к среднему за 20 дней, где IB относительно вчерашнего VA.
-Карта зон на день (tpo/day_context.py): старые балансы (VA композитов), HVN-зоны
-с классом на дату, серые зоны (незаполненные single prints).
+Карта зон на день (build_zone_map): старые балансы (VA композитов), HVN-зоны
+с классом на дату, серые зоны (tpo/grey_zones.py: мало истории или узкие).
 Исходы дня: вчерашние цели, где сформировался POC дня (в какой зоне или вне
 всех — новый баланс), ближайшая зона сверху/снизу (дошли / остановились /
-прошли), заполнение серых зон.
+прошли).
 Всё про зоны сравнивается со сдвинутыми зонами (1.5–3 ширины, ширина ≥ 4 п.).
 Таблицы — отдельно до и после split_date.
 
@@ -24,6 +24,7 @@ Disbalance in range / Full disbalance), принятие/отторжение в
 """
 from __future__ import annotations
 
+import copy
 import sys
 
 import numpy as np
@@ -34,14 +35,16 @@ from scripts.primary_zones import zone_frame
 from scripts.stage1_profiles import load_adjusted
 from tpo.balance import find_balances
 from tpo.data import ROOT, load_config
-from tpo.day_context import (bucket_rel, grey_zones, loc_vs_va, open_location, spike, tail_bucket)
+from tpo.day_context import (bucket_rel, loc_vs_va, open_location, spike, tail_bucket)
 from tpo.day_type import classify_days
+from tpo.grey_zones import grey_until
+from tpo.intraday import hvn_band
 from tpo.zone_classes import interaction_types
 
 OPEN_ORDER = ["выше High", "VAH–High", "внутри VA", "Low–VAL", "ниже Low"]
 ZTYPES = ["old_balance", "hvn_S", "hvn_R", "hvn_range", "hvn_new", "grey"]
 ZNAME = {"old_balance": "старый баланс (VA композита)", "hvn_S": "HVN · поддержка", "hvn_R": "HVN · сопротивление",
-         "hvn_range": "HVN · проторговка", "hvn_new": "HVN · без истории", "grey": "серая (single prints)"}
+         "hvn_range": "HVN · проторговка", "hvn_new": "HVN · без истории", "grey": "серая (мало истории / узкая)"}
 
 
 # ---------------------------------------------------------------- карта зон
@@ -76,22 +79,70 @@ def hvn_class_on(cls_tab, zone_id, date, share):
     return "hvn_range"
 
 
-def zone_map(comps, prim, grey):
-    """Единая таблица зон: type, lo, hi, available_from, filled (NaT — не заполняется), zone_id."""
+def grey_candidates(cfg, bars, daily, profiles, tick, dd):
+    """Серые зоны из коротких композитов и слабых HVN-дней: lo, hi, available_from, src.
+    dd — результат per_day (без колонки ok)."""
+    gc = cfg["grey_zones"]
+    rows = []
+    # короткие композиты: HVN-полоса вокруг POC композита
+    c2 = copy.deepcopy(cfg)
+    c2["balance"]["min_days"] = gc["composite_min_days"]
+    comps, cprof = find_balances(bars, daily, profiles, c2, tick)
+    short = comps[(comps.end_reason != "open") & (comps.n_days < cfg["zones"]["min_composite_days"])]
+    for r in short.itertuples():
+        lo, hi = hvn_band(cprof[r.composite_id], int(round(r.poc / tick)), cfg["intraday"]["hvn_share"])
+        rows.append({"lo": lo * tick, "hi": hi * tick, "available_from": r.available_from, "src": "comp"})
+    # слабые HVN-дни: тот же алгоритм первородных зон
+    d = dd.copy()
+    d["ok"] = d.hvn_tpo.between(*gc["hvn_tpo"])
+    weak = zone_frame(d, daily, cfg, tick)
+    for r in weak[weak.available_from.notna()].itertuples():
+        rows.append({"lo": r.lo, "hi": r.hi, "available_from": r.available_from, "src": "hvn"})
+    g = pd.DataFrame(rows)
+    w = g.hi - g.lo
+    return g[(w >= gc["min_width_points"] - 1e-9) & (w <= gc["max_width_points"] + 1e-9)].reset_index(drop=True)
+
+
+def zone_map(comps, prim, grey, min_history=0):
+    """Единая таблица зон: type, lo, hi, available_from, zone_id, src, young, grey_until.
+    young — первородная зона, серая до grey_until (NaT — до конца данных)."""
     ob = pd.DataFrame({"type": "old_balance", "lo": comps.val, "hi": comps.vah,
-                       "available_from": comps.available_from, "filled": pd.NaT, "zone_id": -1})
+                       "available_from": comps.available_from, "zone_id": -1, "src": "comp"})
+    gu = [grey_until(f, c, min_history) for f, c in zip(prim.formation_days, prim.conf_dates)]
     hv = pd.DataFrame({"type": "hvn", "lo": prim.lo, "hi": prim.hi, "available_from": prim.available_from,
-                       "filled": pd.NaT, "zone_id": prim.zone_id})
+                       "zone_id": prim.zone_id, "src": "hvn",
+                       "young": [g is not None for g in gu],
+                       "grey_until": [pd.NaT if g is None else g for g in gu]})
     gr = pd.DataFrame({"type": "grey", "lo": grey.lo, "hi": grey.hi, "available_from": grey.available_from,
-                       "filled": grey.filled, "zone_id": -1})
+                       "zone_id": -1, "src": grey.src})
     z = pd.concat([ob, hv, gr], ignore_index=True)
+    z["young"] = z.young.fillna(False).astype(bool)
+    z["grey_until"] = pd.to_datetime(z.grey_until)
     return z[z.available_from.notna()].reset_index(drop=True)
 
 
-def active(z, date, cls_tab, share):
-    a = z[(z.available_from <= date) & (z.filled.isna() | (z.filled >= date))].copy()
+def build_zone_map(cfg, bars, daily, profiles, tick):
+    """Карта зон по RTH-профилям: (zmap, prim, dd). dd — per_day с колонкой ok (8–10 TPO)."""
+    zc = cfg["hvn_zones"]
+    comps, _ = find_balances(bars, daily, profiles, cfg, tick)
+    comps = comps[(comps.end_reason != "open") & (comps.n_days >= cfg["zones"].get("min_composite_days", 0))]
+    dd = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
+    grey = grey_candidates(cfg, bars, daily, profiles, tick, dd)
+    dd["ok"] = dd.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
+    prim = zone_frame(dd, daily, cfg, tick)
+    prim = prim[prim.available_from.notna()].reset_index(drop=True)
+    return zone_map(comps, prim, grey, cfg["grey_zones"]["min_history_days"]), prim, dd
+
+
+def active(z, date, cls_tab=None, share=None):
+    """Зоны, доступные на дату, с типом на дату (класс HVN, молодая первородная — серая)."""
+    a = z[z.available_from <= date].copy()
     m = a.type == "hvn"
-    a.loc[m, "type"] = [hvn_class_on(cls_tab, i, date, share) for i in a.zone_id[m]]
+    young = m & a.young & (a.grey_until.isna() | (a.grey_until > date))
+    a.loc[young, ["type", "src"]] = ["grey", "young"]
+    m &= ~young
+    if cls_tab is not None:              # None — без класса, тип остаётся «hvn»
+        a.loc[m, "type"] = [hvn_class_on(cls_tab, i, date, share) for i in a.zone_id[m]]
     return a
 
 
@@ -235,25 +286,19 @@ def main(instrument: str = "ES", zones: str = "1") -> None:
     out = ROOT / "output"
     bars, daily, profiles, _, tick = load_adjusted(instrument, cfg)
     daily = classify_days(daily, profiles, cfg, tick)
-    comps, _ = find_balances(bars, daily, profiles, cfg, tick)
-    comps = comps[(comps.end_reason != "open") & (comps.n_days >= cfg["zones"].get("min_composite_days", 0))]
-    dd = per_day(daily, profiles, tick, cfg["intraday"]["hvn_share"]).sort_values("date")
-    dd["ok"] = dd.hvn_tpo.between(zc["min_tpo"], zc["max_tpo"])
-    prim = zone_frame(dd, daily, cfg, tick)
-    prim = prim[prim.available_from.notna()].reset_index(drop=True)
-    grey = grey_zones(daily, profiles, tick, cc["grey_min_ticks"])
+    zmap, prim, _ = build_zone_map(cfg, bars, daily, profiles, tick)
     mw = cfg["wicks"]["min_wick_ticks"] * tick
     share = cfg["wicks"]["class_rejection_share"]
     cls_tab = hvn_class_table(bars, prim, mw, share)
-    zmap = zone_map(comps, prim, grey)
     split = pd.Timestamp(cc["split_date"])
 
     df = build(bars, daily, profiles, cfg, tick, zmap, cls_tab)
     df.to_csv(out / f"{instrument}_day_context.csv", index=False)
     print(f"{instrument}: дней {len(df)} ({df.date.min():%Y-%m-%d} – {df.date.max():%Y-%m-%d}); "
           f"до {split:%Y-%m-%d} — {(df.date < split).sum()}, после — {(df.date >= split).sum()}")
-    print(f"Зоны: старых балансов {len(comps)}, HVN {len(prim)}, серых {len(grey)} "
-          f"(заполнено {grey.filled.notna().sum()})")
+    n = zmap.groupby("type").size()
+    print(f"Зоны: старых балансов {n.get('old_balance', 0)}, HVN {len(prim)} (из них бывают серыми {zmap.young.sum()}), "
+          f"серых {n.get('grey', 0)} ({zmap[zmap.type == 'grey'].src.value_counts().to_dict()})")
     print("В каждой ячейке: до split / после split.")
 
     print("\n===== 0. ПО ЗАМЕТКАМ «MP FP» =====")

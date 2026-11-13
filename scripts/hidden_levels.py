@@ -2,7 +2,7 @@
 
 Уровень — VAH / VAL / POC полного RTH-дня D. Скрытым он становится, когда в
 один из следующих hidden_lookahead_days дней (D2) через него прошли
-single prints или тейл (участок строк с TPO = 1 длиной ≥ grey_min_ticks).
+single prints или тейл (участок строк с TPO = 1 длиной ≥ single_print_min_ticks).
 Такой уровень не сребалансирован и валиден, пока участок не проторгуется
 (диапазон какого-нибудь дня пройдёт его целиком).
 Тест — первый возврат цены к уровню после D2 по правилам этапа 6 на 30m
@@ -38,7 +38,7 @@ def find_hidden(daily, profiles, tick, cfg):
     for r in d.itertuples():
         p = profiles[r.date]
         runs[r.date] = [(lo * tick, hi * tick) for lo, hi in
-                        single_runs(p.counts, p.low, p.row, max(1, cc["grey_min_ticks"] // p.row))]
+                        single_runs(p.counts, p.low, p.row, max(1, cc["single_print_min_ticks"] // p.row))]
     H, L, dates = d.high.to_numpy(), d.low.to_numpy(), d.date.to_numpy()
     hidden, regular = [], []
     for i, r in d.iterrows():
