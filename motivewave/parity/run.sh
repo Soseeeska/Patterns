@@ -17,3 +17,4 @@ for pair in "0 0" "3 3" "10 6" "20 8" "60 11"; do
   python -I motivewave/parity/compare.py "$T/ref.json" "$T/java$1.json" "$T/vis$1.json" "$2"
 done
 java -Djava.awt.headless=true -cp "$T/cls" Preview "$T/bars.csv" motivewave/preview.png 5
+java -Djava.awt.headless=true -cp "$T/cls" Preview "$T/bars.csv" motivewave/top5_rejections.png 5 0 5   # топ-5 по отторжениям

@@ -606,5 +606,41 @@ public final class ZoneEngine {
         return lo;
     }
 
+    // ------------------------------------------------------------------ последние сессии
+    /** Тесты и отторжения зоны на 30m-барах (все бары — ETH + RTH) последних сессий. */
+    public static final class Recent {
+        public final Zone z; public int tests, longs, shorts;
+        Recent(Zone z) { this.z = z; }
+        public int rejections() { return longs + shorts; }
+    }
+
+    /** Для каждой зоны, видимой хотя бы в одну из последних {@code lastSessions} показываемых сессий:
+     *  тест — бар задел зону (границы после подгонки); отторжение — хвост пересёк границу и close
+     *  за зоной (правила tpo/zone_classes.py). Сортировка: отторжения, затем тесты, по убыванию. */
+    public static List<Recent> recent(List<Bar> bars, Result res, Params p, int lastSessions) {
+        int n = res.sessions.size(), from = Math.max(0, n - lastSessions);
+        if (n == 0) return List.of();
+        long t0 = res.sessions.get(from).startMs;
+        Map<Zone, Recent> out = new java.util.LinkedHashMap<>();
+        for (int i = from; i < n; i++) for (Shown v : res.visible.get(i)) out.computeIfAbsent(v.z, Recent::new);
+        double mw = p.minWickTicks * p.tick;
+        for (Bar b : bars) {
+            if (b.t < t0) continue;
+            LocalDateTime lt = LocalDateTime.ofInstant(Instant.ofEpochMilli(b.t), p.tz);
+            LocalDate d = lt.getHour() * 60 + lt.getMinute() >= p.ethStartMin ? lt.toLocalDate().plusDays(1) : lt.toLocalDate();
+            long ord = d.toEpochDay();
+            for (Recent r : out.values()) {
+                if (r.z.avOrd() > ord) continue;              // зона ещё не появилась
+                if (b.l > r.z.bhi || b.h < r.z.blo) continue;
+                r.tests++;
+                int t = interaction(b.o, b.h, b.l, b.c, r.z.blo, r.z.bhi, mw);
+                if (t == 1) r.longs++; else if (t == 2) r.shorts++;
+            }
+        }
+        List<Recent> l = new ArrayList<>(out.values());
+        l.sort((a, b) -> a.rejections() != b.rejections() ? b.rejections() - a.rejections() : b.tests - a.tests);
+        return l;
+    }
+
     private ZoneEngine() {}
 }

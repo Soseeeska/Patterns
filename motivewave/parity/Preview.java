@@ -25,7 +25,8 @@ import patterns.zones.ZoneEngine.Result;
 import patterns.zones.ZonePlan;
 
 /** Превью того, что рисует TpoZonesStudy (тот же ZoneEngine + ZonePlan, цвета и прозрачность по умолчанию):
- *  java Preview bars.csv out.png [сессий на картинке] [N подгонки]
+ *  java Preview bars.csv out.png [сессий на картинке] [N подгонки] [выделить топ зон по отторжениям]
+ *  Топ — тесты и отторжения на всех барах (ETH + RTH) показанных сессий, обводка пунктиром.
  *  Ось времени — по барам (без пустых выходных), как у MotiveWave. */
 public class Preview {
     public static void main(String[] a) throws Exception {
@@ -42,6 +43,19 @@ public class Preview {
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         Result res = ZoneEngine.run(bars, p);
         ZonePlan plan = ZonePlan.of(res, p);
+        int top = a.length > 4 ? Integer.parseInt(a[4]) : 0;
+        List<ZoneEngine.Recent> recent = ZoneEngine.recent(bars, res, p, k);
+        if (top > 0) {
+            System.out.println("Зоны последних " + k + " сессий (ETH+RTH 30m): отторжения / тесты");
+            int i = 0;
+            for (ZoneEngine.Recent r : recent) {
+                if (r.tests == 0) continue;
+                String kind = "";
+                for (ZoneEngine.Shown v : res.visible.get(res.visible.size() - 1)) if (v.z == r.z) kind = v.st.kind.title;
+                System.out.printf(java.util.Locale.ROOT, "%s%2d. %-28s %8.2f–%-8.2f отт %2d (лонг %d / шорт %d)  тестов %2d  появилась %s%n",
+                        ++i <= top ? "*" : " ", i, kind, r.z.blo, r.z.bhi, r.rejections(), r.longs, r.shorts, r.tests, r.z.av);
+            }
+        }
         int n = bars.size();
         long[] st = new long[n];
         for (int i = 0; i < n; i++) st[i] = bars.get(i).t;
@@ -111,6 +125,28 @@ public class Preview {
             var rect = new java.awt.geom.Rectangle2D.Double(x - bw * 0.35, y0, bw * 0.7, Math.max(1, y1 - y0));
             if (b.c >= b.o) { g.setColor(upFill); g.fill(rect); g.setColor(up); g.draw(rect); } else { g.setColor(dn); g.fill(rect); }
         }
+        // топ зон по отторжениям за показанные сессии — пунктирная обводка и подпись
+        List<Integer> usedY = new ArrayList<>();
+        double tFrom = tx.applyAsDouble(res.sessions.get(Math.max(0, res.sessions.size() - k)).startMs);
+        for (int i = 0; i < Math.min(top, recent.size()); i++) {
+            ZoneEngine.Recent r = recent.get(i);
+            if (r.rejections() == 0) break;
+            double y0 = ty.applyAsDouble(r.z.bhi), y1 = ty.applyAsDouble(r.z.blo);
+            g.setColor(new Color(0xffd23f));
+            g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{9f, 6f}, 0f));
+            g.draw(new java.awt.geom.Rectangle2D.Double(Math.max(2, tFrom), y0 - 2, PW - Math.max(2, tFrom) - 4, Math.max(4, y1 - y0 + 4)));
+            String lbl = String.format(java.util.Locale.ROOT, "#%d  отторжений %d (L %d / S %d) · тестов %d", i + 1, r.rejections(), r.longs, r.shorts, r.tests);
+            g.setFont(new Font("SansSerif", Font.BOLD, 12));
+            int lw = g.getFontMetrics().stringWidth(lbl);
+            int lx = PW - lw - 14, ly = (int) y0 - 6;
+            for (boolean moved = true; moved; ) {
+                moved = false;
+                for (int u : usedY) if (Math.abs(u - ly) < 17) { ly = u + 17; moved = true; }
+            }
+            usedY.add(ly);
+            g.setColor(new Color(0x15181c)); g.fillRect(lx - 4, ly - 13, lw + 8, 17);
+            g.setColor(new Color(0xffd23f)); g.drawString(lbl, lx, ly);
+        }
         float[] dash = {5f, 4f};
         for (ZonePlan.Level l : plan.levels) {
             double x0 = tx.applyAsDouble(l.t0), x1 = tx.applyAsDouble(l.t1);
@@ -131,7 +167,8 @@ public class Preview {
             g.drawString(s.date.toString(), (int) x + 4, H - 12);
         }
         g.setColor(new Color(0xe7eaed)); g.setFont(new Font("SansSerif", Font.BOLD, 14));
-        g.drawString("TPO Zones 1.1 — превью (ES, 30m, ETH+RTH, подгонка " + p.alignSessions + " сесс.)", 16, 24);
+        g.drawString("TPO Zones 1.1 — ES 30m ETH+RTH, подгонка " + p.alignSessions + " сесс."
+                + (top > 0 ? " · пунктир — топ-" + top + " зон по отторжениям за последние " + k + " сессий" : ""), 16, 24);
         ImageIO.write(img, "png", new File(a[1]));
         System.out.println(a[1] + " rects=" + plan.rects.size() + " levels=" + plan.levels.size());
     }
