@@ -26,6 +26,8 @@ public class ParityDump {
             }
         }
         Params p = new Params();
+        p.rejectionShare = 0.60;      // сверка — с правилами страницы карты зон
+        p.stickyRange = false;
         if (a.length > 2) p.alignSessions = Integer.parseInt(a[2]);
         if (a.length > 3) p.promoteRejections = Integer.parseInt(a[3]);
         long t0 = System.nanoTime();
