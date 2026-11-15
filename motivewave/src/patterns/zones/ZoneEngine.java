@@ -78,7 +78,9 @@ public final class ZoneEngine {
         // режим «по композиту»
         public boolean compositeMode = false;     // класс зоны по положению в композите, а не по отторжениям
         public boolean coreByVa = false;          // ядро композита: VA (иначе HVN-полоса вокруг POC)
-        public double coreAbsorb = 0.30;          // зона, на > 30% своей ширины лежащая на ядре, поглощается им
+        public double coreAbsorb = 0.30;
+        public double zoneMaxWidthPts = 0;        // > 0: HVN-полоса дня и ядро композита шире — сужаются до окна
+                                                  // с POC и максимумом TPO (на странице карты зон лимита нет)          // зона, на > 30% своей ширины лежащая на ядре, поглощается им
         public int minWickTicks = 2;
         // подгонка границ
         public int alignSessions = 0;            // 0 — без подгонки (по умолчанию на странице)
@@ -274,7 +276,8 @@ public final class ZoneEngine {
                 int[] c = d.profile.counts; int mx = 0;
                 for (int t = d.val; t <= d.vah; t++) mx = Math.max(mx, c[t - d.profile.low]);
                 d.hvnTpo = mx;
-                int[] band = hvnBand(d.profile, d.poc, p.hvnShare);
+                int[] band = narrow(d.profile, hvnBand(d.profile, d.poc, p.hvnShare), d.poc,
+                        (int) Math.round(p.zoneMaxWidthPts / tick));
                 d.bandLo = band[0]; d.bandHi = band[1];
             }
         }
@@ -485,6 +488,7 @@ public final class ZoneEngine {
             Zone core = new Zone();
             core.k = K_CORE; core.av = endDay; core.src = "core";
             int[] band = p.coreByVa ? new int[]{va[1], va[2]} : hvnBand(cp, va[0], p.hvnShare);
+            band = narrow(cp, band, va[0], (int) Math.round(p.zoneMaxWidthPts / p.tick));
             core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
             c.core = core;
             comps.add(c);
@@ -499,6 +503,20 @@ public final class ZoneEngine {
             z.k = K_GREY; z.lo = band[0] * p.tick; z.hi = band[1] * p.tick;
             greyComp.add(z);
         }
+    }
+
+    /** Полоса [lo, hi] шире maxW тиков → окно шириной maxW внутри неё, содержащее POC, с максимумом TPO
+     *  (при равенстве — с POC ближе к середине). */
+    static int[] narrow(Profile p, int[] band, int poc, int maxW) {
+        if (maxW <= 0 || band[1] - band[0] <= maxW) return band;
+        int bestLo = band[0]; long best = -1; double bestOff = Double.MAX_VALUE;
+        for (int lo = Math.max(band[0], poc - maxW); lo <= Math.min(poc, band[1] - maxW); lo++) {
+            long sum = 0;
+            for (int t = lo; t <= lo + maxW; t++) sum += p.counts[t - p.low];
+            double off = Math.abs(lo + maxW / 2.0 - poc);
+            if (sum > best || (sum == best && off < bestOff)) { best = sum; bestLo = lo; bestOff = off; }
+        }
+        return new int[]{bestLo, bestLo + maxW};
     }
 
     // ------------------------------------------------------------------ первородные зоны

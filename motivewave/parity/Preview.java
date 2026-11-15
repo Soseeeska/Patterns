@@ -42,6 +42,7 @@ public class Preview {
         Params p = new Params();
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         if (a.length > 5) p.compositeMode = a[5].equals("comp");
+        p.zoneMaxWidthPts = 10;                        // как в индикаторе по умолчанию
         Result res = ZoneEngine.run(bars, p);
         ZonePlan plan = ZonePlan.of(res, p);
         int top = a.length > 4 ? Integer.parseInt(a[4]) : 0;

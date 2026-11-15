@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -141,6 +141,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new IntegerDescriptor(GHVN_MAX, "Серые: HVN в VA до, TPO", 7, 1, 30, 1));
         g.addRow(new DoubleDescriptor(MERGE_OV, "Пересечение для склейки, доля", 0.50, 0.05, 1.0, 0.05));
         g.addRow(new DoubleDescriptor(MERGE_W, "Ширина первородной зоны до, п.", 10.0, 1, 50, 0.5));
+        g.addRow(new DoubleDescriptor(ZONE_W, "Зоны не шире, п.: HVN-полоса дня и ядро композита сужаются до окна с POC (0 — без лимита)", 10.0, 0, 60, 0.5));
         g.addRow(new IntegerDescriptor(COMP_DAYS, "Композит «старый баланс» от, дней", 3, 2, 30, 1));
         g.addRow(new IntegerDescriptor(GREY_HIST, "Молодая первородная серая, пока истории < дней", 2, 0, 20, 1));
         g.addRow(new DoubleDescriptor(GREY_WMIN, "Серые: ширина от, п.", 1.0, 0, 50, 0.25));
@@ -232,6 +233,7 @@ public class TpoZonesStudy extends Study {
         p.greyMinWidthPts = st.getDouble(GREY_WMIN, 1.0); p.greyMaxWidthPts = st.getDouble(GREY_WMAX, 10.0);
         p.rejectionShare = st.getDouble(REJ_SHARE, 0.6);
         p.compositeMode = st.getBoolean(MODE, true);
+        p.zoneMaxWidthPts = st.getDouble(ZONE_W, 10.0);
         p.coreByVa = st.getBoolean(CORE_VA, false);
         p.minWickTicks = st.getInteger(WICK, 2);
         p.sessions = st.getInteger(SESSIONS, 250);
