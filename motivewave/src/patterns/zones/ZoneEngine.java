@@ -70,8 +70,7 @@ public final class ZoneEngine {
         public double greyMinWidthPts = 1.0, greyMaxWidthPts = 10.0;
         public double greyMaxOverlap = 0.30;
         // классы
-        public double rejectionShare = 0.70;      // на странице карты зон — 0.60
-        public boolean stickyRange = true;        // проторговка (баланс) больше не меняет класс
+        public double rejectionShare = 0.60;
         public int minWickTicks = 2;
         // подгонка границ
         public int alignSessions = 0;            // 0 — без подгонки (по умолчанию на странице)
@@ -186,7 +185,6 @@ public final class ZoneEngine {
         int formationDays; List<LocalDate> conf = List.of();
         // события (дни от 1970-01-01)
         public long[] L = new long[0], S = new long[0];
-        public long rangeFrom = Long.MAX_VALUE;              // с этого дня зона — проторговка навсегда
         public final List<long[]> cf = new ArrayList<>();   // {ord, gap*100}
         public int ai;                                       // индекс av в списке полных RTH-дней
         public double blo, bhi;                              // границы после подгонки
@@ -328,7 +326,6 @@ public final class ZoneEngine {
                 }
                 z.L = lg.stream().mapToLong(Long::longValue).toArray();
                 z.S = sh.stream().mapToLong(Long::longValue).toArray();
-                z.rangeFrom = rangeFrom(z.L, z.S, p.rejectionShare);
             }
             // подтверждения: зачётные HVN-дни (8–10 TPO) после появления, зазор до зоны
             for (Day d : full) {
@@ -569,8 +566,7 @@ public final class ZoneEngine {
             if (pr != null && o >= pr) { kind = null; st.promoted = true; }
         }
         if (kind == null) {
-            if (p.stickyRange && o >= z.rangeFrom) kind = Kind.HVN_RANGE;
-            else kind = tot == 0 ? Kind.HVN_NEW : (double) st.nl / tot >= p.rejectionShare ? Kind.HVN_S
+            kind = tot == 0 ? Kind.HVN_NEW : (double) st.nl / tot >= p.rejectionShare ? Kind.HVN_S
                     : (double) st.ns / tot >= p.rejectionShare ? Kind.HVN_R : Kind.HVN_RANGE;
         }
         st.kind = kind;
@@ -582,19 +578,6 @@ public final class ZoneEngine {
         for (long[] c : z.cf) { if (c[0] >= o) break; if (c[1] <= cnear) conf++; }
         st.conf = conf;
         return st;
-    }
-
-    /** Первый день, когда по отторжениям строго раньше него зона — проторговка (ни одна сторона не набрала share). */
-    static long rangeFrom(long[] L, long[] S, double share) {
-        int i = 0, j = 0, nl = 0, ns = 0;
-        while (i < L.length || j < S.length) {
-            long d = j >= S.length || (i < L.length && L[i] <= S[j]) ? L[i] : S[j];
-            while (i < L.length && L[i] == d) { i++; nl++; }
-            while (j < S.length && S[j] == d) { j++; ns++; }
-            int tot = nl + ns;
-            if ((double) nl / tot < share && (double) ns / tot < share) return d + 1;
-        }
-        return Long.MAX_VALUE;
     }
 
     /** День перевода серой зоны в основную или null (≥ promoteRejections отторжений за сессии подгонки). */

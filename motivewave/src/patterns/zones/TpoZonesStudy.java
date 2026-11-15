@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String STICKY = "stickyRange", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -139,8 +139,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new IntegerDescriptor(GREY_HIST, "Молодая первородная серая, пока истории < дней", 2, 0, 20, 1));
         g.addRow(new DoubleDescriptor(GREY_WMIN, "Серые: ширина от, п.", 1.0, 0, 50, 0.25));
         g.addRow(new DoubleDescriptor(GREY_WMAX, "Серые: ширина до, п.", 10.0, 0, 50, 0.25));
-        g.addRow(new DoubleDescriptor(REJ_SHARE, "Класс HVN: доля отторжений в одну сторону", 0.70, 0.5, 1.0, 0.05));
-        g.addRow(new BooleanDescriptor(STICKY, "Проторговка (баланс) больше не меняет класс", true));
+        g.addRow(new DoubleDescriptor(REJ_SHARE, "Класс HVN: доля отторжений в одну сторону", 0.60, 0.5, 1.0, 0.05));
         g.addRow(new IntegerDescriptor(WICK, "Хвост от, тиков", 2, 1, 20, 1));
 
         RuntimeDescriptor rd = createRD();
@@ -225,8 +224,7 @@ public class TpoZonesStudy extends Study {
         p.greyCompositeMinDays = Math.min(2, p.compositeMinDays);
         p.greyMinHistoryDays = st.getInteger(GREY_HIST, 2);
         p.greyMinWidthPts = st.getDouble(GREY_WMIN, 1.0); p.greyMaxWidthPts = st.getDouble(GREY_WMAX, 10.0);
-        p.rejectionShare = st.getDouble(REJ_SHARE, 0.7);
-        p.stickyRange = st.getBoolean(STICKY, true);
+        p.rejectionShare = st.getDouble(REJ_SHARE, 0.6);
         p.minWickTicks = st.getInteger(WICK, 2);
         p.sessions = st.getInteger(SESSIONS, 250);
         p.nearest = st.getInteger(NEAR, 6);
