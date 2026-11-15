@@ -27,6 +27,10 @@ import java.util.TreeMap;
  *   4. класс HVN-зоны на дату — по отторжениям хвостом на RTH-барах (≥ 60% в одну сторону);
  *   5. подгонка границ по краям тел 30m-свечей за первые N сессий (N = 0 — без подгонки),
  *      перевод серой зоны в основную по отторжениям за эти N сессий;
+ *   режим «по композиту» (Params.compositeMode): ядро композита ≥ 3 дней (HVN-полоса вокруг POC
+ *      или VA) — проторговка; ядро, пересекающее уже существующее, его подтверждает, новой зоны нет.
+ *      HVN- и серые зоны внутри диапазона композита: выше ядра — сопротивление, ниже — поддержка,
+ *      на ядре — поглощаются им; вне всех композитов — серые. Правит последний доступный композит;
  *   6. фильтры страницы: типы, «ближайшие к open сессии», отторжения, чистота,
  *      подтверждения, возраст, ширина; серая скрывается, если на > 30% заходит на основную.
  * Все цены профиля — в целых тиках, как в tpo/profile.py.
@@ -34,12 +38,12 @@ import java.util.TreeMap;
 public final class ZoneEngine {
 
     // ------------------------------------------------------------------ виды зон
-    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_GREY = 5;
+    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_GREY = 5;
 
     public enum Kind {
         HVN_S("HVN · поддержка"), HVN_R("HVN · сопротивление"), HVN_RANGE("HVN · проторговка"),
         HVN_NEW("HVN · без истории"), OLD_BALANCE("Старый баланс (VA композита)"),
-        GREY("Серая (мало истории / узкая)");
+        GREY("Серая (мало истории / узкая)"), CORE("Проторговка композита");
         public final String title;
         Kind(String t) { title = t; }
     }
@@ -71,6 +75,10 @@ public final class ZoneEngine {
         public double greyMaxOverlap = 0.30;
         // классы
         public double rejectionShare = 0.60;
+        // режим «по композиту»
+        public boolean compositeMode = false;     // класс зоны по положению в композите, а не по отторжениям
+        public boolean coreByVa = false;          // ядро композита: VA (иначе HVN-полоса вокруг POC)
+        public double coreAbsorb = 0.30;          // зона, на > 30% своей ширины лежащая на ядре, поглощается им
         public int minWickTicks = 2;
         // подгонка границ
         public int alignSessions = 0;            // 0 — без подгонки (по умолчанию на странице)
@@ -88,7 +96,7 @@ public final class ZoneEngine {
         public int minAgeDays = 0;
         public double maxWidthPts = 60;          // ≥ 60 — любая
         public final Set<Kind> types = new HashSet<>(Arrays.asList(
-                Kind.HVN_S, Kind.HVN_R, Kind.HVN_RANGE, Kind.HVN_NEW, Kind.GREY));
+                Kind.HVN_S, Kind.HVN_R, Kind.HVN_RANGE, Kind.HVN_NEW, Kind.GREY, Kind.CORE));
         public double confirmStoreMaxPts = 10.0; // MAX_NEAR экспорта
     }
 
@@ -188,11 +196,19 @@ public final class ZoneEngine {
         public final List<long[]> cf = new ArrayList<>();   // {ord, gap*100}
         public int ai;                                       // индекс av в списке полных RTH-дней
         public double blo, bhi;                              // границы после подгонки
+        long[] coreConf = new long[0];                       // ядро: дни подтверждений другими композитами
+        long[] govAv = new long[0]; Comp[] gov = new Comp[0]; // композиты, в диапазон которых попадает зона
         public long avOrd() { return av.toEpochDay(); }
+    }
+
+    /** Композит ≥ compositeMinDays: диапазон и его ядро (зона проторговки). */
+    public static final class Comp {
+        public double lo, hi; public LocalDate start, end, av; public int days; public Zone core;
     }
 
     /** Состояние зоны на сессию. */
     public static final class State {
+        public Comp comp;                                   // режим «по композиту»: правящий композит
         public Kind kind; public boolean promoted; public int rej, nl, ns, conf; public Double purity; public long age;
     }
 
@@ -212,6 +228,7 @@ public final class ZoneEngine {
         public final List<Session> sessions = new ArrayList<>();     // показываемые сессии
         public final List<List<Shown>> visible = new ArrayList<>();  // по сессиям
         public int rthDays, fullDays, composites;
+        public final List<Comp> comps = new ArrayList<>();
         public String note = "";
     }
 
@@ -274,7 +291,7 @@ public final class ZoneEngine {
                 if (cand.isEmpty()) { cand.add(d); cp = d.profile; continue; }
                 int c = ticks(d.close, tick);
                 if (c >= cp.low && c <= cp.high()) { cand.add(d); cp = merge(cp, d.profile); continue; }
-                closeComposite(cand, cp, d.date, p, ob, greyComp);
+                closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps);
                 cand = new ArrayList<>(); cand.add(d); cp = d.profile;
             }
             // незакрытый композит в конце данных не используется
@@ -297,6 +314,23 @@ public final class ZoneEngine {
         for (Zone z : greyAll) {
             double w = z.hi - z.lo;
             if (w >= p.greyMinWidthPts - 1e-9 && w <= p.greyMaxWidthPts + 1e-9) zones.add(z);
+        }
+        if (p.compositeMode) {
+            // ядра: новое, пересекающее существующее ≥ mergeOverlapMin (от более узкого), его подтверждает
+            List<Zone> cores = new ArrayList<>();
+            Map<Zone, List<Long>> cc = new HashMap<>();
+            for (Comp c : res.comps) {
+                int lo = ticks(c.core.lo, tick), hi = ticks(c.core.hi, tick);
+                Zone best = null; double bestOv = -1;
+                for (Zone e : cores) {
+                    double ov = overlap(ticks(e.lo, tick), ticks(e.hi, tick), lo, hi);
+                    if (ov >= p.mergeOverlapMin && ov > bestOv) { best = e; bestOv = ov; }
+                }
+                if (best != null) { cc.get(best).add(c.av.toEpochDay()); c.core = best; }
+                else { cores.add(c.core); cc.put(c.core, new ArrayList<>()); }
+            }
+            for (Zone e : cores) e.coreConf = cc.get(e).stream().mapToLong(Long::longValue).toArray();
+            zones.addAll(cores);
         }
 
         // ---------- события по RTH-барам: отторжения (лонг / шорт)
@@ -365,6 +399,17 @@ public final class ZoneEngine {
             z.blo = Math.rint(r[0] / tick) * tick; z.bhi = Math.rint(r[1] / tick) * tick;
         }
 
+        if (p.compositeMode) {
+            for (Zone z : zones) {
+                if (z.k != K_HVN && z.k != K_GREY) continue;
+                double mid = (z.blo + z.bhi) / 2;
+                List<Comp> g = new ArrayList<>();
+                for (Comp c : res.comps) if (c.lo <= mid && mid <= c.hi) g.add(c);
+                z.gov = g.toArray(new Comp[0]);
+                z.govAv = g.stream().mapToLong(c -> c.av.toEpochDay()).toArray();
+            }
+        }
+
         // ---------- показываемые сессии и предыдущий RTH-день
         int from = Math.max(0, sessAll.size() - Math.max(1, p.sessions));
         for (int i = from; i < sessAll.size(); i++) {
@@ -395,13 +440,28 @@ public final class ZoneEngine {
         }
         for (Session s : res.sessions) {
             List<Shown> list = new ArrayList<>();
-            for (Zone z : keep) if (z.avOrd() <= s.ord) list.add(new Shown(z, stateAt(z, s.ord, p, fullOrd)));
+            for (Zone z : keep) {
+                if (z.avOrd() > s.ord) continue;
+                State st = stateAt(z, s.ord, p, fullOrd);
+                if (st.kind != null) list.add(new Shown(z, st));      // null — поглощена ядром композита
+            }
             List<Shown> out = new ArrayList<>();
             for (Shown v : list) {
-                if (v.st.kind != Kind.GREY) { out.add(v); continue; }
+                // режим «по композиту»: зона, лежащая на ядре, — его подтверждение
                 boolean hide = false;
+                if (p.compositeMode && v.st.kind != Kind.CORE) {
+                    for (Shown m : list) {
+                        if (m.st.kind != Kind.CORE) continue;
+                        double inter = Math.min(v.z.bhi, m.z.bhi) - Math.max(v.z.blo, m.z.blo);
+                        if (inter > 0 && inter / Math.max(v.z.bhi - v.z.blo, tick) > p.coreAbsorb) { hide = true; break; }
+                    }
+                    if (hide) continue;
+                }
+                // зона из серого источника — подтверждение первородной зоны под ней
+                boolean secondary = v.st.kind == Kind.GREY || (p.compositeMode && v.z.k == K_GREY);
+                if (!secondary) { out.add(v); continue; }
                 for (Shown m : list) {
-                    if (m.st.kind == Kind.GREY) continue;
+                    if (m.st.kind == Kind.GREY || (p.compositeMode && m.z.k == K_GREY)) continue;
                     double inter = Math.min(v.z.bhi, m.z.bhi) - Math.max(v.z.blo, m.z.blo);
                     if (inter > 0 && inter / Math.max(v.z.bhi - v.z.blo, tick) > p.greyMaxOverlap) { hide = true; break; }
                 }
@@ -414,10 +474,21 @@ public final class ZoneEngine {
 
     // ------------------------------------------------------------------ композиты
     private static void closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
-                                       List<Zone> ob, List<Zone> greyComp) {
+                                       List<Zone> ob, List<Zone> greyComp, List<Comp> comps) {
         int n = cand.size();
         if (n < p.greyCompositeMinDays) return;
         int[] va = valueArea(cp, p.valueAreaPct);
+        if (n >= p.compositeMinDays) {
+            Comp c = new Comp();
+            c.lo = cp.low * p.tick; c.hi = cp.high() * p.tick; c.av = endDay; c.days = n;
+            c.start = cand.get(0).date; c.end = cand.get(n - 1).date;
+            Zone core = new Zone();
+            core.k = K_CORE; core.av = endDay; core.src = "core";
+            int[] band = p.coreByVa ? new int[]{va[1], va[2]} : hvnBand(cp, va[0], p.hvnShare);
+            core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
+            c.core = core;
+            comps.add(c);
+        }
         Zone z = new Zone();
         z.av = endDay; z.src = "comp";
         if (n >= p.compositeMinDays) {
@@ -559,6 +630,33 @@ public final class ZoneEngine {
         State st = new State();
         st.nl = lowerBound(z.L, o); st.ns = lowerBound(z.S, o);
         int tot = st.nl + st.ns;
+        if (p.compositeMode && z.k == K_CORE) {
+            st.kind = Kind.CORE; st.rej = tot; st.purity = tot >= 1 ? Math.max(st.nl, st.ns) / (double) tot : null;
+            st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
+            return st;
+        }
+        if (p.compositeMode && (z.k == K_HVN || z.k == K_GREY)) {
+            // класс фиксируется по композиту, правившему при появлении зоны (или по первому, накрывшему её позже)
+            int gi = lowerBound(z.govAv, z.avOrd() + 1) - 1;
+            if (gi < 0 && z.govAv.length > 0) gi = 0;
+            if (gi >= 0 && z.govAv[gi] > o) gi = -1;          // этот композит ещё не сложился — пока серая
+            Kind kind;
+            if (gi < 0) kind = Kind.GREY;
+            else {
+                Comp c = z.gov[gi]; st.comp = c;
+                Zone core = c.core;
+                double w = Math.max(z.bhi - z.blo, p.tick);
+                double inter = Math.min(z.bhi, core.bhi) - Math.max(z.blo, core.blo);
+                double mid = (z.blo + z.bhi) / 2;
+                kind = inter > 0 && inter / w > p.coreAbsorb ? null : mid > core.bhi ? Kind.HVN_R : mid < core.blo ? Kind.HVN_S : null;
+            }
+            st.kind = kind; st.rej = tot; st.purity = tot >= 1 ? Math.max(st.nl, st.ns) / (double) tot : null;
+            st.age = o - z.avOrd();
+            int conf = 0; long cnear = Math.round(p.confirmNearPts * 100);
+            for (long[] c : z.cf) { if (c[0] >= o) break; if (c[1] <= cnear) conf++; }
+            st.conf = conf;
+            return st;
+        }
         Kind kind = z.k == K_OLD_BALANCE ? Kind.OLD_BALANCE : z.k == K_GREY ? Kind.GREY : null;
         if (kind == null && z.young && (z.greyUntil == null || o < z.greyUntil.toEpochDay())) kind = Kind.GREY;
         if (kind == Kind.GREY) {
@@ -590,7 +688,7 @@ public final class ZoneEngine {
     }
 
     static boolean passes(Zone z, State st, Params p) {
-        if (!p.types.contains(st.kind)) return false;
+        if (st.kind == null || !p.types.contains(st.kind)) return false;
         if (st.conf < p.minConfirmations || st.rej < p.minRejections || st.age < p.minAgeDays) return false;
         if (p.purityMinPct > 0 && (st.purity == null || st.purity * 100 < p.purityMinPct)) return false;
         if (p.purityMaxPct < 100 && (st.purity == null || st.purity * 100 > p.purityMaxPct)) return false;

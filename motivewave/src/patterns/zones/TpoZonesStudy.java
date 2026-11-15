@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -70,10 +70,12 @@ public class TpoZonesStudy extends Study {
     static {
         SHOW.put(Kind.HVN_S, "showS"); SHOW.put(Kind.HVN_R, "showR"); SHOW.put(Kind.HVN_RANGE, "showRange");
         SHOW.put(Kind.HVN_NEW, "showNew"); SHOW.put(Kind.OLD_BALANCE, "showOld"); SHOW.put(Kind.GREY, "showGrey");
+        SHOW.put(Kind.CORE, "showCore");
         for (Kind k : Kind.values()) COLOR.put(k, "color_" + k.name());
         DEF_COLOR.put(Kind.HVN_S, new Color(0x0f8a3c)); DEF_COLOR.put(Kind.HVN_R, new Color(0xd63b3a));
         DEF_COLOR.put(Kind.HVN_RANGE, new Color(0x6250d6)); DEF_COLOR.put(Kind.HVN_NEW, new Color(0x7d858c));
         DEF_COLOR.put(Kind.OLD_BALANCE, new Color(0x2a78d6)); DEF_COLOR.put(Kind.GREY, new Color(0x7d858c));
+        DEF_COLOR.put(Kind.CORE, new Color(0x2a78d6));
     }
 
     private LocalDate computedFor;   // сессия последнего бара на момент расчёта
@@ -83,13 +85,17 @@ public class TpoZonesStudy extends Study {
         SettingsDescriptor sd = createSD();
 
         SettingTab tab = sd.addTab("Карта зон");
-        SettingGroup g = tab.addGroup("Типы зон");
+        SettingGroup g = tab.addGroup("Класс зон");
+        g.addRow(new BooleanDescriptor(MODE, "По положению в композите: выше ядра — сопротивление, ниже — поддержка (иначе — по отторжениям, как на странице)", true));
+        g.addRow(new BooleanDescriptor(CORE_VA, "Ядро композита — VA (иначе HVN-полоса вокруг POC)", false));
+        g = tab.addGroup("Типы зон");
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.HVN_S), Kind.HVN_S.title, true));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.HVN_R), Kind.HVN_R.title, true));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.HVN_RANGE), Kind.HVN_RANGE.title, true));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.HVN_NEW), Kind.HVN_NEW.title, true));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.OLD_BALANCE), Kind.OLD_BALANCE.title, false));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.GREY), Kind.GREY.title, true));
+        g.addRow(new BooleanDescriptor(SHOW.get(Kind.CORE), Kind.CORE.title + " (режим «по композиту»)", true));
         g = tab.addGroup("Фильтры (как на странице карты зон)");
         g.addRow(new IntegerDescriptor(NEAR, "Ближайших к open сессии зон (0 — все)", 6, 0, 100, 1));
         g.addRow(new IntegerDescriptor(SESSIONS, "Сколько последних сессий показывать", 250, 5, 5000, 5));
@@ -225,6 +231,8 @@ public class TpoZonesStudy extends Study {
         p.greyMinHistoryDays = st.getInteger(GREY_HIST, 2);
         p.greyMinWidthPts = st.getDouble(GREY_WMIN, 1.0); p.greyMaxWidthPts = st.getDouble(GREY_WMAX, 10.0);
         p.rejectionShare = st.getDouble(REJ_SHARE, 0.6);
+        p.compositeMode = st.getBoolean(MODE, true);
+        p.coreByVa = st.getBoolean(CORE_VA, false);
         p.minWickTicks = st.getInteger(WICK, 2);
         p.sessions = st.getInteger(SESSIONS, 250);
         p.nearest = st.getInteger(NEAR, 6);

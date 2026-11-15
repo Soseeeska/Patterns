@@ -25,7 +25,7 @@ import patterns.zones.ZoneEngine.Result;
 import patterns.zones.ZonePlan;
 
 /** Превью того, что рисует TpoZonesStudy (тот же ZoneEngine + ZonePlan, цвета и прозрачность по умолчанию):
- *  java Preview bars.csv out.png [сессий на картинке] [N подгонки] [выделить топ зон по отторжениям]
+ *  java Preview bars.csv out.png [сессий на картинке] [N подгонки] [выделить топ зон по отторжениям] [comp|rej]
  *  Топ — тесты и отторжения на всех барах (ETH + RTH) показанных сессий, обводка пунктиром.
  *  Ось времени — по барам (без пустых выходных), как у MotiveWave. */
 public class Preview {
@@ -41,6 +41,7 @@ public class Preview {
         int k = a.length > 2 ? Integer.parseInt(a[2]) : 5;
         Params p = new Params();
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
+        if (a.length > 5) p.compositeMode = a[5].equals("comp");
         Result res = ZoneEngine.run(bars, p);
         ZonePlan plan = ZonePlan.of(res, p);
         int top = a.length > 4 ? Integer.parseInt(a[4]) : 0;
@@ -90,7 +91,7 @@ public class Preview {
         Map<Kind, Color> base = new EnumMap<>(Kind.class);
         base.put(Kind.HVN_S, new Color(0x2fb35e)); base.put(Kind.HVN_R, new Color(0xef5a59));
         base.put(Kind.HVN_RANGE, new Color(0x8f84ea)); base.put(Kind.HVN_NEW, new Color(0x8d959c));
-        base.put(Kind.OLD_BALANCE, new Color(0x4a8fe6)); base.put(Kind.GREY, new Color(0x8d959c));
+        base.put(Kind.OLD_BALANCE, new Color(0x4a8fe6)); base.put(Kind.CORE, new Color(0x4a8fe6)); base.put(Kind.GREY, new Color(0x8d959c));
         BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -163,7 +164,7 @@ public class Preview {
             g.drawString(s.date.toString(), (int) x + 4, H - 12);
         }
         g.setColor(new Color(0xe7eaed)); g.setFont(new Font("SansSerif", Font.BOLD, 14));
-        g.drawString("TPO Zones 1.1 — ES 30m ETH+RTH, подгонка " + p.alignSessions + " сесс."
+        g.drawString("TPO Zones 1.1 — ES 30m ETH+RTH, " + (p.compositeMode ? "класс по композиту" : "класс по отторжениям") + ", подгонка " + p.alignSessions + " сесс."
                 + (top > 0 ? " · пунктир — топ-" + top + " зон по отторжениям за последние " + k + " сессий" : ""), 16, 24);
         ImageIO.write(img, "png", new File(a[1]));
         System.out.println(a[1] + " rects=" + plan.rects.size() + " levels=" + plan.levels.size());
