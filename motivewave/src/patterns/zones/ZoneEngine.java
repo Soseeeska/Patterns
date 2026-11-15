@@ -79,6 +79,9 @@ public final class ZoneEngine {
         public boolean compositeMode = false;     // класс зоны по положению в композите, а не по отторжениям
         public boolean coreByVa = false;          // ядро композита: VA (иначе HVN-полоса вокруг POC)
         public double coreAbsorb = 0.30;
+        public boolean coreFromSessions = true;   // ядро — где совпадают HVN-полосы ≥ половины дней композита
+        public double joinGapPts = 0.25;          // режим «по композиту»: зона того же вида ближе этого к более
+                                                  // старой — её подтверждение (ядро не создаётся / не рисуется); < 0 — выкл.
         public double zoneMaxWidthPts = 0;        // > 0: HVN-полоса дня и ядро композита шире — сужаются до окна
                                                   // с POC и максимумом TPO (на странице карты зон лимита нет)          // зона, на > 30% своей ширины лежащая на ядре, поглощается им
         public int minWickTicks = 2;
@@ -327,7 +330,8 @@ public final class ZoneEngine {
                 Zone best = null; double bestOv = -1;
                 for (Zone e : cores) {
                     double ov = overlap(ticks(e.lo, tick), ticks(e.hi, tick), lo, hi);
-                    if (ov >= p.mergeOverlapMin && ov > bestOv) { best = e; bestOv = ov; }
+                    boolean near = p.joinGapPts >= 0 && Math.max(e.lo, c.core.lo) - Math.min(e.hi, c.core.hi) <= p.joinGapPts + 1e-9;
+                    if ((ov >= p.mergeOverlapMin || near) && ov > bestOv) { best = e; bestOv = ov; }
                 }
                 if (best != null) { cc.get(best).add(c.av.toEpochDay()); c.core = best; }
                 else { cores.add(c.core); cc.put(c.core, new ArrayList<>()); }
@@ -397,6 +401,7 @@ public final class ZoneEngine {
             double w = z.hi - z.lo;
             double search = Math.max(p.alignSearchFrac * w, p.alignSearchMinPts);
             double maxW = Math.max(p.alignMaxWidthPts, p.alignMaxWidthMult * w);
+            if (p.compositeMode && p.zoneMaxWidthPts > 0) maxW = Math.min(maxW, Math.max(w, p.zoneMaxWidthPts));
             double[] r = alignZone(bars.subList(a, e), z.lo, z.hi, tick, search, mw, p.alignWPlain,
                     p.alignMinScore, p.alignMinWidthTicks * tick, maxW);
             z.blo = Math.rint(r[0] / tick) * tick; z.bhi = Math.rint(r[1] / tick) * tick;
@@ -460,6 +465,15 @@ public final class ZoneEngine {
                     }
                     if (hide) continue;
                 }
+                // зона вплотную к более старой видимой зоне того же вида — её подтверждение
+                if (p.compositeMode && p.joinGapPts >= 0 && v.st.kind != Kind.CORE) {
+                    for (Shown m : list) {
+                        if (m == v || m.st.kind != v.st.kind) continue;
+                        boolean older = m.z.avOrd() < v.z.avOrd() || (m.z.avOrd() == v.z.avOrd() && list.indexOf(m) < list.indexOf(v));
+                        if (older && Math.max(m.z.blo, v.z.blo) - Math.min(m.z.bhi, v.z.bhi) <= p.joinGapPts + 1e-9) { hide = true; break; }
+                    }
+                    if (hide) continue;
+                }
                 // зона из серого источника — подтверждение первородной зоны под ней
                 boolean secondary = v.st.kind == Kind.GREY || (p.compositeMode && v.z.k == K_GREY);
                 if (!secondary) { out.add(v); continue; }
@@ -488,7 +502,12 @@ public final class ZoneEngine {
             Zone core = new Zone();
             core.k = K_CORE; core.av = endDay; core.src = "core";
             int[] band = p.coreByVa ? new int[]{va[1], va[2]} : hvnBand(cp, va[0], p.hvnShare);
-            band = narrow(cp, band, va[0], (int) Math.round(p.zoneMaxWidthPts / p.tick));
+            int poc = va[0];
+            if (p.coreFromSessions && !p.coreByVa) {
+                int[] agree = sessionAgreement(cand, cp);
+                if (agree != null) { band = new int[]{agree[0], agree[1]}; poc = agree[2]; }
+            }
+            band = narrow(cp, band, poc, (int) Math.round(p.zoneMaxWidthPts / p.tick));
             core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
             c.core = core;
             comps.add(c);
@@ -503,6 +522,30 @@ public final class ZoneEngine {
             z.k = K_GREY; z.lo = band[0] * p.tick; z.hi = band[1] * p.tick;
             greyComp.add(z);
         }
+    }
+
+    /** Ядро по сессионным профилям: строки, накрытые HVN-полосами не меньше половины дней композита;
+     *  из таких участков — с наибольшим TPO композита. {lo, hi, строка максимума TPO} в тиках или null. */
+    static int[] sessionAgreement(List<Day> days, Profile cp) {
+        int n = cp.counts.length, need = (days.size() + 1) / 2;
+        int[] cov = new int[n + 1];
+        for (Day d : days) { cov[Math.max(0, d.bandLo - cp.low)]++; cov[Math.min(n, d.bandHi - cp.low + 1)]--; }
+        int[] best = null; long bestSum = -1;
+        int acc = 0, start = -1; long sum = 0;
+        for (int i = 0; i <= n; i++) {
+            acc += i < n ? cov[i] : 0;
+            boolean in = i < n && acc >= need;
+            if (in) { if (start < 0) { start = i; sum = 0; } sum += cp.counts[i]; }
+            else if (start >= 0) {
+                if (sum > bestSum) {
+                    int mx = start;
+                    for (int t = start; t < i; t++) if (cp.counts[t] > cp.counts[mx]) mx = t;
+                    best = new int[]{cp.low + start, cp.low + i - 1, cp.low + mx}; bestSum = sum;
+                }
+                start = -1;
+            }
+        }
+        return best;
     }
 
     /** Полоса [lo, hi] шире maxW тиков → окно шириной maxW внутри неё, содержащее POC, с максимумом TPO
