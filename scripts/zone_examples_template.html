@@ -1,0 +1,270 @@
+<title>Зоны на графике ES</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: терминал — выбор участка, подпись, слои, график во всю ширину, панель под курсором, легенда. */
+:root{
+  --bg:#f5f6f7; --panel:#ffffff; --ink:#161a1e; --muted:#5a636c; --line:#dde1e5; --grid:#edf0f2;
+  --accent:#2a6fdb; --cbody:#ffffff; --cdark:#2f363d; --sess:#e9edf1;
+  --z-ob:#2a78d6; --z-s:#0f8a3c; --z-r:#d63b3a; --z-range:#6250d6; --z-new:#6f7880;
+  --g-comp:#8a7f70; --g-hvn:#6f7c88; --g-young:#80868c;
+  --comp:#1f5fbf; --comp2:#8a7f70; --poc:#e2662c; --va:#161a1e; --prof:#6f7880;
+  --f-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111417; --panel:#171b1f; --ink:#e6e9ec; --muted:#9aa3ab; --line:#2a3036; --grid:#1e2328;
+  --accent:#5b97f0; --cbody:#171b1f; --cdark:#c9ced3; --sess:#1c2126;
+  --z-ob:#4a8fe6; --z-s:#2fb35e; --z-r:#ef5a59; --z-range:#8f84ea; --z-new:#8d959c;
+  --g-comp:#a89d8e; --g-hvn:#8f9ba6; --g-young:#9aa0a6;
+  --comp:#5b97f0; --comp2:#a89d8e; --poc:#f08a52; --va:#e6e9ec; --prof:#8d959c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111417; --panel:#171b1f; --ink:#e6e9ec; --muted:#9aa3ab; --line:#2a3036; --grid:#1e2328;
+  --accent:#5b97f0; --cbody:#171b1f; --cdark:#c9ced3; --sess:#1c2126;
+  --z-ob:#4a8fe6; --z-s:#2fb35e; --z-r:#ef5a59; --z-range:#8f84ea; --z-new:#8d959c;
+  --g-comp:#a89d8e; --g-hvn:#8f9ba6; --g-young:#9aa0a6;
+  --comp:#5b97f0; --comp2:#a89d8e; --poc:#f08a52; --va:#e6e9ec; --prof:#8d959c; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.45}
+.wrap{max-width:1400px;margin:0 auto;padding-block:18px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:12px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px}
+h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.grp{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.grp-name{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);min-width:170px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
+.chip[aria-pressed="false"]{color:var(--muted);opacity:.55}
+.ex[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);opacity:1;color:var(--ink)}
+.ex[aria-pressed="false"]{opacity:1}
+.chip:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block;flex:none}
+.caption{display:flex;flex-direction:column;gap:2px}
+.caption b{font-size:15px;font-weight:600}
+.caption span{color:var(--muted);font-size:13px}
+.chartbox{position:relative;height:clamp(420px,64vh,720px);background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-y}
+.hover{font-family:var(--f-num);font-size:12.5px;color:var(--muted);min-height:4.5em;display:flex;flex-direction:column;gap:2px}
+.hover .z{color:var(--ink)}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px 28px}
+.note h2{font-size:14px;margin:0 0 6px;font-weight:600}
+.note li{color:var(--muted);font-size:13px;max-width:68ch}
+.note ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+@media (max-width:560px){.grp-name{min-width:100%}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Зоны на графике ES</h1>
+    <span class="sub" id="sub"></span>
+  </header>
+
+  <section class="panel" aria-label="Выбор участка">
+    <div class="grp" id="g-comp"><span class="grp-name">Строятся композиты</span></div>
+    <div class="grp" id="g-none"><span class="grp-name">Композиты не строятся</span></div>
+  </section>
+
+  <div class="caption"><b id="cap-t"></b><span id="cap-n"></span></div>
+
+  <section class="panel" aria-label="Слои графика">
+    <div class="grp" id="l-sess"><span class="grp-name">Сессия</span></div>
+    <div class="grp" id="l-comp"><span class="grp-name">Композит и варианты зон</span></div>
+    <div class="grp" id="l-zone"><span class="grp-name">Зоны на сессию</span></div>
+  </section>
+
+  <div class="chartbox"><canvas id="cv"></canvas></div>
+  <div class="hover" id="hover" aria-live="polite"><span>Наведи курсор на график: здесь появятся зоны на этой цене в эту сессию и откуда они взялись.</span></div>
+
+  <section class="note">
+    <div>
+      <h2>Как читать</h2>
+      <ul>
+        <li>Свечи — 30m RTH (08:30–15:00 CT), каждая сессия отдельным блоком. Зоны в блоке — те, что были известны к этой сессии (по RTH-профилям прошлых дней).</li>
+        <li>Композит — дни подряд, чьи close остались внутри High–Low первых дней. Рамка — High–Low композита на днях, из которых он собран, заливка — его VA, оранжевая линия — POC.</li>
+        <li>Основная зона от композита (3+ дня) — его VA («старый баланс»). Двухдневный композит даёт серую зону — HVN-полосу вокруг его POC.</li>
+        <li>«Варианты» продлевают вправо после конца композита другие возможные зоны: HVN-полосу и POC каждого композита — чтобы сравнить, как они легли бы на график.</li>
+        <li>Без композитов TPO каждого дня остаётся в своей сессии. Зоны там дают дневные HVN-полосы: 8–10 TPO — первородная зона (пока у неё меньше 2 дней истории, она серая), 5–7 TPO — серая.</li>
+        <li>Серая зона прячется в сессию, где заходит на показанную основную зону больше чем на 30% своей ширины (переключатель в слоях).</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Цвета зон</h2>
+      <ul id="legend"></ul>
+    </div>
+  </section>
+</div>
+
+<script id="zone-data" type="application/json">__DATA__</script>
+<script>
+(function(){
+const D=JSON.parse(document.getElementById('zone-data').textContent);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const KIND={
+  old_balance:['Старый баланс (VA композита 3+ дн.)','--z-ob'],
+  hvn_S:['HVN · поддержка','--z-s'], hvn_R:['HVN · сопротивление','--z-r'],
+  hvn_range:['HVN · проторговка','--z-range'], hvn_new:['HVN · без отторжений','--z-new'],
+  grey_comp:['Серая · композит 2 дн.','--g-comp'], grey_hvn:['Серая · слабый HVN (5–7 TPO)','--g-hvn'],
+  grey_young:['Серая · молодая первородная','--g-young']};
+const S={ex:0, prof:true, sva:true, comp:true, vband:false, vpoc:false, hide30:true,
+  types:Object.fromEntries(Object.keys(KIND).map(k=>[k,true]))};
+try{ const s=JSON.parse(localStorage.getItem('zone-examples')||'null'); if(s){ Object.assign(S,s,{types:Object.assign({},S.types,s.types||{})}); } }catch(e){}
+const save=()=>{ try{ localStorage.setItem('zone-examples',JSON.stringify(S)); }catch(e){} };
+if(!(S.ex<D.examples.length)) S.ex=0;
+document.getElementById('sub').textContent=D.instrument;
+
+// чипы
+function chip(parent,label,color,get,set,cls){
+  const b=document.createElement('button'); b.type='button'; b.className='chip'+(cls?' '+cls:'');
+  b.innerHTML=(color?`<span class="sw" style="background:var(${color})"></span>`:'')+label;
+  const sync=()=>b.setAttribute('aria-pressed',get()?'true':'false'); sync();
+  b.onclick=()=>{ set(!get()); save(); refreshChips(); draw(); };
+  parent.appendChild(b); chips.push(sync); return b;
+}
+const chips=[]; const refreshChips=()=>chips.forEach(f=>f());
+D.examples.forEach((e,i)=>{
+  chip(document.getElementById(e.group==='comp'?'g-comp':'g-none'), e.title.replace(/^Композит |^Без композитов · /,''), null,
+    ()=>S.ex===i, ()=>{ S.ex=i; caption(); }, 'ex');
+});
+const ls=document.getElementById('l-sess'), lc=document.getElementById('l-comp'), lz=document.getElementById('l-zone');
+chip(ls,'TPO-профиль сессии','--prof',()=>S.prof,v=>S.prof=v);
+chip(ls,'VA и POC сессии','--poc',()=>S.sva,v=>S.sva=v);
+chip(lc,'Композит: High–Low, VA, POC','--comp',()=>S.comp,v=>S.comp=v);
+chip(lc,'Вариант: HVN-полоса композита вправо','--comp2',()=>S.vband,v=>S.vband=v);
+chip(lc,'Вариант: POC композита вправо','--poc',()=>S.vpoc,v=>S.vpoc=v);
+Object.entries(KIND).forEach(([k,[label,c]])=>chip(lz,label,c,()=>S.types[k],v=>S.types[k]=v));
+chip(lz,'Прятать серые, заходящие на основные > 30%',null,()=>S.hide30,v=>S.hide30=v);
+document.getElementById('legend').innerHTML=Object.entries(KIND).map(([k,[l,c]])=>
+  `<li><span class="sw" style="background:var(${c});vertical-align:-1px"></span> ${l}</li>`).join('');
+
+function caption(){ const e=D.examples[S.ex];
+  document.getElementById('cap-t').textContent=e.title; document.getElementById('cap-n').textContent=e.note; }
+caption();
+
+// данные текущего участка: слоты баров и зоны на сессию
+const GAP=1.2;
+function layout(e){
+  const slot=[], first=[], last=[]; let x=0, prev=-1;
+  e.bars.forEach((b,i)=>{ if(b[4]!==prev){ if(prev>=0) x+=GAP; prev=b[4]; first[b[4]]=x; } slot.push(x); last[b[4]]=x; x+=1; });
+  return {slot,first,last,n:x};
+}
+function zonesFor(e,s){
+  const list=e.zs[s].map(([k,kind])=>({k,kind,z:e.zones[k]})).filter(v=>S.types[v.kind]);
+  if(!S.hide30) return list;
+  const main=list.filter(v=>!v.kind.startsWith('grey'));
+  return list.filter(v=>!v.kind.startsWith('grey')||!main.some(m=>{
+    const inter=Math.min(v.z.hi,m.z.hi)-Math.max(v.z.lo,m.z.lo);
+    return inter>0 && inter/Math.max(v.z.hi-v.z.lo,D.tick)>0.30; }));
+}
+function hexA(hex,a){ const h=hex.replace('#',''); const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+
+// график
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let G=null, hover=null;
+function niceStep(range,target){ const raw=range/target, p=Math.pow(10,Math.floor(Math.log10(raw)));
+  for(const m of [1,2,2.5,5,10]) if(m*p>=raw) return m*p; return 10*p; }
+function hatch(color){
+  const p=document.createElement('canvas'); p.width=p.height=8; const c=p.getContext('2d');
+  c.strokeStyle=hexA(color,0.55); c.lineWidth=1; c.beginPath(); c.moveTo(0,8); c.lineTo(8,0); c.moveTo(-2,2); c.lineTo(2,-2); c.moveTo(6,10); c.lineTo(10,6); c.stroke();
+  return ctx.createPattern(p,'repeat');
+}
+function draw(){
+  const e=D.examples[S.ex], L=layout(e);
+  const r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(r.width*dpr)||cv.height!==Math.round(r.height*dpr)){ cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr); }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=r.width, H=r.height, AX=58, BOT=26, TOP=8, PW=W-AX-8, PH=H-BOT-TOP;
+  const sx=PW/(L.n+0.5), X=s=>8+(s+0.5)*sx, Y=p=>TOP+(e.hi-p)/(e.hi-e.lo)*PH;
+  G={e,L,X,Y,sx,W,H,AX,PW,PH,TOP,BOT};
+  const col={}; Object.entries(KIND).forEach(([k,[,c]])=>col[k]=css(c));
+  ctx.fillStyle=css('--panel'); ctx.fillRect(0,0,W,H);
+  // сетка цен
+  const step=niceStep(e.hi-e.lo,8); ctx.font='11px '+css('--f-num'); ctx.textBaseline='middle';
+  for(let p=Math.ceil(e.lo/step)*step;p<=e.hi;p+=step){ const y=Math.round(Y(p))+.5;
+    ctx.strokeStyle=css('--grid'); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(8,y); ctx.lineTo(8+PW,y); ctx.stroke();
+    ctx.fillStyle=css('--muted'); ctx.textAlign='left'; ctx.fillText(p.toFixed(step<1?2:0),W-AX+4,y); }
+  ctx.save(); ctx.beginPath(); ctx.rect(8,TOP,PW,PH); ctx.clip();
+  const sess=e.days.map((d,s)=>({x0:X(L.first[s])-sx*0.5, x1:X(L.last[s])+sx*0.5}));
+  // фон сессий
+  sess.forEach((q,s)=>{ ctx.fillStyle=s%2?css('--panel'):hexA(css('--sess'),0.6); ctx.fillRect(q.x0,TOP,q.x1-q.x0,PH); });
+  // дни без композитов
+  if(e.group==='none'){ const a=sess[e.core[0]].x0, b=sess[e.core[1]].x1;
+    ctx.fillStyle=hexA(css('--accent'),0.07); ctx.fillRect(a,TOP,b-a,PH);
+    ctx.fillStyle=css('--accent'); ctx.fillRect(a,TOP,b-a,3);
+    ctx.font='600 11px '+css('--f-ui'); ctx.textBaseline='top'; ctx.textAlign='left';
+    ctx.fillText('без композитов: каждый день — свой профиль', a+4, TOP+6); }
+  // профиль TPO сессии
+  if(S.prof) e.days.forEach((d,s)=>{ const q=sess[s], mx=Math.max(...d.pc), w=(q.x1-q.x0)*0.9;
+    ctx.fillStyle=hexA(css('--prof'),0.16);
+    d.pc.forEach((c,i)=>{ if(!c) return; const p=d.pl+i*d.pr, y1=Y(p+d.pr/2), y2=Y(p-d.pr/2);
+      ctx.fillRect(q.x0, y1, w*c/mx, Math.max(1,y2-y1)); }); });
+  // зоны на сессию
+  e.days.forEach((d,s)=>{ const q=sess[s];
+    zonesFor(e,s).forEach(v=>{ const c=col[v.kind], y1=Y(v.z.hi), y2=Y(v.z.lo), h=Math.max(2,y2-y1);
+      const grey=v.kind.startsWith('grey');
+      ctx.fillStyle=hexA(c, v.kind==='old_balance'?0.10:grey?0.10:0.22); ctx.fillRect(q.x0,y1,q.x1-q.x0,h);
+      if(grey){ ctx.fillStyle=hatch(c); ctx.fillRect(q.x0,y1,q.x1-q.x0,h); }
+      ctx.strokeStyle=hexA(c,0.9); ctx.lineWidth=1; ctx.beginPath();
+      ctx.moveTo(q.x0,y1); ctx.lineTo(q.x1,y1); ctx.moveTo(q.x0,y1+h); ctx.lineTo(q.x1,y1+h); ctx.stroke(); }); });
+  // композиты и варианты
+  e.comps.forEach(c=>{ const s0=Math.max(c.s,0), s1=Math.min(c.e,e.days.length-1); if(s1<s0) return;
+    const x0=sess[s0].x0, x1=sess[s1].x1, cc=css(c.main?'--comp':'--comp2');
+    if(S.comp){
+      ctx.fillStyle=hexA(cc,0.10); ctx.fillRect(x0,Y(c.vah),x1-x0,Y(c.val)-Y(c.vah));
+      ctx.strokeStyle=hexA(cc,0.95); ctx.lineWidth=1.4; ctx.strokeRect(x0+.5,Y(c.hi),x1-x0-1,Y(c.lo)-Y(c.hi));
+      ctx.strokeStyle=css('--poc'); ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(x0,Y(c.poc)); ctx.lineTo(x1,Y(c.poc)); ctx.stroke();
+      ctx.font='600 11px '+css('--f-ui'); ctx.textBaseline='bottom'; ctx.textAlign='left'; ctx.fillStyle=cc;
+      ctx.fillText(`композит ${c.n} дн.${c.main?'':' (серый)'}`, x0+3, Y(c.hi)-2);
+    }
+    const xe=c.e+1<e.days.length?sess[c.e+1].x0:null;
+    if(xe!==null && S.vband){ ctx.fillStyle=hexA(css('--comp2'),0.12); ctx.fillRect(xe,Y(c.bhi),8+PW-xe,Y(c.blo)-Y(c.bhi));
+      ctx.strokeStyle=hexA(css('--comp2'),0.9); ctx.lineWidth=1; ctx.beginPath();
+      ctx.moveTo(xe,Y(c.bhi)); ctx.lineTo(8+PW,Y(c.bhi)); ctx.moveTo(xe,Y(c.blo)); ctx.lineTo(8+PW,Y(c.blo)); ctx.stroke(); }
+    if(xe!==null && S.vpoc){ ctx.strokeStyle=hexA(css('--poc'),0.75); ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(xe,Y(c.poc)); ctx.lineTo(8+PW,Y(c.poc)); ctx.stroke(); }
+  });
+  // VA и POC своей сессии
+  if(S.sva) e.days.forEach((d,s)=>{ const q=sess[s];
+    ctx.strokeStyle=hexA(css('--va'),0.55); ctx.lineWidth=1; ctx.beginPath();
+    ctx.moveTo(q.x0,Y(d.vah)); ctx.lineTo(q.x1,Y(d.vah)); ctx.moveTo(q.x0,Y(d.val)); ctx.lineTo(q.x1,Y(d.val)); ctx.stroke();
+    ctx.strokeStyle=css('--poc'); ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(q.x0,Y(d.poc)); ctx.lineTo(q.x1,Y(d.poc)); ctx.stroke(); });
+  // свечи
+  const bw=Math.max(1,Math.min(9,sx*0.62));
+  e.bars.forEach((b,i)=>{ const x=X(L.slot[i]), [o,h,l,c]=b, up=c>=o;
+    ctx.strokeStyle=css('--cdark'); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(Math.round(x)+.5,Y(h)); ctx.lineTo(Math.round(x)+.5,Y(l)); ctx.stroke();
+    const y1=Y(Math.max(o,c)), y2=Y(Math.min(o,c)); ctx.fillStyle=up?css('--cbody'):css('--cdark');
+    ctx.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1)); ctx.strokeRect(Math.round(x-bw/2)+.5,Math.round(y1)+.5,Math.round(bw)-1,Math.max(1,Math.round(y2-y1))); });
+  // курсор
+  if(hover){ ctx.strokeStyle=hexA(css('--muted'),0.6); ctx.lineWidth=1; ctx.beginPath();
+    ctx.moveTo(8,Math.round(hover.y)+.5); ctx.lineTo(8+PW,Math.round(hover.y)+.5); ctx.stroke(); }
+  ctx.restore();
+  // подписи сессий
+  ctx.font='11px '+css('--f-num'); ctx.textBaseline='top'; ctx.textAlign='center'; ctx.fillStyle=css('--muted');
+  let lastX=-1e9; e.days.forEach((d,s)=>{ const cx=(sess[s].x0+sess[s].x1)/2; if(cx-lastX<64) return; lastX=cx; ctx.fillText(d.lab,cx,H-BOT+7); });
+  if(hover){ ctx.fillStyle=css('--ink'); ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(hover.p.toFixed(2),W-AX+4,hover.y); }
+}
+// под курсором
+const hov=document.getElementById('hover');
+const fmt=d=>{ const [y,m,dd]=d.split('-'); return `${dd}.${m}.${y}`; };
+cv.addEventListener('pointermove',ev=>{
+  if(!G) return; const r=cv.getBoundingClientRect(), x=ev.clientX-r.left, y=ev.clientY-r.top, {e,L,X}=G;
+  if(y<G.TOP||y>G.TOP+G.PH||x<8||x>8+G.PW){ hover=null; draw(); return; }
+  const p=e.hi-(y-G.TOP)/G.PH*(e.hi-e.lo);
+  let s=0; e.days.forEach((d,i)=>{ if(x>=X(L.first[i])-G.sx*(0.5+GAP/2)) s=i; });
+  hover={y,p}; draw();
+  const d=e.days[s], tol=D.tick;
+  const zs=zonesFor(e,s).filter(v=>v.z.lo-tol<=p && v.z.hi+tol>=p);
+  const cm=e.comps.filter(c=>s>=c.s && s<=c.e);
+  const head=`<span>${d.lab} · цена ${p.toFixed(2)} · день: VA ${d.val.toFixed(2)}–${d.vah.toFixed(2)}, POC ${d.poc.toFixed(2)}, HVN ${d.tpo} TPO в строке</span>`;
+  const comp=cm.map(c=>`<span class="z">композит ${c.n} дн. ${c.start}–${c.end}: High–Low ${c.lo.toFixed(2)}–${c.hi.toFixed(2)}, VA ${c.val.toFixed(2)}–${c.vah.toFixed(2)}, POC ${c.poc.toFixed(2)}${c.main?'':' — двухдневный, даёт серую зону'}</span>`).join('');
+  const conf=v=>{ if(!v.z.cf) return ''; const n=v.z.cf.filter(x=>x<d.date).length; return ` · подтверждений к сессии ${n}`; };
+  hov.innerHTML=head+comp+(zs.length?zs.map(v=>`<span class="z">${KIND[v.kind][0]} ${v.z.lo.toFixed(2)}–${v.z.hi.toFixed(2)} · с ${fmt(v.z.av)} · ${v.z.t}${conf(v)}</span>`).join('')
+    :'<span>зон на этой цене в эту сессию нет</span>');
+});
+cv.addEventListener('pointerleave',()=>{ hover=null; draw(); });
+new ResizeObserver(()=>draw()).observe(cv);
+const mq=matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener?.('change',draw);
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+if(document.fonts) document.fonts.ready.then(draw);
+draw();
+})();
+</script>
