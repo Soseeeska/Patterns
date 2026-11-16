@@ -92,6 +92,7 @@ public final class ZoneEngine {
                                                   // так же и доклейка после ложного выхода
         public double compInsideShare = 0.8;      // ... но день, чей High–Low на ≥ эту долю внутри диапазона композита, клеится по ИЛИ
                                                   // (0 — выкл.)
+        public boolean compOutsideDays = true;    // ... и внешний день: диапазон композита на ≥ ту же долю внутри High–Low дня
         public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
@@ -740,12 +741,15 @@ public final class ZoneEngine {
         return inter > 0 && inter / (double) narrow >= p.compVaOverlap;
     }
 
-    /** High–Low дня на ≥ compInsideShare внутри диапазона композита (compInsideShare = 0 — выкл.). */
+    /** Внутренний день: High–Low дня на ≥ compInsideShare внутри диапазона композита; внешний (compOutsideDays) —
+     *  наоборот, диапазон композита на ≥ эту долю внутри High–Low дня (compInsideShare = 0 — выкл.). */
     static boolean insideDay(Day d, Profile cp, Params p) {
         if (p.compInsideShare <= 0) return false;
         int lo = ticks(d.low, p.tick), hi = ticks(d.high, p.tick);
         int in = Math.min(hi, cp.high()) - Math.max(lo, cp.low);
-        return in >= 0 && (hi == lo || in / (double) (hi - lo) >= p.compInsideShare - 1e-9);
+        if (in < 0) return false;
+        int w = p.compOutsideDays ? Math.min(hi - lo, cp.high() - cp.low) : hi - lo;   // доля от более узкого
+        return w == 0 || in / (double) w >= p.compInsideShare - 1e-9;
     }
 
     private static Comp closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
