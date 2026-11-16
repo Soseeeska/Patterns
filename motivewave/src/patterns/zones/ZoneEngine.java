@@ -518,6 +518,7 @@ public final class ZoneEngine {
             // ядро, нарисованное узлами, в списке зон нет: его границы — от нижнего до верхнего узла
             for (Comp c : res.comps) {
                 Zone e = c.core;
+                if (!zones.contains(e) && e.nodes.isEmpty()) { e.blo = e.lo; e.bhi = e.hi; }   // ядро не на графике (разметка)
                 if (e.nodes.isEmpty()) continue;
                 e.blo = Double.MAX_VALUE; e.bhi = -Double.MAX_VALUE;
                 for (Zone nz : e.nodes) { e.blo = Math.min(e.blo, nz.blo); e.bhi = Math.max(e.bhi, nz.bhi); }
