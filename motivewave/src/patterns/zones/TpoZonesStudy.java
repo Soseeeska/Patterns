@@ -38,14 +38,14 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 
 /**
- * TPO Zones 1.3 — карта зон ES (ветка Zones-1.1 + класс по композиту) прямо на графике MotiveWave.
+ * TPO Zones 1.4 — карта зон ES (ветка Zones-1.1 + класс по композиту) прямо на графике MotiveWave.
  * Расчёт — ZoneEngine (порт scripts/zone_map_export.py + фильтров страницы карты зон),
  * по 30m-барам инструмента; рисуется на любом таймфрейме графика.
  */
 @StudyHeader(
     namespace = "com.patterns",
     id = "TPO_ZONES_1_2",
-    name = "TPO Zones 1.3",
+    name = "TPO Zones 1.4",
     label = "TPO Zones",
     desc = "Карта зон по RTH TPO-профилям: старые балансы, первородные HVN-зоны с классом по отторжениям, серые зоны",
     menu = "Patterns",
