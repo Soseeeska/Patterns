@@ -39,7 +39,7 @@ import java.util.TreeMap;
 public final class ZoneEngine {
 
     // ------------------------------------------------------------------ виды зон
-    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_GREY = 5;
+    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_PART = 3, K_GREY = 5;
 
     public enum Kind {
         HVN_S("HVN · поддержка"), HVN_R("HVN · сопротивление"), HVN_RANGE("HVN · проторговка"),
@@ -83,6 +83,12 @@ public final class ZoneEngine {
         public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
         public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
         public boolean compositeShortDays = true;
+        public boolean partition = true;          // разметка композита: тело целиком режется на зоны (ядро / подд. / сопр.)
+        public double bodyShare = 0.15;           // тело — строки не ниже этой доли максимума (сглаж. 1 п.), хвосты отпадают
+        public double partCoreShare = 0.65;       // ядро — часть тела не ниже этой доли максимума
+        public double partDipShare = 0.06;        // провал для нарезки — не мельче этой доли максимума (и не мельче 2 TPO)
+        public double partTargetPts = 8, partMaxPts = 10, partMinPts = 2;
+        public double partMaxBodyPts = 100;       // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
         public boolean coreNodes = true;          // ядро рисуется узлами профиля (локальные вершины, разделённые провалами)
         public double nodeDipTpo = 2.0;           // провал между узлами — не меньше стольких TPO от обеих вершин (сглаж. 1 п.)
         public double nodeDropTpo = 2.0;          // узел — строки не ниже вершины узла на столько TPO
@@ -210,6 +216,8 @@ public final class ZoneEngine {
         public boolean fixedGrey;                            // ядро композита-уточнения: всегда серая
         public String info = "";                             // ядро: как посчитано (для подсказки)
         public List<Zone> nodes = List.of();                 // ядро: узлы профиля (рисуются вместо ядра)
+        public Kind partKind; public Comp partOf;            // кусок разметки композита: вид и композит
+        long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
         Zone nodeOf;                                         // узел: его ядро
         int formationDays; List<LocalDate> conf = List.of();
         // события (дни от 1970-01-01)
@@ -226,6 +234,8 @@ public final class ZoneEngine {
     public static final class Comp {
         public double lo, hi; public LocalDate start, end, av; public int days; public Zone core;
         public Comp parent;                                  // уточнение внутри более раннего баланса
+        public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
+        List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
     }
 
     /** Состояние зоны на сессию. */
@@ -358,6 +368,7 @@ public final class ZoneEngine {
                     if (par == null) { parents.add(c); continue; }
                     c.parent = par;
                     res.subComps.add(c);
+                    if (p.partition) continue;
                     Zone g = new Zone();
                     g.k = K_GREY; g.src = "sub"; g.fixedGrey = true; g.av = c.av; g.lo = c.core.lo; g.hi = c.core.hi;
                     zones.add(g);
@@ -379,9 +390,37 @@ public final class ZoneEngine {
                 else { cores.add(c.core); cc.put(c.core, new ArrayList<>()); }
             }
             for (Zone e : cores) e.coreConf = cc.get(e).stream().mapToLong(Long::longValue).toArray();
-            for (Zone e : cores) {
-                if (e.nodes.isEmpty()) { zones.add(e); continue; }
-                for (Zone nz : e.nodes) { nz.coreConf = e.coreConf; zones.add(nz); }
+            if (!p.partition) {
+                for (Zone e : cores) {
+                    if (e.nodes.isEmpty()) { zones.add(e); continue; }
+                    for (Zone nz : e.nodes) { nz.coreConf = e.coreConf; zones.add(nz); }
+                }
+            } else {
+                // разметка: первый композит на уровне — главный; совпадающий кусок позднего композита его подтверждает
+                List<Comp> bal = new ArrayList<>(res.comps); bal.addAll(res.subComps);
+                bal.sort((x, y) -> x.av.compareTo(y.av));
+                List<Zone> parts = new ArrayList<>();
+                Map<Zone, List<Long>> pc = new HashMap<>();
+                for (Comp c : bal) for (int[] sg : c.segs) {
+                    Zone best = null; double bestOv = -1;
+                    for (Zone e : parts) {
+                        double ov = overlap(ticks(e.lo, tick), ticks(e.hi, tick), sg[0], sg[1]);
+                        if (ov >= p.mergeOverlapMin && ov > bestOv) { best = e; bestOv = ov; }
+                    }
+                    if (best != null) { pc.get(best).add(c.av.toEpochDay()); continue; }
+                    Zone z = new Zone();
+                    z.k = K_PART; z.src = "part"; z.av = c.av; z.partOf = c; z.info = c.core.info;
+                    z.partKind = sg[2] == 0 ? Kind.CORE : sg[2] == 1 ? Kind.HVN_S : Kind.HVN_R;
+                    z.lo = sg[0] * tick; z.hi = sg[1] * tick;
+                    parts.add(z); pc.put(z, new ArrayList<>());
+                }
+                for (Zone e : parts) { e.coreConf = pc.get(e).stream().mapToLong(Long::longValue).toArray(); zones.add(e); }
+                // дневные HVN-зоны и серые внутри тела сложившегося композита — не рисуются
+                for (Zone z : zones) {
+                    if (z.k != K_HVN && z.k != K_GREY) continue;
+                    double mid = (z.lo + z.hi) / 2;
+                    for (Comp c : bal) if (c.bodyLo <= mid && mid <= c.bodyHi) z.hideFrom = Math.min(z.hideFrom, c.av.toEpochDay());
+                }
             }
         }
 
@@ -509,7 +548,7 @@ public final class ZoneEngine {
             for (Shown v : list) {
                 // режим «по композиту»: зона, лежащая на ядре, — его подтверждение
                 boolean hide = false;
-                if (p.compositeMode && v.st.kind != Kind.CORE) {
+                if (p.compositeMode && v.st.kind != Kind.CORE && v.z.k != K_PART) {
                     for (Shown m : list) {
                         if (m.st.kind != Kind.CORE) continue;
                         double inter = Math.min(v.z.bhi, m.z.bhi) - Math.max(v.z.blo, m.z.blo);
@@ -518,7 +557,7 @@ public final class ZoneEngine {
                     if (hide) continue;
                 }
                 // зона вплотную к более старой видимой зоне того же вида — её подтверждение
-                if (p.compositeMode && p.joinGapPts >= 0 && v.st.kind != Kind.CORE) {
+                if (p.compositeMode && p.joinGapPts >= 0 && v.st.kind != Kind.CORE && v.z.k != K_PART) {
                     for (Shown m : list) {
                         if (m == v || m.st.kind != v.st.kind) continue;
                         boolean older = m.z.avOrd() < v.z.avOrd() || (m.z.avOrd() == v.z.avOrd() && list.indexOf(m) < list.indexOf(v));
@@ -608,7 +647,12 @@ public final class ZoneEngine {
                 core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
                 c.core = core;
                 comps.add(c);
-                if (p.coreNodes) {
+                if (p.partition) {
+                    int[] body = new int[2];
+                    c.segs = partition(cand, cp, poc, p, body);
+                    c.bodyLo = body[0] * p.tick; c.bodyHi = body[1] * p.tick;
+                }
+                if (p.coreNodes && !p.partition) {
                     List<int[]> nd = nodes(cp, poc, p.hvnShare, p.nodeDipTpo, p.nodeDropTpo, (int) Math.round(1.0 / p.tick));
                     if (!nd.isEmpty()) {
                         List<Zone> zs = new ArrayList<>();
@@ -635,6 +679,89 @@ public final class ZoneEngine {
             z.k = K_GREY; z.lo = band[0] * p.tick; z.hi = band[1] * p.tick;
             greyComp.add(z);
         }
+    }
+
+    /** Разметка тела композита. Тело — строки от POC, пока сглаженный (1 п.) счёт не ниже bodyShare
+     *  максимума; ядро — часть тела не ниже partCoreShare. Ниже ядра — поддержка, выше — сопротивление.
+     *  Каждая часть режется по провалам (глубина ≥ max(2, partDipShare × максимум) от обеих сторон), кусок
+     *  шире partMaxPts — на равные части ≈ partTargetPts (границы — к краям HVN-полос дней в пределах 2 п.),
+     *  куски уже partMinPts присоединяются к соседу. body — {низ, верх} тела в тиках. */
+    static List<int[]> partition(List<Day> days, Profile cp, int pocTicks, Params p, int[] body) {
+        int[] c = cp.counts; int n = c.length, onePt = (int) Math.round(1.0 / p.tick), half = onePt / 2;
+        double[] sm = new double[n];
+        for (int i = 0; i < n; i++) {
+            double sum = 0; int k = 0;
+            for (int j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { sum += c[j]; k++; }
+            sm[i] = sum / k;
+        }
+        double mx = 0; for (double v : sm) mx = Math.max(mx, v);
+        int pi = pocTicks - cp.low, a = pi, b = pi, ca = pi, cb = pi;
+        int maxBody = (int) Math.round(p.partMaxBodyPts / p.tick);
+        for (double share = p.bodyShare; ; share += 0.05) {
+            a = pi; b = pi;
+            while (a > 0 && sm[a - 1] >= share * mx) a--;
+            while (b < n - 1 && sm[b + 1] >= share * mx) b++;
+            if (p.partMaxBodyPts <= 0 || b - a <= maxBody || share >= p.partCoreShare) break;
+        }
+        while (ca > a && sm[ca - 1] >= p.partCoreShare * mx) ca--;
+        while (cb < b && sm[cb + 1] >= p.partCoreShare * mx) cb++;
+        body[0] = cp.low + a; body[1] = cp.low + b;
+        double dip = Math.max(2.0, p.partDipShare * mx);
+        int maxW = (int) Math.round(p.partMaxPts / p.tick), tgt = (int) Math.round(p.partTargetPts / p.tick),
+            minW = (int) Math.round(p.partMinPts / p.tick);
+        List<Integer> edges = new ArrayList<>();
+        for (Day d : days) if (d.bandHi > 0) { edges.add(d.bandLo - cp.low); edges.add(d.bandHi - cp.low + 1); }
+        List<int[]> out = new ArrayList<>();
+        int[][] regions = {{a, ca - 1, 1}, {ca, cb, 0}, {cb + 1, b, 2}};
+        for (int[] r : regions) {
+            if (r[1] < r[0]) continue;
+            List<int[]> pcs = new ArrayList<>();
+            splitDips(sm, r[0], r[1], dip, pcs);
+            List<int[]> fine = new ArrayList<>();
+            for (int[] q : pcs) {
+                int w = q[1] - q[0] + 1;
+                if (w <= maxW) { fine.add(q); continue; }
+                int k = (int) Math.ceil(w / (double) tgt);
+                int start = q[0];
+                for (int j = 1; j < k; j++) {
+                    int cut = q[0] + (int) Math.round(j * w / (double) k), best = cut;
+                    for (int e : edges) if (e > start + minW && e < q[1] - minW && Math.abs(e - cut) <= 2 * onePt && Math.abs(e - cut) < Math.abs(best - cut)) best = e;
+                    fine.add(new int[]{start, best - 1}); start = best;
+                }
+                fine.add(new int[]{start, q[1]});
+            }
+            // слишком узкие — к соседу поуже
+            boolean ch = true;
+            while (ch && fine.size() > 1) {
+                ch = false;
+                for (int i = 0; i < fine.size(); i++) {
+                    int[] q = fine.get(i);
+                    if (q[1] - q[0] + 1 >= minW) continue;
+                    int j = i == 0 ? 1 : i == fine.size() - 1 ? i - 1
+                            : (fine.get(i - 1)[1] - fine.get(i - 1)[0] <= fine.get(i + 1)[1] - fine.get(i + 1)[0] ? i - 1 : i + 1);
+                    int[] m = fine.get(j);
+                    fine.set(Math.min(i, j), new int[]{Math.min(q[0], m[0]), Math.max(q[1], m[1])});
+                    fine.remove(Math.max(i, j)); ch = true; break;
+                }
+            }
+            for (int[] q : fine) if (q[1] - q[0] + 1 >= Math.min(minW, onePt)) out.add(new int[]{cp.low + q[0], cp.low + q[1], r[2]});
+        }
+        return out;
+    }
+
+    private static void splitDips(double[] sm, int lo, int hi, double dip, List<int[]> out) {
+        int best = -1; double bestDepth = 0;
+        for (int i = lo + 1; i < hi; i++) {
+            if (!(sm[i] <= sm[i - 1] && sm[i] <= sm[i + 1])) continue;
+            double l = 0, r = 0;
+            for (int j = lo; j < i; j++) l = Math.max(l, sm[j]);
+            for (int j = i + 1; j <= hi; j++) r = Math.max(r, sm[j]);
+            double depth = Math.min(l, r) - sm[i];
+            if (depth >= dip && depth > bestDepth) { bestDepth = depth; best = i; }
+        }
+        if (best < 0) { out.add(new int[]{lo, hi}); return; }
+        splitDips(sm, lo, best - 1, dip, out);
+        splitDips(sm, best, hi, dip, out);
     }
 
     /** Подсказка ядра: дни композита, диапазон, POC и две самые высокие вершины профиля (вторая — за провалом вне плато POC). */
@@ -860,6 +987,12 @@ public final class ZoneEngine {
             st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
             return st;
         }
+        if (p.compositeMode && z.k == K_PART) {
+            st.kind = z.partKind; st.comp = z.partOf; st.rej = tot; st.purity = tot >= 1 ? Math.max(st.nl, st.ns) / (double) tot : null;
+            st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
+            return st;
+        }
+        if (p.compositeMode && p.partition && (z.k == K_HVN || z.k == K_GREY) && o >= z.hideFrom) { st.kind = null; return st; }
         if (p.compositeMode && z.fixedGrey) {
             st.kind = Kind.GREY; st.rej = tot; st.purity = tot >= 1 ? Math.max(st.nl, st.ns) / (double) tot : null;
             st.age = o - z.avOrd();

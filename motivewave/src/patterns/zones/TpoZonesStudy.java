@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -91,6 +91,11 @@ public class TpoZonesStudy extends Study {
         g.addRow(new BooleanDescriptor(CORE_SESS, "Ядро по профилю композита: от POC до обрыва TPO, баланс — по VA дней", true));
         g.addRow(new IntegerDescriptor(CLIFF, "Обрыв TPO: строка на N принтов ниже максимума предыдущего 1 п. — граница ядра (0 — выкл.)", 4, 0, 50, 1));
         g.addRow(new DoubleDescriptor(CORE_DAYS, "Композит — баланс, если ядро задевают VA ≥ доли его дней (0 — любой)", 0.5, 0, 1, 0.05));
+        g.addRow(new BooleanDescriptor(PART, "Разметка композита: тело целиком режется на зоны (ядро / поддержка / сопротивление)", true));
+        g.addRow(new DoubleDescriptor(BODY, "Разметка: тело — строки не ниже доли максимума TPO (хвосты отпадают)", 0.15, 0.02, 0.6, 0.01));
+        g.addRow(new DoubleDescriptor(PMAXB, "Разметка: тело не шире, п. (шире — остаётся плотная середина)", 100, 20, 400, 5));
+        g.addRow(new DoubleDescriptor(PCORE, "Разметка: ядро — строки не ниже доли максимума TPO", 0.65, 0.3, 0.95, 0.05));
+        g.addRow(new DoubleDescriptor(PTGT, "Разметка: ширина куска ≈, п. (кусок шире 10 п. делится)", 8.0, 2, 10, 0.5));
         g.addRow(new BooleanDescriptor(NODES, "Ядро композита — узлами профиля (тонкие зоны вокруг вершин TPO)", true));
         g.addRow(new DoubleDescriptor(NODE_DIP, "Узлы: провал между вершинами от, TPO", 2.0, 0.5, 20, 0.5));
         g.addRow(new DoubleDescriptor(NODE_DROP, "Узлы: строки не ниже вершины узла на, TPO", 2.0, 0.5, 20, 0.5));
@@ -253,6 +258,11 @@ public class TpoZonesStudy extends Study {
         p.subOverlap = st.getDouble(SUB_OV, 0.70);
         p.compositeShortDays = st.getBoolean(SHORT_DAYS, true);
         p.coreNodes = st.getBoolean(NODES, true);
+        p.partition = st.getBoolean(PART, true);
+        p.bodyShare = st.getDouble(BODY, 0.15);
+        p.partCoreShare = st.getDouble(PCORE, 0.65);
+        p.partTargetPts = st.getDouble(PTGT, 8.0);
+        p.partMaxBodyPts = st.getDouble(PMAXB, 100);
         p.nodeDipTpo = st.getDouble(NODE_DIP, 2.0);
         p.nodeDropTpo = st.getDouble(NODE_DROP, 2.0);
         p.noOverlap = st.getBoolean(NO_OVERLAP, true);
@@ -298,7 +308,9 @@ public class TpoZonesStudy extends Study {
         Color none = new Color(0, 0, 0, 0);
         List<Figure> figs = new ArrayList<>();
         for (ZonePlan.Rect r : plan.rects) {
-            Box b = new Box(r.t0, r.hi, r.t1, r.lo);
+            // куски разметки стоят вплотную: верх на 1 тик ниже, чтобы соседние полосы читались отдельно
+            double top = r.z.k == ZoneEngine.K_PART && r.hi - r.lo > 2 * p.tick ? r.hi - p.tick : r.hi;
+            Box b = new Box(r.t0, top, r.t1, r.lo);
             b.setFillColor(fill.get(r.kind));
             b.setLineColor(none);
             b.setUnderlay(true);

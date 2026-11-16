@@ -18,3 +18,4 @@ for pair in "0 0" "3 3" "10 6" "20 8" "60 11"; do
 done
 java -Djava.awt.headless=true -cp "$T/cls" Preview "$T/bars.csv" motivewave/preview.png 12 0 0 comp
 java -Djava.awt.headless=true -cp "$T/cls" Preview "$T/bars.csv" motivewave/preview_range_sep.png 15 0 0 comp 2026-09-10
+java -Djava.awt.headless=true -cp "$T/cls" Preview "$T/bars.csv" motivewave/preview_range_aug_manual.png 15 0 0 comp 2026-08-21

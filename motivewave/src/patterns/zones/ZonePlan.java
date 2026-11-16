@@ -81,12 +81,13 @@ public final class ZonePlan {
         b.append(v.st.kind.title).append("  ").append(fmt(v.lo)).append(" – ").append(fmt(v.hi));
         if (v.lo != z.blo || v.hi != z.bhi) b.append(" (обрезана соседними, полностью ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi)).append(')');
         if ("node".equals(z.src)) b.append("\nузел ядра композита");
+        if ("part".equals(z.src)) b.append("\nразметка композита (подтверждений — совпавшими кусками поздних композитов)");
         b.append("\nпоявилась ").append(z.av).append(", возраст ").append(v.st.age).append(" дн. (на ").append(on).append(')');
         b.append("\nотторжений ").append(v.st.rej).append(" (лонг ").append(v.st.nl).append(" / шорт ").append(v.st.ns);
         if (v.st.purity != null) b.append(", чистота ").append(Math.round(v.st.purity * 100)).append('%');
         b.append(")\nподтверждений ").append(v.st.conf);
         if (v.st.kind == Kind.CORE) b.append(" (другими композитами)");
-        if (v.st.kind == Kind.CORE && !z.info.isEmpty()) b.append("\n").append(z.info.replace("; ", "\n"));
+        if ((v.st.kind == Kind.CORE || "part".equals(z.src)) && !z.info.isEmpty()) b.append("\n").append(z.info.replace("; ", "\n"));
         if (v.st.comp != null) b.append("\nкомпозит ").append(v.st.comp.start).append(" – ").append(v.st.comp.end)
                 .append(" (").append(v.st.comp.days).append(" дн., ").append(fmt(v.st.comp.lo)).append(" – ").append(fmt(v.st.comp.hi))
                 .append("), ядро ").append(fmt(v.st.comp.core.blo)).append(" – ").append(fmt(v.st.comp.core.bhi));
