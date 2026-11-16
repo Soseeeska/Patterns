@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -95,6 +95,9 @@ public class TpoZonesStudy extends Study {
         g.addRow(new DoubleDescriptor(BODY, "Разметка: тело — строки не ниже доли максимума TPO (хвосты отпадают)", 0.15, 0.02, 0.6, 0.01));
         g.addRow(new DoubleDescriptor(PMAXB, "Разметка: тело не шире, п. (шире — остаётся плотная середина)", 100, 20, 400, 5));
         g.addRow(new DoubleDescriptor(FIT_B, "Подгонка по телам: меньше доли максимума тел свечей — пустота (0 — без подгонки)", 0.20, 0, 0.8, 0.05));
+        g.addRow(new BooleanDescriptor(SESS, "Зоны из сессий (проба): узлы RTH TPO дня, подогнанные по телам; композит задаёт роль и один раз перекрашивает", false));
+        g.addRow(new IntegerDescriptor(S_PEAK, "Сессионные зоны: вершина узла от, TPO", 3, 1, 13, 1));
+        g.addRow(new DoubleDescriptor(S_BODY, "Сессионные зоны: подгонка — тела не ниже доли максимума тел", 0.5, 0.1, 0.95, 0.05));
         g.addRow(new BooleanDescriptor(CLUST, "Зоны — скопления тел свечей (границы на провалах), без нарезки равными кусками", true));
         g.addRow(new DoubleDescriptor(CL_DIP, "Скопления: провал между ними от доли меньшей вершины", 0.10, 0.02, 0.6, 0.02));
         g.addRow(new DoubleDescriptor(CL_MAX, "Скопление не шире, п. (шире — остаётся самая плотная часть)", 8, 2, 10, 0.5));
@@ -274,6 +277,9 @@ public class TpoZonesStudy extends Study {
         p.fitClusterShare = st.getDouble(FIT_C, 0.70);
         p.fitEthBodies = st.getBoolean(FIT_ETH, true);
         p.bodyClusters = st.getBoolean(CLUST, true);
+        p.sessionZones = st.getBoolean(SESS, false);
+        p.sessMinPeak = st.getInteger(S_PEAK, 3);
+        p.sessBodyShare = st.getDouble(S_BODY, 0.5);
         p.clusterDip = st.getDouble(CL_DIP, 0.10);
         p.clusterMaxPts = st.getDouble(CL_MAX, 8);
         p.subAddsZones = st.getBoolean(SUB_ADD, false);

@@ -39,7 +39,7 @@ import java.util.TreeMap;
 public final class ZoneEngine {
 
     // ------------------------------------------------------------------ виды зон
-    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_PART = 3, K_GREY = 5;
+    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_PART = 3, K_SESS = 4, K_GREY = 5;
 
     public enum Kind {
         HVN_S("HVN · поддержка"), HVN_R("HVN · сопротивление"), HVN_RANGE("HVN · проторговка"),
@@ -83,6 +83,15 @@ public final class ZoneEngine {
         public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
         public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
         public boolean compositeShortDays = true;
+        public boolean sessionZones = false;      // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
+                                                  // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
+        public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
+        public double sessNodeDip = 0.15;         // провал между узлами — от доли меньшей вершины (и ≥ 1 TPO)
+        public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
+        public double sessMaxPts = 8;             // зона не шире, п.
+        public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
+        public double sessBodyShare = 0.5;
+        public int sessConfirm = 5;               // режим 2: зона рождается серой, через столько полных дней — цвет по отторжениям за них        // подгонка узла по телам: скопление не ниже этой доли максимума тел
         public boolean partition = true;          // разметка композита: тело целиком режется на зоны (ядро / подд. / сопр.)
         public double bodyShare = 0.15;           // тело — строки не ниже этой доли максимума (сглаж. 1 п.), хвосты отпадают
         public double partCoreShare = 0.65;       // ядро — часть тела не ниже этой доли максимума
@@ -215,6 +224,7 @@ public final class ZoneEngine {
         double open, high, low, close;
         final List<int[]> periods = new ArrayList<>();   // {period, lowTicks, highTicks, openTicks, closeTicks}
         final List<int[]> bodies = new ArrayList<>();    // тела всех 30m-свечей сессии (ETH + RTH): {open, close} в тиках
+        final List<double[]> sbars = new ArrayList<>();  // все 30m-свечи сессии (ETH + RTH): {o, h, l, c}
         Profile profile; int poc, val, vah;              // тики
         int hvnTpo, bandLo, bandHi;                      // per_day (только полные дни)
     }
@@ -227,6 +237,7 @@ public final class ZoneEngine {
         public String info = "";                             // ядро: как посчитано (для подсказки)
         public List<Zone> nodes = List.of();                 // ядро: узлы профиля (рисуются вместо ядра)
         public Kind partKind; public Comp partOf;            // кусок разметки композита: вид и композит
+        public Kind recolorKind; long recolorAt = Long.MAX_VALUE;   // сессионная зона: роль после перекраски композитом
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
         Zone nodeOf;                                         // узел: его ядро
         int formationDays; List<LocalDate> conf = List.of();
@@ -245,6 +256,7 @@ public final class ZoneEngine {
         public double lo, hi; public LocalDate start, end, av; public int days; public Zone core;
         public Comp parent;                                  // уточнение внутри более раннего баланса
         public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
+        public double coreLo, coreHi;                        // ядро тела (строки не ниже partCoreShare максимума)
         List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
     }
 
@@ -306,7 +318,11 @@ public final class ZoneEngine {
         }
         for (int i = 0; i < bars.size(); i++) {           // тела свечей всей сессии — для подгонки по телам
             Day d = days.get(sessOf[i]);
-            if (d != null) d.bodies.add(new int[]{ticks(bars.get(i).o, tick), ticks(bars.get(i).c, tick)});
+            if (d != null) {
+                Bar bb = bars.get(i);
+                d.bodies.add(new int[]{ticks(bb.o, tick), ticks(bb.c, tick)});
+                d.sbars.add(new double[]{bb.o, bb.h, bb.l, bb.c});
+            }
         }
         List<Day> all = new ArrayList<>(days.values());
         List<Day> full = new ArrayList<>();
@@ -447,6 +463,39 @@ public final class ZoneEngine {
             }
         }
 
+        if (p.compositeMode && p.sessionZones) {
+            // зоны из сессий: узлы RTH TPO дня, подогнанные по телам; роль — композит / отторжения / выход / серая
+            List<Comp> bal = new ArrayList<>(res.comps);
+            bal.sort((x, y) -> x.av.compareTo(y.av));
+            zones.clear();
+            List<Zone> ses = new ArrayList<>();
+            Map<Zone, List<Long>> cf = new HashMap<>();
+            int onePt = (int) Math.round(1.0 / tick), maxW = (int) Math.round(p.sessMaxPts / tick);
+            double mwk = p.minWickTicks * tick;
+            for (Day d : full) {
+                LocalDate av = nextTradeDay.get(d.date);
+                if (av == null) continue;
+                for (int[] nd : dayNodes(d, p, onePt, maxW)) {
+                    Zone best = null;
+                    for (Zone e : ses) if (overlap(ticks(e.lo, tick), ticks(e.hi, tick), nd[0], nd[1]) >= p.mergeOverlapMin) { best = e; break; }
+                    if (best != null) { cf.get(best).add(av.toEpochDay()); continue; }
+                    Zone z = new Zone();
+                    z.k = K_SESS; z.src = "sess"; z.av = av; z.lo = nd[0] * tick; z.hi = nd[1] * tick;
+                    double mid = (z.lo + z.hi) / 2;
+                    Comp gov = null;
+                    for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
+                    z.partKind = gov != null ? roleIn(gov, mid) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
+                    if (gov != null) z.partOf = gov;
+                    for (Comp c : bal)
+                        if (c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) {
+                            z.recolorAt = c.av.toEpochDay(); z.recolorKind = roleIn(c, mid); z.info = c.core.info; break;
+                        }
+                    ses.add(z); cf.put(z, new ArrayList<>());
+                }
+            }
+            for (Zone z : ses) { z.coreConf = cf.get(z).stream().mapToLong(Long::longValue).toArray(); zones.add(z); }
+        }
+
         // ---------- события по RTH-барам: отторжения (лонг / шорт)
         List<Integer> rthIdx = new ArrayList<>();
         for (int i = 0; i < bars.size(); i++) if (isRth[i]) rthIdx.add(i);
@@ -572,7 +621,7 @@ public final class ZoneEngine {
             for (Shown v : list) {
                 // режим «по композиту»: зона, лежащая на ядре, — его подтверждение
                 boolean hide = false;
-                if (p.compositeMode && v.st.kind != Kind.CORE && v.z.k != K_PART) {
+                if (p.compositeMode && v.st.kind != Kind.CORE && v.z.k != K_PART && v.z.k != K_SESS) {
                     for (Shown m : list) {
                         if (m.st.kind != Kind.CORE) continue;
                         double inter = Math.min(v.z.bhi, m.z.bhi) - Math.max(v.z.blo, m.z.blo);
@@ -581,7 +630,7 @@ public final class ZoneEngine {
                     if (hide) continue;
                 }
                 // зона вплотную к более старой видимой зоне того же вида — её подтверждение
-                if (p.compositeMode && p.joinGapPts >= 0 && v.st.kind != Kind.CORE && v.z.k != K_PART) {
+                if (p.compositeMode && p.joinGapPts >= 0 && v.st.kind != Kind.CORE && v.z.k != K_PART && v.z.k != K_SESS) {
                     for (Shown m : list) {
                         if (m == v || m.st.kind != v.st.kind) continue;
                         boolean older = m.z.avOrd() < v.z.avOrd() || (m.z.avOrd() == v.z.avOrd() && list.indexOf(m) < list.indexOf(v));
@@ -672,9 +721,10 @@ public final class ZoneEngine {
                 c.core = core;
                 comps.add(c);
                 if (p.partition) {
-                    int[] body = new int[2];
+                    int[] body = new int[4];
                     c.segs = partition(cand, cp, poc, p, body);
                     c.bodyLo = body[0] * p.tick; c.bodyHi = body[1] * p.tick;
+                    c.coreLo = body[2] * p.tick; c.coreHi = body[3] * p.tick;
                 }
                 if (p.coreNodes && !p.partition) {
                     List<int[]> nd = nodes(cp, poc, p.hvnShare, p.nodeDipTpo, p.nodeDropTpo, (int) Math.round(1.0 / p.tick));
@@ -705,6 +755,69 @@ public final class ZoneEngine {
         }
     }
 
+    /** Роль цены mid в композите: ядро — проторговка, выше — сопротивление, ниже — поддержка. */
+    static Kind roleIn(Comp c, double mid) {
+        return mid > c.coreHi ? Kind.HVN_R : mid < c.coreLo ? Kind.HVN_S : Kind.CORE;
+    }
+
+    /** Роль зоны вне композита по сессии её рождения: отторжения (первичны), иначе — где закрылась сессия, иначе серая. */
+    static Kind roleByDay(Day d, double lo, double hi, double mw, int mode) {
+        int nl = 0, ns = 0;
+        for (double[] b : d.sbars) {
+            int t = interaction(b[0], b[1], b[2], b[3], lo, hi, mw);
+            if (t == 1) nl++; else if (t == 2) ns++;
+        }
+        if (mode == 0 && nl > ns) return Kind.HVN_S;
+        if (mode == 0 && ns > nl) return Kind.HVN_R;
+        double close = d.sbars.isEmpty() ? d.close : d.sbars.get(d.sbars.size() - 1)[3];
+        return close > hi ? Kind.HVN_S : close < lo ? Kind.HVN_R : Kind.GREY;
+    }
+
+    /** Узлы RTH TPO-профиля дня (сглаж. 1 п.): вершины ≥ sessMinPeak, разделённые провалами; узел — строки не ниже
+     *  вершины на sessNodeDrop; затем подгонка по телам свечей сессии в пределах узла ± 1 п. (скопление ≥ 70% максимума).
+     *  Ширина — от 1 п. до sessMaxPts. {lo, hi} в тиках. */
+    static List<int[]> dayNodes(Day d, Params p, int onePt, int maxW) {
+        Profile pf = d.profile; int[] c = pf.counts; int n = c.length, half = onePt / 2;
+        double[] sm = new double[n];
+        for (int i = 0; i < n; i++) {
+            double sum = 0; int k = 0;
+            for (int j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { sum += c[j]; k++; }
+            sm[i] = sum / k;
+        }
+        List<int[]> pcs = new ArrayList<>();
+        splitRel(sm, 0, n - 1, p.sessNodeDip, 1.0, pcs);
+        int[] occ = new int[n + 2 * onePt + 1];               // тела свечей сессии, со сдвигом onePt
+        for (int[] q : d.bodies) {
+            int x0 = Math.min(q[0], q[1]) - pf.low + onePt, x1 = Math.max(q[0], q[1]) - pf.low + onePt;
+            x0 = Math.max(0, x0); x1 = Math.min(occ.length - 2, x1);
+            if (x0 <= x1) { occ[x0]++; occ[x1 + 1]--; }
+        }
+        for (int i = 1; i < occ.length; i++) occ[i] += occ[i - 1];
+        List<int[]> out = new ArrayList<>();
+        for (int[] q : pcs) {
+            int m = q[0];
+            for (int i = q[0]; i <= q[1]; i++) if (sm[i] > sm[m]) m = i;
+            if (c[m] < p.sessMinPeak && sm[m] < p.sessMinPeak) continue;
+            int lo = m, hi = m;
+            while (lo > q[0] && sm[lo - 1] >= sm[m] - p.sessNodeDrop) lo--;
+            while (hi < q[1] && sm[hi + 1] >= sm[m] - p.sessNodeDrop) hi++;
+            // подгонка по телам: скопление тел в узле ± 1 п.
+            int w0 = lo, w1 = hi + 2 * onePt, bm = w0;              // индексы в occ (со сдвигом onePt)
+            for (int i = w0; i <= w1; i++) if (occ[i] > occ[bm]) bm = i;
+            if (occ[bm] >= 2) {
+                double thr = p.sessBodyShare * occ[bm];
+                int x0 = bm, x1 = bm;
+                while (x0 > w0 && occ[x0 - 1] >= thr) x0--;
+                while (x1 < w1 && occ[x1 + 1] >= thr) x1++;
+                lo = x0 - onePt; hi = x1 - onePt;
+            }
+            if (hi - lo < onePt) { int mid = (lo + hi) / 2; lo = mid - onePt / 2; hi = lo + onePt; }
+            if (hi - lo > maxW) { int mid = (lo + hi) / 2; lo = mid - maxW / 2; hi = lo + maxW; }
+            out.add(new int[]{pf.low + lo, pf.low + hi});
+        }
+        return out;
+    }
+
     /** Разметка тела композита. Тело — строки от POC, пока сглаженный (1 п.) счёт не ниже bodyShare
      *  максимума; ядро — часть тела не ниже partCoreShare. Ниже ядра — поддержка, выше — сопротивление.
      *  Каждая часть режется по провалам (глубина ≥ max(2, partDipShare × максимум) от обеих сторон), кусок
@@ -730,6 +843,7 @@ public final class ZoneEngine {
         while (ca > a && sm[ca - 1] >= p.partCoreShare * mx) ca--;
         while (cb < b && sm[cb + 1] >= p.partCoreShare * mx) cb++;
         body[0] = cp.low + a; body[1] = cp.low + b;
+        if (body.length > 3) { body[2] = cp.low + ca; body[3] = cp.low + cb; }
         double dip = Math.max(2.0, p.partDipShare * mx);
         // профиль тел: сколько тел 30m-свечей (open–close) дней композита перекрывает каждую строку
         int[] occ = new int[n + 1];
@@ -1084,6 +1198,22 @@ public final class ZoneEngine {
         int tot = st.nl + st.ns;
         if (p.compositeMode && z.k == K_CORE) {
             st.kind = Kind.CORE; st.rej = tot; st.purity = tot >= 1 ? Math.max(st.nl, st.ns) / (double) tot : null;
+            st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
+            return st;
+        }
+        if (p.compositeMode && z.k == K_SESS) {
+            boolean rc = o >= z.recolorAt;
+            st.kind = rc ? z.recolorKind : z.partKind; st.comp = rc ? null : z.partOf;
+            if (!rc && z.partOf == null && p.sessRoleMode == 2) {     // мало информации — серая, пока не наберёт отторжений
+                int idx = z.ai + p.sessConfirm;
+                long f = idx < fullOrd.length ? fullOrd[idx] : Long.MAX_VALUE;
+                if (o < f) st.kind = Kind.GREY;
+                else {
+                    int nl = lowerBound(z.L, f), ns = lowerBound(z.S, f);
+                    st.kind = nl > ns ? Kind.HVN_S : ns > nl ? Kind.HVN_R : Kind.GREY;
+                }
+            }
+            st.rej = tot; st.purity = tot >= 1 ? Math.max(st.nl, st.ns) / (double) tot : null;
             st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
             return st;
         }

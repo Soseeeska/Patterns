@@ -48,6 +48,7 @@ public class Bench {
         int n = 0, m3 = 0, m5 = 0, colorOk = 0; double sumIou = 0, sumEdge = 0, dens = 0, densMan = 0; int densN = 0;
         List<Double> ious = new ArrayList<>(), widths = new ArrayList<>();
         Set<Object> allShown = new HashSet<>();
+        java.util.TreeMap<String, Integer> conf = new java.util.TreeMap<>();
         for (List<Shown> l : res.visible) for (Shown s : l) { if (allShown.add(s.z)) widths.add(s.hi - s.lo); }
         for (String[] mz : man) {
             long o = LocalDate.parse(mz[1]).toEpochDay();
@@ -63,6 +64,7 @@ public class Bench {
                     if (iou > best) { best = iou; bs = s; }
                 }
             ious.add(best); sumIou += best;
+            if (best >= 0.3) conf.merge(mz[0] + " → " + bs.st.kind.name(), 1, Integer::sum);
             if (best >= 0.3) { m3++; sumEdge += (Math.abs(bs.lo - lo) + Math.abs(bs.hi - hi)) / 2; if (agree(mz[0], bs.st.kind)) colorOk++; }
             if (best >= 0.5) m5++;
             int i1 = Math.min(ord.length - 1, i0 + 1);
@@ -78,6 +80,7 @@ public class Bench {
         System.out.printf(Locale.ROOT, "ручных %d | найдено IoU≥0.3: %d (%.0f%%), ≥0.5: %d (%.0f%%) | IoU медиана %.2f | край ошибка %.2f п. | цвет совпал %.0f%% | ширина зон алгоритма медиана %.2f | плотность ±15 п.: алгоритм %.1f / ручных %.1f%n",
                 n, m3, 100.0 * m3 / n, m5, 100.0 * m5 / n, ious.get(ious.size() / 2), m3 > 0 ? sumEdge / m3 : 0, m3 > 0 ? 100.0 * colorOk / m3 : 0,
                 widths.get(widths.size() / 2), dens / densN, densMan / densN);
+        if (Boolean.getBoolean("conf")) System.out.println(conf);
     }
 
     static boolean agree(String c, Kind k) {
