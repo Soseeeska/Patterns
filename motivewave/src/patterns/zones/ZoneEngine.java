@@ -503,11 +503,13 @@ public final class ZoneEngine {
             core.k = K_CORE; core.av = endDay; core.src = "core";
             int[] band = p.coreByVa ? new int[]{va[1], va[2]} : hvnBand(cp, va[0], p.hvnShare);
             int poc = va[0];
+            int cap = (int) Math.round(p.zoneMaxWidthPts / p.tick);
             if (p.coreFromSessions && !p.coreByVa) {
-                int[] agree = sessionAgreement(cand, cp);
-                if (agree != null) { band = new int[]{agree[0], agree[1]}; poc = agree[2]; }
-            }
-            band = narrow(cp, band, poc, (int) Math.round(p.zoneMaxWidthPts / p.tick));
+                // ширина — от HVN-полосы композита (≤ лимита), место — где окно накрывают дневные HVN-полосы
+                int w = band[1] - band[0];
+                if (cap > 0) w = Math.min(w, cap);
+                band = sessionWindow(cand, cp, w);
+            } else band = narrow(cp, band, poc, cap);
             core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
             c.core = core;
             comps.add(c);
@@ -524,28 +526,27 @@ public final class ZoneEngine {
         }
     }
 
-    /** Ядро по сессионным профилям: строки, накрытые HVN-полосами не меньше половины дней композита;
-     *  из таких участков — с наибольшим TPO композита. {lo, hi, строка максимума TPO} в тиках или null. */
-    static int[] sessionAgreement(List<Day> days, Profile cp) {
-        int n = cp.counts.length, need = (days.size() + 1) / 2;
+    /** Ядро по сессионным профилям: окно шириной w тиков внутри диапазона композита, которое
+     *  дневные HVN-полосы его дней накрывают больше всего (сумма по строкам: сколько дней накрывает
+     *  строку); при равенстве — с наибольшим TPO композита, затем ближе к POC композита. */
+    static int[] sessionWindow(List<Day> days, Profile cp, int w) {
+        int n = cp.counts.length;
+        w = Math.min(w, n - 1);
         int[] cov = new int[n + 1];
-        for (Day d : days) { cov[Math.max(0, d.bandLo - cp.low)]++; cov[Math.min(n, d.bandHi - cp.low + 1)]--; }
-        int[] best = null; long bestSum = -1;
-        int acc = 0, start = -1; long sum = 0;
-        for (int i = 0; i <= n; i++) {
-            acc += i < n ? cov[i] : 0;
-            boolean in = i < n && acc >= need;
-            if (in) { if (start < 0) { start = i; sum = 0; } sum += cp.counts[i]; }
-            else if (start >= 0) {
-                if (sum > bestSum) {
-                    int mx = start;
-                    for (int t = start; t < i; t++) if (cp.counts[t] > cp.counts[mx]) mx = t;
-                    best = new int[]{cp.low + start, cp.low + i - 1, cp.low + mx}; bestSum = sum;
-                }
-                start = -1;
-            }
+        for (Day d : days) {
+            int a = Math.max(0, d.bandLo - cp.low), b = Math.min(n - 1, d.bandHi - cp.low);
+            if (a <= b) { cov[a]++; cov[b + 1]--; }
         }
-        return best;
+        for (int i = 1; i <= n; i++) cov[i] += cov[i - 1];
+        int poc = pocIndex(cp);
+        long bestC = -1, bestT = -1; int bestLo = 0; double bestD = Double.MAX_VALUE;
+        for (int lo = 0; lo + w < n; lo++) {
+            long c = 0, t = 0;
+            for (int i = lo; i <= lo + w; i++) { c += cov[i]; t += cp.counts[i]; }
+            double d = Math.abs(lo + w / 2.0 - poc);
+            if (c > bestC || (c == bestC && (t > bestT || (t == bestT && d < bestD)))) { bestC = c; bestT = t; bestLo = lo; bestD = d; }
+        }
+        return new int[]{cp.low + bestLo, cp.low + bestLo + w};
     }
 
     /** Полоса [lo, hi] шире maxW тиков → окно шириной maxW внутри неё, содержащее POC, с максимумом TPO
