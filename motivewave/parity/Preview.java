@@ -190,7 +190,7 @@ public class Preview {
             g.drawString(s.date.toString(), (int) x + 4, H - 12);
         }
         g.setColor(new Color(0xe7eaed)); g.setFont(new Font("SansSerif", Font.BOLD, 14));
-        g.drawString("TPO Zones 1.6 — ES 30m ETH+RTH, " + (p.compositeMode ? "класс по композиту" : "класс по отторжениям") + ", подгонка " + p.alignSessions + " сесс."
+        g.drawString("TPO Zones 1.7 — ES 30m ETH+RTH, " + (p.compositeMode ? "класс по композиту" : "класс по отторжениям") + ", подгонка " + p.alignSessions + " сесс."
                 + (top > 0 ? " · пунктир — топ-" + top + " зон по отторжениям за последние " + k + " сессий" : "")
                 + (System.getProperty("manual") != null ? " · заливка — алгоритм, пунктир — ручные зоны" : ""), 16, 24);
         ImageIO.write(img, "png", new File(a[1]));
