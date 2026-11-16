@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -89,6 +89,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new BooleanDescriptor(MODE, "По положению в композите: выше ядра — сопротивление, ниже — поддержка (иначе — по отторжениям, как на странице)", true));
         g.addRow(new BooleanDescriptor(CORE_VA, "Ядро композита — VA (иначе HVN-полоса вокруг POC)", false));
         g.addRow(new BooleanDescriptor(CORE_SESS, "Ядро по сессионным профилям: где совпадают HVN-полосы ≥ половины дней", true));
+        g.addRow(new DoubleDescriptor(CORE_DAYS, "Композит — баланс, если ядро задевают HVN-полосы ≥ доли его дней (0 — любой)", 0.5, 0, 1, 0.05));
         g.addRow(new DoubleDescriptor(JOIN_GAP, "Соседние зоны одного вида ближе, п. — подтверждение старой (−1 — выкл.)", 0.25, -1, 10, 0.25));
         g = tab.addGroup("Типы зон");
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.HVN_S), Kind.HVN_S.title, true));
@@ -238,6 +239,7 @@ public class TpoZonesStudy extends Study {
         p.zoneMaxWidthPts = st.getDouble(ZONE_W, 10.0);
         p.coreByVa = st.getBoolean(CORE_VA, false);
         p.coreFromSessions = st.getBoolean(CORE_SESS, true);
+        p.coreMinDaysShare = st.getDouble(CORE_DAYS, 0.5);
         p.joinGapPts = st.getDouble(JOIN_GAP, 0.25);
         p.minWickTicks = st.getInteger(WICK, 2);
         p.sessions = st.getInteger(SESSIONS, 250);

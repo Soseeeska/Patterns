@@ -79,7 +79,9 @@ public final class ZoneEngine {
         public boolean compositeMode = false;     // класс зоны по положению в композите, а не по отторжениям
         public boolean coreByVa = false;          // ядро композита: VA (иначе HVN-полоса вокруг POC)
         public double coreAbsorb = 0.30;
-        public boolean coreFromSessions = true;   // ядро — где совпадают HVN-полосы ≥ половины дней композита
+        public boolean coreFromSessions = true;
+        public double coreMinDaysShare = 0.5;     // ядро признаётся, если его задевают HVN-полосы ≥ этой доли дней
+                                                  // композита; иначе это не баланс — композит не используется (0 — выкл.)   // ядро — где совпадают HVN-полосы ≥ половины дней композита
         public double joinGapPts = 0.25;          // режим «по композиту»: зона того же вида ближе этого к более
                                                   // старой — её подтверждение (ядро не создаётся / не рисуется); < 0 — выкл.
         public double zoneMaxWidthPts = 0;        // > 0: HVN-полоса дня и ядро композита шире — сужаются до окна
@@ -234,6 +236,7 @@ public final class ZoneEngine {
         public final List<List<Shown>> visible = new ArrayList<>();  // по сессиям
         public int rthDays, fullDays, composites;
         public final List<Comp> comps = new ArrayList<>();
+        public final List<Comp> notBalance = new ArrayList<>();      // композиты, где дни не сошлись (без ядра)
         public String note = "";
     }
 
@@ -297,7 +300,7 @@ public final class ZoneEngine {
                 if (cand.isEmpty()) { cand.add(d); cp = d.profile; continue; }
                 int c = ticks(d.close, tick);
                 if (c >= cp.low && c <= cp.high()) { cand.add(d); cp = merge(cp, d.profile); continue; }
-                closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps);
+                closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
                 cand = new ArrayList<>(); cand.add(d); cp = d.profile;
             }
             // незакрытый композит в конце данных не используется
@@ -491,7 +494,7 @@ public final class ZoneEngine {
 
     // ------------------------------------------------------------------ композиты
     private static void closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
-                                       List<Zone> ob, List<Zone> greyComp, List<Comp> comps) {
+                                       List<Zone> ob, List<Zone> greyComp, List<Comp> comps, List<Comp> notBalance) {
         int n = cand.size();
         if (n < p.greyCompositeMinDays) return;
         int[] va = valueArea(cp, p.valueAreaPct);
@@ -509,10 +512,18 @@ public final class ZoneEngine {
                 int w = band[1] - band[0];
                 if (cap > 0) w = Math.min(w, cap);
                 band = sessionWindow(cand, cp, w);
+                int hit = 0;
+                for (Day d : cand) if (d.bandLo <= band[1] && d.bandHi >= band[0]) hit++;
+                if (p.coreMinDaysShare > 0 && hit < Math.ceil(p.coreMinDaysShare * n - 1e-9)) {
+                    band = null;                // не баланс: дни композита не сходятся в одной зоне
+                }
             } else band = narrow(cp, band, poc, cap);
-            core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
-            c.core = core;
-            comps.add(c);
+            if (band == null) notBalance.add(c);
+            else {
+                core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
+                c.core = core;
+                comps.add(c);
+            }
         }
         Zone z = new Zone();
         z.av = endDay; z.src = "comp";
