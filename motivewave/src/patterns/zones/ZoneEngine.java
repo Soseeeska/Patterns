@@ -83,8 +83,12 @@ public final class ZoneEngine {
         public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
         public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
         public boolean compositeShortDays = true;
-        public double compVaOverlap = 0;          // день входит в композит и при close вне диапазона, если ≥ этой доли его VA
-                                                  // внутри VA композита (0 — только close внутри диапазона)
+        public double compFalseBreakMaxPts = 100; // ... если диапазон закрытого композита не шире, п.
+        public int compFalseBreakMax = 2;         // ... и не больше стольких продолжений подряд
+        public boolean compFalseBreak = true;     // ложный выход: возврат close в диапазон закрытого композита, пока новый
+                                                  // не набрал compositeMinDays дней, — дни доклеиваются к нему
+        public double compVaOverlap = 0.5;        // день входит в композит и при close вне диапазона, если VA дня и VA композита
+                                                  // пересекаются на ≥ эту долю меньшей из двух (0 — только close внутри диапазона)
         public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
@@ -259,6 +263,7 @@ public final class ZoneEngine {
     public static final class Comp {
         public double lo, hi; public LocalDate start, end, av; public int days; public Zone core;
         public Comp parent;                                  // уточнение внутри более раннего баланса
+        public Comp extendsOf;                               // продолжение этого композита после ложного выхода
         public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
         public double coreLo, coreHi;                        // ядро тела (строки не ниже partCoreShare максимума)
         List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
@@ -357,18 +362,35 @@ public final class ZoneEngine {
         List<Zone> ob = new ArrayList<>(), greyComp = new ArrayList<>();
         {
             List<Day> cand = new ArrayList<>(); Profile cp = null;
+            List<Day> lastCand = null; Profile lastCp = null; Comp lastComp = null, extOf = null;
+            int extCount = 0, lastExt = 0;                  // сколько раз текущий / закрытый композит продолжался
             // режим «по композиту»: короткие дни (ранние закрытия) тоже входят в композит, как в TPO платформы
             for (Day d : p.compositeMode && p.compositeShortDays ? all : full) {
                 if (cand.isEmpty()) { cand.add(d); cp = d.profile; continue; }
                 int c = ticks(d.close, tick);
+                if (cand.size() >= p.compositeMinDays) lastCand = null;
+                if (p.compositeMode && p.compFalseBreak && lastCand != null && c >= lastCp.low && c <= lastCp.high()
+                        && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts && extCount < p.compFalseBreakMax) {
+                    // ложный выход: композит закрылся, новый ещё не набрал дней, а цена закрылась обратно в его
+                    // диапазоне — дни после выхода доклеиваются к нему, композит продолжается
+                    extCount = lastExt;
+                    List<Day> m = new ArrayList<>(lastCand); m.addAll(cand); m.add(d);
+                    Profile mp = lastCp;
+                    for (Day x : cand) mp = merge(mp, x.profile);
+                    cand = m; cp = merge(mp, d.profile); extOf = lastComp; lastCand = null; extCount++;
+                    continue;
+                }
                 boolean join = c >= cp.low && c <= cp.high();
                 if (!join && p.compositeMode && p.compVaOverlap > 0) {       // или VA дня внутри VA композита ≥ доли
                     int[] cva = valueArea(cp, p.valueAreaPct);
                     int inter = Math.min(d.vah, cva[2]) - Math.max(d.val, cva[1]) + 1;
-                    join = inter > 0 && inter / (double) (d.vah - d.val + 1) >= p.compVaOverlap;
+                    int narrow = Math.min(d.vah - d.val, cva[2] - cva[1]) + 1;        // доля от меньшей из двух VA
+                    join = inter > 0 && inter / (double) narrow >= p.compVaOverlap;
                 }
                 if (join) { cand.add(d); cp = merge(cp, d.profile); continue; }
-                closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
+                Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
+                if (made != null) made.extendsOf = extOf;
+                lastCand = cand; lastCp = cp; lastComp = made; extOf = null; lastExt = extCount; extCount = 0;
                 cand = new ArrayList<>(); cand.add(d); cp = d.profile;
             }
             // незакрытый композит в конце данных не используется
@@ -404,6 +426,9 @@ public final class ZoneEngine {
                         Comp q = parents.get(i);
                         double inter = Math.min(c.hi, q.hi) - Math.max(c.lo, q.lo);
                         if (inter >= p.subOverlap * w && q.hi - q.lo <= p.subMaxRatio * w) par = q;
+                    }
+                    if (c.extendsOf != null && parents.contains(c.extendsOf)) {   // продолжение после ложного выхода
+                        parents.set(parents.indexOf(c.extendsOf), c); continue;
                     }
                     if (par == null) { parents.add(c); continue; }
                     c.parent = par;
@@ -704,13 +729,15 @@ public final class ZoneEngine {
     private static int rank(Kind k) { return k == Kind.CORE ? 0 : k == Kind.GREY ? 2 : 1; }
 
     // ------------------------------------------------------------------ композиты
-    private static void closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
+    private static Comp closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
                                        List<Zone> ob, List<Zone> greyComp, List<Comp> comps, List<Comp> notBalance) {
         int n = cand.size();
-        if (n < p.greyCompositeMinDays) return;
+        Comp made = null;
+        if (n < p.greyCompositeMinDays) return null;
         int[] va = valueArea(cp, p.valueAreaPct);
         if (n >= p.compositeMinDays) {
             Comp c = new Comp();
+            made = c;
             c.lo = cp.low * p.tick; c.hi = cp.high() * p.tick; c.av = endDay; c.days = n;
             c.start = cand.get(0).date; c.end = cand.get(n - 1).date;
             Zone core = new Zone();
@@ -767,6 +794,7 @@ public final class ZoneEngine {
             z.k = K_GREY; z.lo = band[0] * p.tick; z.hi = band[1] * p.tick;
             greyComp.add(z);
         }
+        return made;
     }
 
     /** Роль цены mid в композите: ядро — проторговка, выше — сопротивление, ниже — поддержка. */
