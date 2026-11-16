@@ -83,12 +83,14 @@ public final class ZoneEngine {
         public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
         public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
         public boolean compositeShortDays = true;
-        public boolean sessionZones = false;      // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
+        public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
         public double sessNodeDip = 0.15;         // провал между узлами — от доли меньшей вершины (и ≥ 1 TPO)
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
         public double sessMaxPts = 8;             // зона не шире, п.
+        public double sessMinGapPts = 1.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
+        public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
         public double sessBodyShare = 0.5;
         public int sessConfirm = 5;               // режим 2: зона рождается серой, через столько полных дней — цвет по отторжениям за них        // подгонка узла по телам: скопление не ниже этой доли максимума тел
@@ -477,7 +479,10 @@ public final class ZoneEngine {
                 if (av == null) continue;
                 for (int[] nd : dayNodes(d, p, onePt, maxW)) {
                     Zone best = null;
-                    for (Zone e : ses) if (overlap(ticks(e.lo, tick), ticks(e.hi, tick), nd[0], nd[1]) >= p.mergeOverlapMin) { best = e; break; }
+                    for (Zone e : ses) {
+                        double gap = Math.max(e.lo, nd[0] * tick) - Math.min(e.hi, nd[1] * tick);   // < 0 — пересекаются
+                        if (gap < p.sessMinGapPts - 1e-9) { best = e; break; }
+                    }
                     if (best != null) { cf.get(best).add(av.toEpochDay()); continue; }
                     Zone z = new Zone();
                     z.k = K_SESS; z.src = "sess"; z.av = av; z.lo = nd[0] * tick; z.hi = nd[1] * tick;
@@ -679,6 +684,7 @@ public final class ZoneEngine {
                 pieces = next;
             }
             for (double[] q : pieces) if (q[1] - q[0] > bestHi - bestLo) { bestLo = q[0]; bestHi = q[1]; }
+            if (p.layoutDropYounger && (bestLo != v.z.blo || bestHi != v.z.bhi)) continue;   // налезает — не рисуется
             if (bestHi - bestLo < p.minPiecePts - 1e-9) continue;
             v.lo = bestLo; v.hi = bestHi;
             used.add(new double[]{bestLo, bestHi});

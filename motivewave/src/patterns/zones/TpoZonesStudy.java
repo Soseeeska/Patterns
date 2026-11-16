@@ -95,7 +95,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new DoubleDescriptor(BODY, "Разметка: тело — строки не ниже доли максимума TPO (хвосты отпадают)", 0.15, 0.02, 0.6, 0.01));
         g.addRow(new DoubleDescriptor(PMAXB, "Разметка: тело не шире, п. (шире — остаётся плотная середина)", 100, 20, 400, 5));
         g.addRow(new DoubleDescriptor(FIT_B, "Подгонка по телам: меньше доли максимума тел свечей — пустота (0 — без подгонки)", 0.20, 0, 0.8, 0.05));
-        g.addRow(new BooleanDescriptor(SESS, "Зоны из сессий (проба): узлы RTH TPO дня, подогнанные по телам; композит задаёт роль и один раз перекрашивает", false));
+        g.addRow(new BooleanDescriptor(SESS, "Зоны из сессий: узлы RTH TPO дня, подогнанные по телам; композит задаёт роль и один раз перекрашивает", true));
         g.addRow(new IntegerDescriptor(S_PEAK, "Сессионные зоны: вершина узла от, TPO", 3, 1, 13, 1));
         g.addRow(new DoubleDescriptor(S_BODY, "Сессионные зоны: подгонка — тела не ниже доли максимума тел", 0.5, 0.1, 0.95, 0.05));
         g.addRow(new BooleanDescriptor(CLUST, "Зоны — скопления тел свечей (границы на провалах), без нарезки равными кусками", true));
@@ -277,7 +277,7 @@ public class TpoZonesStudy extends Study {
         p.fitClusterShare = st.getDouble(FIT_C, 0.70);
         p.fitEthBodies = st.getBoolean(FIT_ETH, true);
         p.bodyClusters = st.getBoolean(CLUST, true);
-        p.sessionZones = st.getBoolean(SESS, false);
+        p.sessionZones = st.getBoolean(SESS, true);
         p.sessMinPeak = st.getInteger(S_PEAK, 3);
         p.sessBodyShare = st.getDouble(S_BODY, 0.5);
         p.clusterDip = st.getDouble(CL_DIP, 0.10);
