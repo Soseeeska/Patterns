@@ -101,8 +101,6 @@ public final class ZoneEngine {
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
         public double sessMaxPts = 8;             // зона не шире, п.
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
-        public boolean sessOneCore = true;        // у композита одна синяя зона: сессионная зона на POC (или ближайшая к нему, задевающая
-                                                  // ядро композита); выше неё — сопротивление, ниже — поддержка (иначе ядро — ядро тела)
         public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
         public double sessBodyShare = 0.5;
@@ -273,8 +271,6 @@ public final class ZoneEngine {
         public Comp extendsOf;                               // продолжение этого композита после ложного выхода
         public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
         public double coreLo, coreHi;                        // ядро тела (строки не ниже partCoreShare максимума)
-        public double poc;                                   // POC композита
-        public double roleLo = Double.NaN, roleHi = Double.NaN;   // сессионные зоны: ядро для ролей (иначе — ядро тела)
         List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
     }
 
@@ -512,7 +508,6 @@ public final class ZoneEngine {
             zones.clear();
             List<Zone> ses = new ArrayList<>();
             Map<Zone, List<Long>> cf = new HashMap<>();
-            Map<Zone, Day> born = new HashMap<>();
             int onePt = (int) Math.round(1.0 / tick), maxW = (int) Math.round(p.sessMaxPts / tick);
             double mwk = p.minWickTicks * tick;
             for (Day d : full) {
@@ -527,36 +522,17 @@ public final class ZoneEngine {
                     if (best != null) { cf.get(best).add(av.toEpochDay()); continue; }
                     Zone z = new Zone();
                     z.k = K_SESS; z.src = "sess"; z.av = av; z.lo = nd[0] * tick; z.hi = nd[1] * tick;
-                    ses.add(z); cf.put(z, new ArrayList<>()); born.put(z, d);
+                    double mid = (z.lo + z.hi) / 2;
+                    Comp gov = null;
+                    for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
+                    z.partKind = gov != null ? roleIn(gov, mid) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
+                    if (gov != null) z.partOf = gov;
+                    for (Comp c : bal)
+                        if (c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) {
+                            z.recolorAt = c.av.toEpochDay(); z.recolorKind = roleIn(c, mid); z.info = c.core.info; break;
+                        }
+                    ses.add(z); cf.put(z, new ArrayList<>());
                 }
-            }
-            if (p.sessOneCore) {
-                // ядро композита для ролей — одна зона: на POC, иначе ближайшая к POC из задевающих ядро (полосу у POC)
-                for (Comp c : bal) {
-                    Zone cz = null; double cd = Double.MAX_VALUE;
-                    for (Zone z : ses) {
-                        if (z.av.isAfter(c.av)) continue;
-                        double mid = (z.lo + z.hi) / 2;
-                        if (mid < c.bodyLo || mid > c.bodyHi) continue;
-                        boolean touches = z.hi >= c.core.lo && z.lo <= c.core.hi;
-                        double dist = Math.max(0, Math.max(z.lo - c.poc, c.poc - z.hi));
-                        if ((dist == 0 || touches) && dist < cd) { cz = z; cd = dist; }
-                    }
-                    if (cz != null) { c.roleLo = cz.lo; c.roleHi = cz.hi; }
-                    else { c.roleLo = c.poc; c.roleHi = c.poc; }      // зоны у POC нет — синей нет, граница — POC
-                }
-            }
-            for (Zone z : ses) {
-                LocalDate av = z.av; Day d = born.get(z);
-                double mid = (z.lo + z.hi) / 2;
-                Comp gov = null;
-                for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
-                z.partKind = gov != null ? roleIn(gov, mid) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
-                if (gov != null) z.partOf = gov;
-                for (Comp c : bal)
-                    if (c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) {
-                        z.recolorAt = c.av.toEpochDay(); z.recolorKind = roleIn(c, mid); z.info = c.core.info; break;
-                    }
             }
             for (Zone z : ses) { z.coreConf = cf.get(z).stream().mapToLong(Long::longValue).toArray(); zones.add(z); }
         }
@@ -785,7 +761,7 @@ public final class ZoneEngine {
         if (n >= p.compositeMinDays) {
             Comp c = new Comp();
             made = c;
-            c.lo = cp.low * p.tick; c.hi = cp.high() * p.tick; c.av = endDay; c.days = n; c.poc = va[0] * p.tick;
+            c.lo = cp.low * p.tick; c.hi = cp.high() * p.tick; c.av = endDay; c.days = n;
             c.start = cand.get(0).date; c.end = cand.get(n - 1).date;
             Zone core = new Zone();
             core.k = K_CORE; core.av = endDay; core.src = "core";
@@ -846,8 +822,7 @@ public final class ZoneEngine {
 
     /** Роль цены mid в композите: ядро — проторговка, выше — сопротивление, ниже — поддержка. */
     static Kind roleIn(Comp c, double mid) {
-        double lo = Double.isNaN(c.roleLo) ? c.coreLo : c.roleLo, hi = Double.isNaN(c.roleHi) ? c.coreHi : c.roleHi;
-        return mid > hi ? Kind.HVN_R : mid < lo ? Kind.HVN_S : Kind.CORE;
+        return mid > c.coreHi ? Kind.HVN_R : mid < c.coreLo ? Kind.HVN_S : Kind.CORE;
     }
 
     /** Роль зоны вне композита по сессии её рождения: отторжения (первичны), иначе — где закрылась сессия, иначе серая. */
