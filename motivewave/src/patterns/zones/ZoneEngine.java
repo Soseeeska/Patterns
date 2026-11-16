@@ -83,6 +83,8 @@ public final class ZoneEngine {
         public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
         public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
         public boolean compositeShortDays = true;
+        public double compVaOverlap = 0;          // день входит в композит и при close вне диапазона, если ≥ этой доли его VA
+                                                  // внутри VA композита (0 — только close внутри диапазона)
         public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
@@ -359,7 +361,13 @@ public final class ZoneEngine {
             for (Day d : p.compositeMode && p.compositeShortDays ? all : full) {
                 if (cand.isEmpty()) { cand.add(d); cp = d.profile; continue; }
                 int c = ticks(d.close, tick);
-                if (c >= cp.low && c <= cp.high()) { cand.add(d); cp = merge(cp, d.profile); continue; }
+                boolean join = c >= cp.low && c <= cp.high();
+                if (!join && p.compositeMode && p.compVaOverlap > 0) {       // или VA дня внутри VA композита ≥ доли
+                    int[] cva = valueArea(cp, p.valueAreaPct);
+                    int inter = Math.min(d.vah, cva[2]) - Math.max(d.val, cva[1]) + 1;
+                    join = inter > 0 && inter / (double) (d.vah - d.val + 1) >= p.compVaOverlap;
+                }
+                if (join) { cand.add(d); cp = merge(cp, d.profile); continue; }
                 closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
                 cand = new ArrayList<>(); cand.add(d); cp = d.profile;
             }
