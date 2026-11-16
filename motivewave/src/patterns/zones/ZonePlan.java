@@ -83,7 +83,7 @@ public final class ZonePlan {
         if (v.st.comp != null) b.append("\nкомпозит ").append(v.st.comp.start).append(" – ").append(v.st.comp.end)
                 .append(" (").append(v.st.comp.days).append(" дн., ").append(fmt(v.st.comp.lo)).append(" – ").append(fmt(v.st.comp.hi))
                 .append("), ядро ").append(fmt(v.st.comp.core.blo)).append(" – ").append(fmt(v.st.comp.core.bhi));
-        if (z.k == ZoneEngine.K_GREY) b.append("\nисточник: ").append("comp".equals(z.src) ? "короткий композит (2 дня)" : "слабый HVN (5–7 TPO)");
+        if (z.k == ZoneEngine.K_GREY) b.append("\nисточник: ").append("comp".equals(z.src) ? "короткий композит (2 дня)" : "sub".equals(z.src) ? "ядро композита-уточнения внутри баланса" : "слабый HVN (5–7 TPO)");
         if (z.young) b.append("\nмолодая первородная: серая ").append(z.greyUntil == null ? "до конца данных" : "до " + z.greyUntil);
         if (v.st.promoted) b.append("\nбыла серой, переведена по отторжениям за подгонку");
         if (p.alignSessions > 0 && (z.blo != z.lo || z.bhi != z.hi))
