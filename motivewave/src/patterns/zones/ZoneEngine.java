@@ -537,9 +537,9 @@ public final class ZoneEngine {
         }
     }
 
-    /** Ядро по сессионным профилям: окно шириной w тиков внутри диапазона композита, которое
-     *  дневные HVN-полосы его дней накрывают больше всего (сумма по строкам: сколько дней накрывает
-     *  строку); при равенстве — с наибольшим TPO композита, затем ближе к POC композита. */
+    /** Ядро по сессионным профилям: окно шириной w тиков внутри диапазона композита, которое задевает
+     *  больше всего дневных HVN-полос его дней; при равенстве — сильнее накрытое (сумма по строкам:
+     *  сколько дней накрывает строку), затем с наибольшим TPO композита, затем ближе к POC композита. */
     static int[] sessionWindow(List<Day> days, Profile cp, int w) {
         int n = cp.counts.length;
         w = Math.min(w, n - 1);
@@ -550,12 +550,15 @@ public final class ZoneEngine {
         }
         for (int i = 1; i <= n; i++) cov[i] += cov[i - 1];
         int poc = pocIndex(cp);
-        long bestC = -1, bestT = -1; int bestLo = 0; double bestD = Double.MAX_VALUE;
+        long bestC = -1, bestT = -1; int bestLo = 0, bestH = -1; double bestD = Double.MAX_VALUE;
         for (int lo = 0; lo + w < n; lo++) {
             long c = 0, t = 0;
             for (int i = lo; i <= lo + w; i++) { c += cov[i]; t += cp.counts[i]; }
+            int h = 0;
+            for (Day dd : days) if (dd.bandLo <= cp.low + lo + w && dd.bandHi >= cp.low + lo) h++;
             double d = Math.abs(lo + w / 2.0 - poc);
-            if (c > bestC || (c == bestC && (t > bestT || (t == bestT && d < bestD)))) { bestC = c; bestT = t; bestLo = lo; bestD = d; }
+            boolean better = h != bestH ? h > bestH : c != bestC ? c > bestC : t != bestT ? t > bestT : d < bestD;
+            if (better) { bestH = h; bestC = c; bestT = t; bestLo = lo; bestD = d; }
         }
         return new int[]{cp.low + bestLo, cp.low + bestLo + w};
     }
@@ -713,6 +716,11 @@ public final class ZoneEngine {
             int gi = lowerBound(z.govAv, z.avOrd() + 1) - 1;
             if (gi < 0 && z.govAv.length > 0) gi = 0;
             if (gi >= 0 && z.govAv[gi] > o) gi = -1;          // этот композит ещё не сложился — пока серая
+            // зона, родившаяся во время композита, переходит к нему, когда он сложится
+            for (int k = z.gov.length - 1; k >= 0; k--) {
+                Comp c = z.gov[k];
+                if (!c.start.isAfter(z.av) && !z.av.isAfter(c.av)) { if (c.av.toEpochDay() <= o) gi = k; break; }
+            }
             Kind kind;
             if (gi < 0) kind = Kind.GREY;
             else {

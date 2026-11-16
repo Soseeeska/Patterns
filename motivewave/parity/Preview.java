@@ -25,7 +25,7 @@ import patterns.zones.ZoneEngine.Result;
 import patterns.zones.ZonePlan;
 
 /** Превью того, что рисует TpoZonesStudy (тот же ZoneEngine + ZonePlan, цвета и прозрачность по умолчанию):
- *  java Preview bars.csv out.png [сессий на картинке] [N подгонки] [выделить топ зон по отторжениям] [comp|rej]
+ *  java Preview bars.csv out.png [сессий на картинке] [N подгонки] [выделить топ зон по отторжениям] [comp|rej] [последний день YYYY-MM-DD]
  *  Топ — тесты и отторжения на всех барах (ETH + RTH) показанных сессий, обводка пунктиром.
  *  Ось времени — по барам (без пустых выходных), как у MotiveWave. */
 public class Preview {
@@ -37,6 +37,10 @@ public class Preview {
                 bars.add(new Bar(Long.parseLong(f[0]), Double.parseDouble(f[1]), Double.parseDouble(f[2]),
                         Double.parseDouble(f[3]), Double.parseDouble(f[4])));
             }
+        }
+        if (a.length > 6) {                            // последний день картинки: как выглядело вживую на эту дату
+            long end = java.time.LocalDate.parse(a[6]).plusDays(1).atTime(16, 0).atZone(java.time.ZoneId.of("America/Chicago")).toInstant().toEpochMilli();
+            bars.removeIf(b -> b.t >= end);
         }
         int k = a.length > 2 ? Integer.parseInt(a[2]) : 5;
         Params p = new Params();
