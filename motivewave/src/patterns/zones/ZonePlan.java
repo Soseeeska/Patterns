@@ -80,6 +80,7 @@ public final class ZonePlan {
         if (v.st.purity != null) b.append(", чистота ").append(Math.round(v.st.purity * 100)).append('%');
         b.append(")\nподтверждений ").append(v.st.conf);
         if (v.st.kind == Kind.CORE) b.append(" (другими композитами)");
+        if (v.st.kind == Kind.CORE && !z.info.isEmpty()) b.append("\n").append(z.info.replace("; ", "\n"));
         if (v.st.comp != null) b.append("\nкомпозит ").append(v.st.comp.start).append(" – ").append(v.st.comp.end)
                 .append(" (").append(v.st.comp.days).append(" дн., ").append(fmt(v.st.comp.lo)).append(" – ").append(fmt(v.st.comp.hi))
                 .append("), ядро ").append(fmt(v.st.comp.core.blo)).append(" – ").append(fmt(v.st.comp.core.bhi));

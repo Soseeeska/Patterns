@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -201,6 +202,7 @@ public final class ZoneEngine {
         public int k; public double lo, hi; public LocalDate av; public String src;
         public boolean young; public LocalDate greyUntil;   // young && greyUntil == null — серая всё время
         public boolean fixedGrey;                            // ядро композита-уточнения: всегда серая
+        public String info = "";                             // ядро: как посчитано (для подсказки)
         int formationDays; List<LocalDate> conf = List.of();
         // события (дни от 1970-01-01)
         public long[] L = new long[0], S = new long[0];
@@ -531,6 +533,7 @@ public final class ZoneEngine {
             c.start = cand.get(0).date; c.end = cand.get(n - 1).date;
             Zone core = new Zone();
             core.k = K_CORE; core.av = endDay; core.src = "core";
+            core.info = coreInfo(cand, cp, va[0], p.tick);
             int[] band = p.coreByVa ? new int[]{va[1], va[2]} : hvnBand(cp, va[0], p.hvnShare);
             int poc = va[0];
             int cap = (int) Math.round(p.zoneMaxWidthPts / p.tick);
@@ -561,6 +564,21 @@ public final class ZoneEngine {
             z.k = K_GREY; z.lo = band[0] * p.tick; z.hi = band[1] * p.tick;
             greyComp.add(z);
         }
+    }
+
+    /** Подсказка ядра: дни композита, диапазон, POC и две самые высокие вершины профиля (вторая — не ближе 5 п. к первой). */
+    static String coreInfo(List<Day> days, Profile cp, int poc, double tick) {
+        StringBuilder b = new StringBuilder("композит ");
+        for (int i = 0; i < days.size(); i++) b.append(i == 0 ? "" : ", ").append(days.get(i).date.toString().substring(5));
+        b.append(String.format(Locale.ROOT, "; диапазон %.2f – %.2f; POC %.2f (%d TPO)",
+                cp.low * tick, cp.high() * tick, poc * tick, cp.counts[poc - cp.low]));
+        int sep = (int) Math.round(5.0 / tick), i1 = -1, i2 = -1;
+        for (int i = 0; i < cp.counts.length; i++) if (i1 < 0 || cp.counts[i] > cp.counts[i1]) i1 = i;
+        for (int i = 0; i < cp.counts.length; i++)
+            if (Math.abs(i - i1) > sep && (i2 < 0 || cp.counts[i] > cp.counts[i2])) i2 = i;
+        b.append(String.format(Locale.ROOT, "; вершины %.2f (%d)", (cp.low + i1) * tick, cp.counts[i1]));
+        if (i2 >= 0) b.append(String.format(Locale.ROOT, ", %.2f (%d)", (cp.low + i2) * tick, cp.counts[i2]));
+        return b.toString();
     }
 
     /** Полоса вокруг POC до обрыва: строка входит, пока её TPO ≥ share × максимум и не ниже
