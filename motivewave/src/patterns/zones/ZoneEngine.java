@@ -88,11 +88,16 @@ public final class ZoneEngine {
         public double partCoreShare = 0.65;       // ядро — часть тела не ниже этой доли максимума
         public double partDipShare = 0.06;        // провал для нарезки — не мельче этой доли максимума (и не мельче 2 TPO)
         public double partTargetPts = 8, partMaxPts = 10, partMinPts = 2;
-        public double partMaxBodyPts = 100;
+        public double partMaxBodyPts = 100;      // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
         public double fitBodyShare = 0.20;        // подгонка по телам: строки, где тел 30m-свечей дней композита меньше этой
                                                   // доли максимума (и меньше 3), — пустота (0 — без подгонки)
-        public double fitClusterShare = 0.60;
-        public boolean fitEthBodies = true;       // подгонка по телам всех свечей сессии (ETH + RTH), профиль — только RTH     // зона — скопление тел вокруг максимума тел в куске: не ниже этой доли его       // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
+        public double fitClusterShare = 0.70;     // зона — скопление тел вокруг вершины: не ниже этой доли её
+        public boolean fitEthBodies = true;       // подгонка по телам всех свечей сессии (ETH + RTH), профиль — только RTH
+        public double clusterMaxPts = 8;
+        public boolean subAddsZones = false;      // уточнения внутри баланса добавляют свои зоны (иначе зоны даёт только главный)          // скопление шире — порог поднимается, остаётся самая плотная часть
+        public boolean bodyClusters = true;       // зоны — скопления тел свечей (вершины профиля тел, границы на провалах),
+                                                  // без нарезки равными кусками; TPO-профиль задаёт только ядро / выше / ниже
+        public double clusterDip = 0.10;          // провал между скоплениями — не мельче этой доли меньшей вершины (и ≥ 1.5 тела)
         public boolean coreNodes = true;          // ядро рисуется узлами профиля (локальные вершины, разделённые провалами)
         public double nodeDipTpo = 2.0;           // провал между узлами — не меньше стольких TPO от обеих вершин (сглаж. 1 п.)
         public double nodeDropTpo = 2.0;          // узел — строки не ниже вершины узла на столько TPO
@@ -406,7 +411,8 @@ public final class ZoneEngine {
                 }
             } else {
                 // разметка: первый композит на уровне — главный; совпадающий кусок позднего композита его подтверждает
-                List<Comp> bal = new ArrayList<>(res.comps); bal.addAll(res.subComps);
+                List<Comp> bal = new ArrayList<>(res.comps);
+                if (p.subAddsZones) bal.addAll(res.subComps);
                 bal.sort((x, y) -> x.av.compareTo(y.av));
                 List<Zone> parts = new ArrayList<>();
                 Map<Zone, List<Long>> pc = new HashMap<>();
@@ -415,6 +421,14 @@ public final class ZoneEngine {
                     for (Zone e : parts) {
                         double ov = overlap(ticks(e.lo, tick), ticks(e.hi, tick), sg[0], sg[1]);
                         if (ov >= p.mergeOverlapMin && ov > bestOv) { best = e; bestOv = ov; }
+                    }
+                    if (best == null && p.joinGapPts >= 0) {        // вплотную к зоне того же вида — её подтверждение
+                        int kind = sg[2];
+                        for (Zone e : parts) {
+                            int ek = e.partKind == Kind.CORE ? 0 : e.partKind == Kind.HVN_S ? 1 : 2;
+                            double gap = Math.max(e.lo, sg[0] * tick) - Math.min(e.hi, sg[1] * tick);
+                            if (ek == kind && gap <= p.joinGapPts + 1e-9) { best = e; break; }
+                        }
                     }
                     if (best != null) { pc.get(best).add(c.av.toEpochDay()); continue; }
                     Zone z = new Zone();
@@ -732,6 +746,36 @@ public final class ZoneEngine {
         for (Day d : days) if (d.bandHi > 0) { edges.add(d.bandLo - cp.low); edges.add(d.bandHi - cp.low + 1); }
         List<int[]> out = new ArrayList<>();
         int[][] regions = {{a, ca - 1, 1}, {ca, cb, 0}, {cb + 1, b, 2}};
+        if (p.bodyClusters) {
+            // профиль тел, сглаженный до 1 п.; скопления — по провалам; зона — тела вокруг вершины скопления
+            double[] os = new double[n];
+            for (int i = 0; i < n; i++) {
+                double sum = 0; int k = 0;
+                for (int j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { sum += occ[j]; k++; }
+                os[i] = sum / k;
+            }
+            for (int[] r : regions) {
+                if (r[1] < r[0]) continue;
+                List<int[]> pcs = new ArrayList<>();
+                splitRel(os, r[0], r[1], p.clusterDip, 1.5, pcs);
+                for (int[] q : pcs) {
+                    int m = q[0];
+                    for (int i = q[0]; i <= q[1]; i++) if (os[i] > os[m]) m = i;
+                    if (os[m] < bodyThr) continue;                  // тела здесь не скапливаются
+                    int x0 = m, x1 = m;
+                    for (double sh = p.fitClusterShare; ; sh += 0.05) {
+                        double thr = Math.max(bodyThr, sh * os[m]);
+                        x0 = m; x1 = m;
+                        while (x0 > q[0] && os[x0 - 1] >= thr) x0--;
+                        while (x1 < q[1] && os[x1 + 1] >= thr) x1++;
+                        if (x1 - x0 <= (int) Math.round(p.clusterMaxPts / p.tick) || sh >= 0.95) break;
+                    }
+                    if (x1 - x0 + 1 < minW) continue;
+                    out.add(new int[]{cp.low + x0, cp.low + x1, r[2]});
+                }
+            }
+            return out;
+        }
         for (int[] r : regions) {
             if (r[1] < r[0]) continue;
             List<int[]> pcs = new ArrayList<>();
@@ -786,6 +830,22 @@ public final class ZoneEngine {
         List<int[]> out = new ArrayList<>();
         for (int[] q : d.periods) out.add(new int[]{q[3], q[4]});
         return out;
+    }
+
+    /** Деление [lo, hi] по провалам: глубина ≥ max(abs, rel × меньшая из вершин слева и справа). */
+    private static void splitRel(double[] v, int lo, int hi, double rel, double abs, List<int[]> out) {
+        int best = -1; double bestDepth = 0;
+        for (int i = lo + 1; i < hi; i++) {
+            if (!(v[i] <= v[i - 1] && v[i] <= v[i + 1])) continue;
+            double l = 0, r = 0;
+            for (int j = lo; j < i; j++) l = Math.max(l, v[j]);
+            for (int j = i + 1; j <= hi; j++) r = Math.max(r, v[j]);
+            double depth = Math.min(l, r) - v[i];
+            if (depth >= Math.max(abs, rel * Math.min(l, r)) && depth > bestDepth) { bestDepth = depth; best = i; }
+        }
+        if (best < 0) { out.add(new int[]{lo, hi}); return; }
+        splitRel(v, lo, best - 1, rel, abs, out);
+        splitRel(v, best, hi, rel, abs, out);
     }
 
     private static void splitDips(double[] sm, int lo, int hi, double dip, List<int[]> out) {
