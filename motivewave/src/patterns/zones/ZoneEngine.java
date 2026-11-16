@@ -88,7 +88,10 @@ public final class ZoneEngine {
         public double partCoreShare = 0.65;       // ядро — часть тела не ниже этой доли максимума
         public double partDipShare = 0.06;        // провал для нарезки — не мельче этой доли максимума (и не мельче 2 TPO)
         public double partTargetPts = 8, partMaxPts = 10, partMinPts = 2;
-        public double partMaxBodyPts = 100;       // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
+        public double partMaxBodyPts = 100;
+        public double fitBodyShare = 0.20;        // подгонка по телам: строки, где тел 30m-свечей дней композита меньше этой
+                                                  // доли максимума (и меньше 3), — пустота (0 — без подгонки)
+        public double fitClusterShare = 0.60;     // зона — скопление тел вокруг максимума тел в куске: не ниже этой доли его       // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
         public boolean coreNodes = true;          // ядро рисуется узлами профиля (локальные вершины, разделённые провалами)
         public double nodeDipTpo = 2.0;           // провал между узлами — не меньше стольких TPO от обеих вершин (сглаж. 1 п.)
         public double nodeDropTpo = 2.0;          // узел — строки не ниже вершины узла на столько TPO
@@ -204,7 +207,7 @@ public final class ZoneEngine {
     static final class Day {
         LocalDate date; int n; boolean shortDay;
         double open, high, low, close;
-        final List<int[]> periods = new ArrayList<>();   // {period, lowTicks, highTicks}
+        final List<int[]> periods = new ArrayList<>();   // {period, lowTicks, highTicks, openTicks, closeTicks}
         Profile profile; int poc, val, vah;              // тики
         int hvnTpo, bandLo, bandHi;                      // per_day (только полные дни)
     }
@@ -291,7 +294,7 @@ public final class ZoneEngine {
                 int per = (m - p.rthStartMin) / p.periodMinutes;
                 if (day.periods.isEmpty()) { day.open = b.o; day.high = b.h; day.low = b.l; }
                 day.high = Math.max(day.high, b.h); day.low = Math.min(day.low, b.l); day.close = b.c;
-                day.periods.add(new int[]{per, ticks(b.l, tick), ticks(b.h, tick)});
+                day.periods.add(new int[]{per, ticks(b.l, tick), ticks(b.h, tick), ticks(b.o, tick), ticks(b.c, tick)});
             }
         }
         List<Day> all = new ArrayList<>(days.values());
@@ -707,6 +710,15 @@ public final class ZoneEngine {
         while (cb < b && sm[cb + 1] >= p.partCoreShare * mx) cb++;
         body[0] = cp.low + a; body[1] = cp.low + b;
         double dip = Math.max(2.0, p.partDipShare * mx);
+        // профиль тел: сколько тел 30m-свечей (open–close) дней композита перекрывает каждую строку
+        int[] occ = new int[n + 1];
+        for (Day d : days) for (int[] q : d.periods) {
+            int x0 = Math.max(0, Math.min(q[3], q[4]) - cp.low), x1 = Math.min(n - 1, Math.max(q[3], q[4]) - cp.low);
+            if (x0 <= x1) { occ[x0]++; occ[x1 + 1]--; }
+        }
+        for (int i = 1; i <= n; i++) occ[i] += occ[i - 1];
+        int occMax = 0; for (int i = a; i <= b; i++) occMax = Math.max(occMax, occ[i]);
+        double bodyThr = Math.max(3, p.fitBodyShare * occMax);
         int maxW = (int) Math.round(p.partMaxPts / p.tick), tgt = (int) Math.round(p.partTargetPts / p.tick),
             minW = (int) Math.round(p.partMinPts / p.tick);
         List<Integer> edges = new ArrayList<>();
@@ -744,7 +756,21 @@ public final class ZoneEngine {
                     fine.remove(Math.max(i, j)); ch = true; break;
                 }
             }
-            for (int[] q : fine) if (q[1] - q[0] + 1 >= Math.min(minW, onePt)) out.add(new int[]{cp.low + q[0], cp.low + q[1], r[2]});
+            for (int[] q : fine) {
+                int lo = q[0], hi = q[1];
+                if (p.fitBodyShare > 0) {         // подгонка по телам: зона — скопление тел свечей в куске
+                    int m = lo;
+                    for (int i = lo; i <= hi; i++) if (occ[i] > occ[m]) m = i;
+                    double thr = Math.max(bodyThr, p.fitClusterShare * occ[m]);
+                    if (occ[m] < thr) continue;         // тела здесь не скапливаются — зоны нет
+                    int x0 = m, x1 = m;
+                    while (x0 > lo && occ[x0 - 1] >= thr) x0--;
+                    while (x1 < hi && occ[x1 + 1] >= thr) x1++;
+                    lo = x0; hi = x1;
+                    if (hi - lo + 1 < minW) continue;
+                }
+                if (hi - lo + 1 >= Math.min(minW, onePt)) out.add(new int[]{cp.low + lo, cp.low + hi, r[2]});
+            }
         }
         return out;
     }
