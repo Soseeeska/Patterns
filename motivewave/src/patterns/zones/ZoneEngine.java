@@ -90,6 +90,8 @@ public final class ZoneEngine {
         public double compVaOverlap = 0.5;        // VA дня и VA композита пересекаются на ≥ эту долю меньшей из двух (0 — не проверять)
         public boolean compJoinBoth = true;       // склейка: close в диапазоне И пересечение VA (иначе — close в диапазоне ИЛИ пересечение VA);
                                                   // так же и доклейка после ложного выхода
+        public double compInsideShare = 0.8;      // ... но день, чей High–Low на ≥ эту долю внутри диапазона композита, клеится по ИЛИ
+                                                  // (0 — выкл.)
         public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
@@ -372,7 +374,7 @@ public final class ZoneEngine {
                 int c = ticks(d.close, tick);
                 if (cand.size() >= p.compositeMinDays) lastCand = null;
                 if (p.compositeMode && p.compFalseBreak && lastCand != null && c >= lastCp.low && c <= lastCp.high()
-                        && (!p.compJoinBoth || vaJoins(d, lastCp, p))
+                        && (!p.compJoinBoth || vaJoins(d, lastCp, p) || insideDay(d, lastCp, p))
                         && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts && extCount < p.compFalseBreakMax) {
                     // ложный выход: композит закрылся, новый ещё не набрал дней, а цена закрылась обратно в его
                     // диапазоне — дни после выхода доклеиваются к нему, композит продолжается
@@ -384,7 +386,8 @@ public final class ZoneEngine {
                     continue;
                 }
                 boolean join = c >= cp.low && c <= cp.high();
-                if (p.compositeMode && p.compJoinBoth) join = join && vaJoins(d, cp, p);     // close в диапазоне И наслоение VA
+                boolean or = !p.compJoinBoth || insideDay(d, cp, p);          // день внутри композита — ИЛИ, иначе И
+                if (p.compositeMode && !or) join = join && vaJoins(d, cp, p);   // close в диапазоне И наслоение VA
                 else if (!join && p.compositeMode && p.compVaOverlap > 0) join = vaJoins(d, cp, p);   // ... ИЛИ
                 if (join) { cand.add(d); cp = merge(cp, d.profile); continue; }
                 Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
@@ -735,6 +738,14 @@ public final class ZoneEngine {
         int inter = Math.min(d.vah, cva[2]) - Math.max(d.val, cva[1]) + 1;
         int narrow = Math.min(d.vah - d.val, cva[2] - cva[1]) + 1;
         return inter > 0 && inter / (double) narrow >= p.compVaOverlap;
+    }
+
+    /** High–Low дня на ≥ compInsideShare внутри диапазона композита (compInsideShare = 0 — выкл.). */
+    static boolean insideDay(Day d, Profile cp, Params p) {
+        if (p.compInsideShare <= 0) return false;
+        int lo = ticks(d.low, p.tick), hi = ticks(d.high, p.tick);
+        int in = Math.min(hi, cp.high()) - Math.max(lo, cp.low);
+        return in >= 0 && (hi == lo || in / (double) (hi - lo) >= p.compInsideShare - 1e-9);
     }
 
     private static Comp closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,

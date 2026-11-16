@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -115,6 +115,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new DoubleDescriptor(MIN_PIECE, "Обрезанная зона уже, п. — не рисуется", 1.0, 0.25, 10, 0.25));
         g.addRow(new DoubleDescriptor(COMP_VA, "Композит: наслоение VA — VA дня и композита пересекаются на ≥ долю меньшей (0 — не проверять)", 0.5, 0, 1, 0.05));
         g.addRow(new BooleanDescriptor(COMP_AND, "Композит: день входит, только если close в диапазоне И наслоение VA (выкл. — ИЛИ)", true));
+        g.addRow(new DoubleDescriptor(COMP_IN, "Композит: день, чей High–Low на ≥ долю внутри диапазона композита, входит по ИЛИ (0 — выкл.)", 0.8, 0, 1, 0.05));
         g.addRow(new BooleanDescriptor(FALSE_BRK, "Композит: ложный выход — возврат close в диапазон закрытого композита (до 3 дней) доклеивает дни к нему", true));
         g.addRow(new BooleanDescriptor(SHORT_DAYS, "Короткие дни (ранние закрытия) входят в композиты", true));
         g.addRow(new DoubleDescriptor(SUB_OV, "Уточнение: ≥ доли диапазона композита внутри раннего баланса — его ядро серое (0 — выкл.)", 0.70, 0, 1, 0.05));
@@ -274,6 +275,7 @@ public class TpoZonesStudy extends Study {
         p.compositeShortDays = st.getBoolean(SHORT_DAYS, true);
         p.compVaOverlap = st.getDouble(COMP_VA, 0.5);
         p.compJoinBoth = st.getBoolean(COMP_AND, true);
+        p.compInsideShare = st.getDouble(COMP_IN, 0.8);
         p.compFalseBreak = st.getBoolean(FALSE_BRK, true);
         p.coreNodes = st.getBoolean(NODES, true);
         p.partition = st.getBoolean(PART, true);
