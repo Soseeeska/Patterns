@@ -81,6 +81,12 @@ public class Bench {
                 n, m3, 100.0 * m3 / n, m5, 100.0 * m5 / n, ious.get(ious.size() / 2), m3 > 0 ? sumEdge / m3 : 0, m3 > 0 ? 100.0 * colorOk / m3 : 0,
                 widths.get(widths.size() / 2), dens / densN, densMan / densN);
         if (Boolean.getBoolean("conf")) System.out.println(conf);
+        List<Shown> last = res.visible.get(res.visible.size() - 1);
+        double plo = Double.MAX_VALUE, phi = -Double.MAX_VALUE;
+        for (Shown v : last) { plo = Math.min(plo, v.lo); phi = Math.max(phi, v.hi); }
+        double lastClose = res.sessions.get(res.sessions.size() - 1).open;
+        int near = 0; for (Shown v : last) if (Math.abs((v.lo + v.hi) / 2 - lastClose) <= 150) near++;
+        System.out.printf(Locale.ROOT, "   последняя сессия: зон %d, в ± 150 п. от цены %d (%.1f на 100 п.; у ручных ≈ 8)%n", last.size(), near, near / 3.0);
     }
 
     static boolean agree(String c, Kind k) {

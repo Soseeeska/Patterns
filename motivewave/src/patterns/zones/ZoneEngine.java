@@ -93,9 +93,10 @@ public final class ZoneEngine {
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
         public double sessNodeDip = 0.15;         // провал между узлами — от доли меньшей вершины (и ≥ 1 TPO)
+        public double sessPeakShare = 0.5;         // узел — вершина не ниже этой доли максимума TPO дня (0 — любая ≥ sessMinPeak)
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
         public double sessMaxPts = 8;             // зона не шире, п.
-        public double sessMinGapPts = 1.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
+        public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
         public double sessBodyShare = 0.5;
@@ -826,6 +827,7 @@ public final class ZoneEngine {
             for (int j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { sum += c[j]; k++; }
             sm[i] = sum / k;
         }
+        double dayMax = 0; for (double v : sm) dayMax = Math.max(dayMax, v);
         List<int[]> pcs = new ArrayList<>();
         splitRel(sm, 0, n - 1, p.sessNodeDip, 1.0, pcs);
         int[] occ = new int[n + 2 * onePt + 1];               // тела свечей сессии, со сдвигом onePt
@@ -840,6 +842,7 @@ public final class ZoneEngine {
             int m = q[0];
             for (int i = q[0]; i <= q[1]; i++) if (sm[i] > sm[m]) m = i;
             if (c[m] < p.sessMinPeak && sm[m] < p.sessMinPeak) continue;
+            if (p.sessPeakShare > 0 && sm[m] < p.sessPeakShare * dayMax) continue;
             int lo = m, hi = m;
             while (lo > q[0] && sm[lo - 1] >= sm[m] - p.sessNodeDrop) lo--;
             while (hi < q[1] && sm[hi + 1] >= sm[m] - p.sessNodeDrop) hi++;
