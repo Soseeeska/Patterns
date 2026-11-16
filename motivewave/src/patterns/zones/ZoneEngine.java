@@ -82,6 +82,7 @@ public final class ZoneEngine {
         public double coreAbsorb = 0.30;
         public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
         public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
+        public boolean compositeShortDays = true; // режим «по композиту»: короткие дни входят в композиты
         public double subOverlap = 0.70;          // ≥ этой доли диапазона композита внутри раннего баланса — уточнение (0 — выкл.)
         public double subMaxRatio = 2.0;          // ... если тот баланс не шире композита больше чем в столько раз
         public double coreMinDaysShare = 0.5;     // ядро признаётся, если его задевают VA ≥ этой доли дней композита;
@@ -304,7 +305,8 @@ public final class ZoneEngine {
         List<Zone> ob = new ArrayList<>(), greyComp = new ArrayList<>();
         {
             List<Day> cand = new ArrayList<>(); Profile cp = null;
-            for (Day d : full) {
+            // режим «по композиту»: короткие дни (ранние закрытия) тоже входят в композит, как в TPO платформы
+            for (Day d : p.compositeMode && p.compositeShortDays ? all : full) {
                 if (cand.isEmpty()) { cand.add(d); cp = d.profile; continue; }
                 int c = ticks(d.close, tick);
                 if (c >= cp.low && c <= cp.high()) { cand.add(d); cp = merge(cp, d.profile); continue; }
