@@ -81,23 +81,17 @@ public final class ZonePlan {
         b.append(v.st.kind.title).append("  ").append(fmt(v.lo)).append(" – ").append(fmt(v.hi));
         if (v.lo != z.blo || v.hi != z.bhi) b.append(" (обрезана соседними, полностью ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi)).append(')');
         if ("node".equals(z.src)) b.append("\nузел ядра композита");
-        if ("sess".equals(z.src) && v.st.evid) {
-            b.append("\nсессионная зона (узел TPO, подогнан по телам), цвет — по отторжениям на 30m " + (p.sessEvidRth ? "RTH" : "ETH + RTH"));
-            if (v.st.kind == Kind.GREY) b.append(v.st.rej < p.sessEvidMin ? (v.st.flips > 0 && v.st.rej == 0 ? "\nсерая: пробита, роль снята" : "\nсерая: отторжений меньше " + p.sessEvidMin) : "\nсерая: отторжения с обеих сторон, вне VA композита");
-            if (v.st.kind == Kind.CORE) b.append("\nсиняя: отторжения с обеих сторон, внутри VA композита");
-            if (v.st.flips > 0) b.append("\nпробоев: ").append(v.st.flips).append(" (роль снята, отторжения — с последнего)");
-        } else if ("sess".equals(z.src)) b.append(v.st.comp != null || z.recolorKind == null ? "\nсессионная зона (узел TPO, подогнан по телам)" : "\nсессионная зона, перекрашена композитом");
+        if ("sess".equals(z.src)) b.append(v.st.comp != null || z.recolorKind == null ? "\nсессионная зона (узел TPO, подогнан по телам)" : "\nсессионная зона, перекрашена композитом");
         if ("part".equals(z.src)) b.append("\nразметка композита (подтверждений — совпавшими кусками поздних композитов)");
         b.append("\nпоявилась ").append(z.av).append(", возраст ").append(v.st.age).append(" дн. (на ").append(on).append(')');
         b.append("\nотторжений ").append(v.st.rej).append(" (лонг ").append(v.st.nl).append(" / шорт ").append(v.st.ns);
         if (v.st.purity != null) b.append(", чистота ").append(Math.round(v.st.purity * 100)).append('%');
         b.append(")\nподтверждений ").append(v.st.conf);
-        if (v.st.kind == Kind.CORE && !v.st.evid) b.append(" (другими композитами)");
-        if ((v.st.kind == Kind.CORE && !v.st.evid || "part".equals(z.src)) && !z.info.isEmpty()) b.append("\n").append(z.info.replace("; ", "\n"));
+        if (v.st.kind == Kind.CORE) b.append(" (другими композитами)");
+        if ((v.st.kind == Kind.CORE || "part".equals(z.src)) && !z.info.isEmpty()) b.append("\n").append(z.info.replace("; ", "\n"));
         if (v.st.comp != null) b.append("\nкомпозит ").append(v.st.comp.start).append(" – ").append(v.st.comp.end)
                 .append(" (").append(v.st.comp.days).append(" дн., ").append(fmt(v.st.comp.lo)).append(" – ").append(fmt(v.st.comp.hi))
-                .append("), ").append(v.st.evid ? "VA " + fmt(v.st.comp.vaLo) + " – " + fmt(v.st.comp.vaHi)
-                        : "ядро " + fmt(v.st.comp.core.blo) + " – " + fmt(v.st.comp.core.bhi));
+                .append("), ядро ").append(fmt(v.st.comp.core.blo)).append(" – ").append(fmt(v.st.comp.core.bhi));
         if (z.k == ZoneEngine.K_GREY) b.append("\nисточник: ").append("comp".equals(z.src) ? "короткий композит (2 дня)" : "sub".equals(z.src) ? "ядро композита-уточнения внутри баланса" : "слабый HVN (5–7 TPO)");
         if (z.young) b.append("\nмолодая первородная: серая ").append(z.greyUntil == null ? "до конца данных" : "до " + z.greyUntil);
         if (v.st.promoted) b.append("\nбыла серой, переведена по отторжениям за подгонку");

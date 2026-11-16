@@ -101,12 +101,6 @@ public final class ZoneEngine {
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
         public double sessMaxPts = 8;             // зона не шире, п.
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
-        public boolean sessEvidence = false;      // цвет сессионной зоны — по доказательствам: рождается серой; зелёная / красная — от
-                                                  // sessEvidMin отторжений, из них ≥ rejectionShare в одну сторону; отторжения с обеих
-                                                  // сторон — синяя внутри VA композита, иначе серая; два close подряд за зоной — пробой:
-                                                  // роль снята, серая, отторжения заново. Композит не красит (выкл. — роль по композиту / сессии рождения, как раньше)
-        public int sessEvidMin = 3;               // ... столько отторжений (с последнего пробоя) нужно для цвета
-        public boolean sessEvidRth = true;        // ... отторжения и пробои — только по RTH-барам (иначе ETH + RTH)
         public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
         public double sessBodyShare = 0.5;
@@ -267,7 +261,6 @@ public final class ZoneEngine {
         public double blo, bhi;                              // границы после подгонки
         long[] coreConf = new long[0];                       // ядро: дни подтверждений другими композитами
         long[] govAv = new long[0]; Comp[] gov = new Comp[0]; // композиты, в диапазон которых попадает зона
-        long[] evOrd = new long[0]; int[][] ev = new int[0][]; // доказательства: с сессии evOrd[i] (со следующей) — {роль, лонг, шорт, флипов}
         public long avOrd() { return av.toEpochDay(); }
     }
 
@@ -278,7 +271,6 @@ public final class ZoneEngine {
         public Comp extendsOf;                               // продолжение этого композита после ложного выхода
         public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
         public double coreLo, coreHi;                        // ядро тела (строки не ниже partCoreShare максимума)
-        public double vaLo, vaHi;                            // VA композита
         List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
     }
 
@@ -286,7 +278,6 @@ public final class ZoneEngine {
     public static final class State {
         public Comp comp;                                   // режим «по композиту»: правящий композит
         public Kind kind; public boolean promoted; public int rej, nl, ns, conf; public Double purity; public long age;
-        public boolean evid; public int flips;              // цвет по доказательствам; флипов роли
     }
 
     public static final class Session {
@@ -514,8 +505,6 @@ public final class ZoneEngine {
             // зоны из сессий: узлы RTH TPO дня, подогнанные по телам; роль — композит / отторжения / выход / серая
             List<Comp> bal = new ArrayList<>(res.comps);
             bal.sort((x, y) -> x.av.compareTo(y.av));
-            List<Comp> balAll = new ArrayList<>(res.comps); balAll.addAll(res.subComps);   // все балансы, включая уточнения
-            balAll.sort((x, y) -> x.av.compareTo(y.av));
             zones.clear();
             List<Zone> ses = new ArrayList<>();
             Map<Zone, List<Long>> cf = new HashMap<>();
@@ -536,15 +525,6 @@ public final class ZoneEngine {
                     double mid = (z.lo + z.hi) / 2;
                     Comp gov = null;
                     for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
-                    if (p.sessEvidence) {                   // композит — ориентир (баланс для синих), не красит
-                        z.partKind = Kind.GREY;
-                        List<Comp> g = new ArrayList<>();
-                        for (Comp c : balAll) if (c.lo <= mid && mid <= c.hi) g.add(c);
-                        z.gov = g.toArray(new Comp[0]);
-                        z.govAv = g.stream().mapToLong(c -> c.av.toEpochDay()).toArray();
-                        ses.add(z); cf.put(z, new ArrayList<>());
-                        continue;
-                    }
                     z.partKind = gov != null ? roleIn(gov, mid) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
                     if (gov != null) z.partOf = gov;
                     for (Comp c : bal)
@@ -608,8 +588,6 @@ public final class ZoneEngine {
         }
         long[] sessOrd = new long[sessAll.size()];
         for (int i = 0; i < sessAll.size(); i++) sessOrd[i] = sessAll.get(i).ord;
-        if (p.compositeMode && p.sessionZones && p.sessEvidence)
-            for (Zone z : zones) if (z.k == K_SESS) evidence(z, bars, isRth, sessAll, sessOrd, p);
         for (Zone z : zones) {
             z.blo = z.lo; z.bhi = z.hi;
             if (p.alignSessions <= 0) continue;
@@ -784,7 +762,6 @@ public final class ZoneEngine {
             Comp c = new Comp();
             made = c;
             c.lo = cp.low * p.tick; c.hi = cp.high() * p.tick; c.av = endDay; c.days = n;
-            c.vaLo = va[1] * p.tick; c.vaHi = va[2] * p.tick;
             c.start = cand.get(0).date; c.end = cand.get(n - 1).date;
             Zone core = new Zone();
             core.k = K_CORE; core.av = endDay; core.src = "core";
@@ -1291,21 +1268,6 @@ public final class ZoneEngine {
             st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
             return st;
         }
-        if (p.compositeMode && z.k == K_SESS && p.sessEvidence) {
-            int i = lowerBound(z.evOrd, o) - 1;                    // изменения до сессии o
-            int[] e = i >= 0 ? z.ev[i] : new int[]{E_NONE, 0, 0, 0};
-            st.evid = true; st.nl = e[1]; st.ns = e[2]; st.flips = e[3];
-            st.kind = e[0] == E_SUP ? Kind.HVN_S : e[0] == E_RES ? Kind.HVN_R : Kind.GREY;
-            if (e[0] == E_TWO) {                                    // спорная: синяя, если внутри VA последнего композита на этой цене
-                int g = lowerBound(z.govAv, o + 1) - 1;
-                if (g >= 0) { Comp c = z.gov[g]; double mid = (z.lo + z.hi) / 2;
-                    if (c.vaLo <= mid && mid <= c.vaHi) { st.kind = Kind.CORE; st.comp = c; } }
-            }
-            int et = st.nl + st.ns;
-            st.rej = et; st.purity = et >= 1 ? Math.max(st.nl, st.ns) / (double) et : null;
-            st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
-            return st;
-        }
         if (p.compositeMode && z.k == K_SESS) {
             boolean rc = o >= z.recolorAt;
             st.kind = rc ? z.recolorKind : z.partKind; st.comp = rc ? null : z.partOf;
@@ -1379,45 +1341,6 @@ public final class ZoneEngine {
         for (long[] c : z.cf) { if (c[0] >= o) break; if (c[1] <= cnear) conf++; }
         st.conf = conf;
         return st;
-    }
-
-    static final int E_NONE = 0, E_SUP = 1, E_RES = 2, E_TWO = 3;
-
-    /** Доказательства сессионной зоны по 30m-барам (RTH или ETH + RTH, sessEvidRth) с сессии её появления: отторжения лонг / шорт
-     *  (interaction), с sessEvidMin штук — роль: ≥ rejectionShare в одну сторону — поддержка / сопротивление, иначе
-     *  спорная. Два close подряд за зоной (впервые после бара внутри / по другую сторону) у поддержки вниз или у
-     *  сопротивления вверх — пробой: роль снята, зона серая, отторжения считаются заново (новая роль — только
-     *  по новым отторжениям). Пишет изменения по сессиям в z.evOrd / z.ev. */
-    static void evidence(Zone z, List<Bar> bars, boolean[] isRth, List<Session> sessAll, long[] sessOrd, Params p) {
-        List<Long> ord = new ArrayList<>(); List<int[]> ev = new ArrayList<>();
-        int si = lowerBound(sessOrd, z.avOrd());
-        if (si >= sessAll.size()) { z.evOrd = new long[0]; z.ev = new int[0][]; return; }
-        double mw = p.minWickTicks * p.tick;
-        int role = E_NONE, nl = 0, ns = 0, flips = 0, run = 0;     // run: подряд close выше (+) / ниже (−) зоны
-        for (int s = si; s < sessAll.size(); s++) {
-            Session ss = sessAll.get(s);
-            int r0 = role, l0 = nl, s0 = ns, f0 = flips;
-            for (int i = ss.firstBar; i <= ss.lastBar; i++) {
-                if (p.sessEvidRth && !isRth[i]) continue;
-                Bar b = bars.get(i);
-                int t = interaction(b.o, b.h, b.l, b.c, z.lo, z.hi, mw);
-                if (t == 1) nl++; else if (t == 2) ns++;
-                int prev = run;
-                run = b.c > z.hi ? Math.max(run, 0) + 1 : b.c < z.lo ? Math.min(run, 0) - 1 : 0;
-                // пробой поддержки вниз / сопротивления вверх: роль снята, зона серая и набирает отторжения заново
-                if ((run == -2 && prev == -1 && role == E_SUP) || (run == 2 && prev == 1 && role == E_RES)) {
-                    role = E_NONE; nl = 0; ns = 0; flips++; continue;
-                }
-                int tot = nl + ns;
-                if (tot >= p.sessEvidMin) {
-                    double share = p.rejectionShare;
-                    role = nl >= share * tot ? E_SUP : ns >= share * tot ? E_RES : E_TWO;
-                }
-            }
-            if (role != r0 || nl != l0 || ns != s0 || flips != f0) { ord.add(ss.ord); ev.add(new int[]{role, nl, ns, flips}); }
-        }
-        z.evOrd = ord.stream().mapToLong(Long::longValue).toArray();
-        z.ev = ev.toArray(new int[0][]);
     }
 
     /** День перевода серой зоны в основную или null (≥ promoteRejections отторжений за сессии подгонки). */
