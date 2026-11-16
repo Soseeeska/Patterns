@@ -149,6 +149,26 @@ public class Preview {
             g.setColor(new Color(0x15181c)); g.fillRect(lx - 4, ly - 13, lw + 8, 17);
             g.setColor(new Color(0xffd23f)); g.drawString(lbl, lx, ly);
         }
+        // ручные зоны (-Dmanual=output/manual_zones_bench.csv): контур их цветом от сессии начала вправо
+        String mf = System.getProperty("manual");
+        if (mf != null) {
+            java.util.Map<String, Color> mc = java.util.Map.of("зелёная", new Color(0x4cd97b), "красная", new Color(0xff6b6b),
+                    "синяя", new Color(0x6aa8ff), "серая", new Color(0xc9ced3), "розовая", new Color(0xff8cf0));
+            try (BufferedReader r = new BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(mf), "UTF-8"))) {
+                for (String line; (line = r.readLine()) != null; ) {
+                    String[] f = line.split(",");
+                    java.time.LocalDate sd = java.time.LocalDate.parse(f[1]);
+                    long t0 = sd.minusDays(1).atTime(17, 0).atZone(p.tz).toInstant().toEpochMilli();
+                    double lo2 = Double.parseDouble(f[2]), hi2 = Double.parseDouble(f[3]);
+                    double x0 = Math.max(0, tx.applyAsDouble(t0)), x1 = PW;
+                    if (x0 >= PW) continue;
+                    g.setColor(mc.getOrDefault(f[0], Color.WHITE));
+                    g.setStroke(new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{6f, 4f}, 0f));
+                    g.draw(new java.awt.geom.Rectangle2D.Double(x0, ty.applyAsDouble(hi2), x1 - x0, Math.max(2, ty.applyAsDouble(lo2) - ty.applyAsDouble(hi2))));
+                }
+            }
+            g.setStroke(new BasicStroke(1f));
+        }
         float[] dash = {5f, 4f};
         for (ZonePlan.Level l : plan.levels) {
             double x0 = tx.applyAsDouble(l.t0), x1 = tx.applyAsDouble(l.t1);
@@ -170,7 +190,8 @@ public class Preview {
         }
         g.setColor(new Color(0xe7eaed)); g.setFont(new Font("SansSerif", Font.BOLD, 14));
         g.drawString("TPO Zones 1.6 — ES 30m ETH+RTH, " + (p.compositeMode ? "класс по композиту" : "класс по отторжениям") + ", подгонка " + p.alignSessions + " сесс."
-                + (top > 0 ? " · пунктир — топ-" + top + " зон по отторжениям за последние " + k + " сессий" : ""), 16, 24);
+                + (top > 0 ? " · пунктир — топ-" + top + " зон по отторжениям за последние " + k + " сессий" : "")
+                + (System.getProperty("manual") != null ? " · заливка — алгоритм, пунктир — ручные зоны" : ""), 16, 24);
         ImageIO.write(img, "png", new File(a[1]));
         System.out.println(a[1] + " rects=" + plan.rects.size() + " levels=" + plan.levels.size());
     }
