@@ -87,8 +87,9 @@ public final class ZoneEngine {
         public int compFalseBreakMax = 2;         // ... и не больше стольких продолжений подряд
         public boolean compFalseBreak = true;     // ложный выход: возврат close в диапазон закрытого композита, пока новый
                                                   // не набрал compositeMinDays дней, — дни доклеиваются к нему
-        public double compVaOverlap = 0.5;        // день входит в композит и при close вне диапазона, если VA дня и VA композита
-                                                  // пересекаются на ≥ эту долю меньшей из двух (0 — только close внутри диапазона)
+        public double compVaOverlap = 0.5;        // VA дня и VA композита пересекаются на ≥ эту долю меньшей из двух (0 — не проверять)
+        public boolean compJoinBoth = true;       // склейка: close в диапазоне И пересечение VA (иначе — close в диапазоне ИЛИ пересечение VA);
+                                                  // так же и доклейка после ложного выхода
         public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
@@ -371,6 +372,7 @@ public final class ZoneEngine {
                 int c = ticks(d.close, tick);
                 if (cand.size() >= p.compositeMinDays) lastCand = null;
                 if (p.compositeMode && p.compFalseBreak && lastCand != null && c >= lastCp.low && c <= lastCp.high()
+                        && (!p.compJoinBoth || vaJoins(d, lastCp, p))
                         && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts && extCount < p.compFalseBreakMax) {
                     // ложный выход: композит закрылся, новый ещё не набрал дней, а цена закрылась обратно в его
                     // диапазоне — дни после выхода доклеиваются к нему, композит продолжается
@@ -382,12 +384,8 @@ public final class ZoneEngine {
                     continue;
                 }
                 boolean join = c >= cp.low && c <= cp.high();
-                if (!join && p.compositeMode && p.compVaOverlap > 0) {       // или VA дня внутри VA композита ≥ доли
-                    int[] cva = valueArea(cp, p.valueAreaPct);
-                    int inter = Math.min(d.vah, cva[2]) - Math.max(d.val, cva[1]) + 1;
-                    int narrow = Math.min(d.vah - d.val, cva[2] - cva[1]) + 1;        // доля от меньшей из двух VA
-                    join = inter > 0 && inter / (double) narrow >= p.compVaOverlap;
-                }
+                if (p.compositeMode && p.compJoinBoth) join = join && vaJoins(d, cp, p);     // close в диапазоне И наслоение VA
+                else if (!join && p.compositeMode && p.compVaOverlap > 0) join = vaJoins(d, cp, p);   // ... ИЛИ
                 if (join) { cand.add(d); cp = merge(cp, d.profile); continue; }
                 Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
                 if (made != null) made.extendsOf = extOf;
@@ -730,6 +728,15 @@ public final class ZoneEngine {
     private static int rank(Kind k) { return k == Kind.CORE ? 0 : k == Kind.GREY ? 2 : 1; }
 
     // ------------------------------------------------------------------ композиты
+    /** VA дня и VA композита пересекаются на ≥ compVaOverlap меньшей из двух (compVaOverlap = 0 — проверка выключена). */
+    static boolean vaJoins(Day d, Profile cp, Params p) {
+        if (p.compVaOverlap <= 0) return true;
+        int[] cva = valueArea(cp, p.valueAreaPct);
+        int inter = Math.min(d.vah, cva[2]) - Math.max(d.val, cva[1]) + 1;
+        int narrow = Math.min(d.vah - d.val, cva[2] - cva[1]) + 1;
+        return inter > 0 && inter / (double) narrow >= p.compVaOverlap;
+    }
+
     private static Comp closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
                                        List<Zone> ob, List<Zone> greyComp, List<Comp> comps, List<Comp> notBalance) {
         int n = cand.size();
