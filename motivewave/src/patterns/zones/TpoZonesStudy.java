@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -95,6 +95,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new DoubleDescriptor(BODY, "Разметка: тело — строки не ниже доли максимума TPO (хвосты отпадают)", 0.15, 0.02, 0.6, 0.01));
         g.addRow(new DoubleDescriptor(PMAXB, "Разметка: тело не шире, п. (шире — остаётся плотная середина)", 100, 20, 400, 5));
         g.addRow(new DoubleDescriptor(FIT_B, "Подгонка по телам: меньше доли максимума тел свечей — пустота (0 — без подгонки)", 0.20, 0, 0.8, 0.05));
+        g.addRow(new BooleanDescriptor(FIT_ETH, "Подгонка по телам всех свечей сессии (ETH + RTH); профиль — только RTH", true));
         g.addRow(new DoubleDescriptor(FIT_C, "Подгонка по телам: зона — тела не ниже доли максимума тел в куске", 0.60, 0.2, 0.95, 0.05));
         g.addRow(new DoubleDescriptor(PCORE, "Разметка: ядро — строки не ниже доли максимума TPO", 0.65, 0.3, 0.95, 0.05));
         g.addRow(new DoubleDescriptor(PTGT, "Разметка: ширина куска ≈, п. (кусок шире 10 п. делится)", 8.0, 2, 10, 0.5));
@@ -267,6 +268,7 @@ public class TpoZonesStudy extends Study {
         p.partMaxBodyPts = st.getDouble(PMAXB, 100);
         p.fitBodyShare = st.getDouble(FIT_B, 0.20);
         p.fitClusterShare = st.getDouble(FIT_C, 0.60);
+        p.fitEthBodies = st.getBoolean(FIT_ETH, true);
         p.nodeDipTpo = st.getDouble(NODE_DIP, 2.0);
         p.nodeDropTpo = st.getDouble(NODE_DROP, 2.0);
         p.noOverlap = st.getBoolean(NO_OVERLAP, true);

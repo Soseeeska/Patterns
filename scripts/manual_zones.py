@@ -130,6 +130,8 @@ def main(path=str(ROOT / "data" / "manual_zones_ESZ6.mwml")):
                     "rej_long": int((it == "long").sum()), "rej_short": int((it == "short").sum()),
                     "range_bars": int((it == "range").sum())})
     df = pd.DataFrame(out)
+    # для замера Java-движка (motivewave/parity/Bench.java): зоны в склеенных ценах и сессия начала
+    df[["color", "session", "lo", "hi"]].to_csv(ROOT / "output" / "manual_zones_bench.csv", index=False, header=False)
     (ROOT / "output").mkdir(exist_ok=True)
     df.to_csv(ROOT / "output" / "manual_zones.csv", index=False)
     pd.set_option("display.width", 250)

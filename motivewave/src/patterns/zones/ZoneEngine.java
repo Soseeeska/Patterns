@@ -91,7 +91,8 @@ public final class ZoneEngine {
         public double partMaxBodyPts = 100;
         public double fitBodyShare = 0.20;        // подгонка по телам: строки, где тел 30m-свечей дней композита меньше этой
                                                   // доли максимума (и меньше 3), — пустота (0 — без подгонки)
-        public double fitClusterShare = 0.60;     // зона — скопление тел вокруг максимума тел в куске: не ниже этой доли его       // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
+        public double fitClusterShare = 0.60;
+        public boolean fitEthBodies = true;       // подгонка по телам всех свечей сессии (ETH + RTH), профиль — только RTH     // зона — скопление тел вокруг максимума тел в куске: не ниже этой доли его       // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
         public boolean coreNodes = true;          // ядро рисуется узлами профиля (локальные вершины, разделённые провалами)
         public double nodeDipTpo = 2.0;           // провал между узлами — не меньше стольких TPO от обеих вершин (сглаж. 1 п.)
         public double nodeDropTpo = 2.0;          // узел — строки не ниже вершины узла на столько TPO
@@ -208,6 +209,7 @@ public final class ZoneEngine {
         LocalDate date; int n; boolean shortDay;
         double open, high, low, close;
         final List<int[]> periods = new ArrayList<>();   // {period, lowTicks, highTicks, openTicks, closeTicks}
+        final List<int[]> bodies = new ArrayList<>();    // тела всех 30m-свечей сессии (ETH + RTH): {open, close} в тиках
         Profile profile; int poc, val, vah;              // тики
         int hvnTpo, bandLo, bandHi;                      // per_day (только полные дни)
     }
@@ -296,6 +298,10 @@ public final class ZoneEngine {
                 day.high = Math.max(day.high, b.h); day.low = Math.min(day.low, b.l); day.close = b.c;
                 day.periods.add(new int[]{per, ticks(b.l, tick), ticks(b.h, tick), ticks(b.o, tick), ticks(b.c, tick)});
             }
+        }
+        for (int i = 0; i < bars.size(); i++) {           // тела свечей всей сессии — для подгонки по телам
+            Day d = days.get(sessOf[i]);
+            if (d != null) d.bodies.add(new int[]{ticks(bars.get(i).o, tick), ticks(bars.get(i).c, tick)});
         }
         List<Day> all = new ArrayList<>(days.values());
         List<Day> full = new ArrayList<>();
@@ -712,7 +718,8 @@ public final class ZoneEngine {
         double dip = Math.max(2.0, p.partDipShare * mx);
         // профиль тел: сколько тел 30m-свечей (open–close) дней композита перекрывает каждую строку
         int[] occ = new int[n + 1];
-        for (Day d : days) for (int[] q : d.periods) {
+        for (Day d : days) for (int[] q0 : p.fitEthBodies ? d.bodies : rthBodies(d)) {
+            int[] q = {0, 0, 0, q0[0], q0[1]};
             int x0 = Math.max(0, Math.min(q[3], q[4]) - cp.low), x1 = Math.min(n - 1, Math.max(q[3], q[4]) - cp.low);
             if (x0 <= x1) { occ[x0]++; occ[x1 + 1]--; }
         }
@@ -772,6 +779,12 @@ public final class ZoneEngine {
                 if (hi - lo + 1 >= Math.min(minW, onePt)) out.add(new int[]{cp.low + lo, cp.low + hi, r[2]});
             }
         }
+        return out;
+    }
+
+    private static List<int[]> rthBodies(Day d) {
+        List<int[]> out = new ArrayList<>();
+        for (int[] q : d.periods) out.add(new int[]{q[3], q[4]});
         return out;
     }
 
