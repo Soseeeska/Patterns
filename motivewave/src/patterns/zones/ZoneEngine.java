@@ -566,16 +566,18 @@ public final class ZoneEngine {
         }
     }
 
-    /** Подсказка ядра: дни композита, диапазон, POC и две самые высокие вершины профиля (вторая — не ближе 5 п. к первой). */
+    /** Подсказка ядра: дни композита, диапазон, POC и две самые высокие вершины профиля (вторая — за провалом вне плато POC). */
     static String coreInfo(List<Day> days, Profile cp, int poc, double tick) {
         StringBuilder b = new StringBuilder("композит ");
         for (int i = 0; i < days.size(); i++) b.append(i == 0 ? "" : ", ").append(days.get(i).date.toString().substring(5));
         b.append(String.format(Locale.ROOT, "; диапазон %.2f – %.2f; POC %.2f (%d TPO)",
                 cp.low * tick, cp.high() * tick, poc * tick, cp.counts[poc - cp.low]));
-        int sep = (int) Math.round(5.0 / tick), i1 = -1, i2 = -1;
-        for (int i = 0; i < cp.counts.length; i++) if (i1 < 0 || cp.counts[i] > cp.counts[i1]) i1 = i;
-        for (int i = 0; i < cp.counts.length; i++)
-            if (Math.abs(i - i1) > sep && (i2 < 0 || cp.counts[i] > cp.counts[i2])) i2 = i;
+        int[] c = cp.counts; int i1 = poc - cp.low, i2 = -1;
+        // плато первой вершины: подряд строки не ниже её TPO − 2; вторая вершина — вне плато, через провал
+        int a = i1, z = i1;
+        while (a > 0 && c[a - 1] >= c[i1] - 2) a--;
+        while (z < c.length - 1 && c[z + 1] >= c[i1] - 2) z++;
+        for (int i = 0; i < c.length; i++) if ((i < a || i > z) && (i2 < 0 || c[i] > c[i2])) i2 = i;
         b.append(String.format(Locale.ROOT, "; вершины %.2f (%d)", (cp.low + i1) * tick, cp.counts[i1]));
         if (i2 >= 0) b.append(String.format(Locale.ROOT, ", %.2f (%d)", (cp.low + i2) * tick, cp.counts[i2]));
         return b.toString();
