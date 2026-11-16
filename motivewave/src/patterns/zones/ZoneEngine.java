@@ -79,9 +79,10 @@ public final class ZoneEngine {
         public boolean compositeMode = false;     // класс зоны по положению в композите, а не по отторжениям
         public boolean coreByVa = false;          // ядро композита: VA (иначе HVN-полоса вокруг POC)
         public double coreAbsorb = 0.30;
-        public boolean coreFromSessions = true;
-        public double coreMinDaysShare = 0.5;     // ядро признаётся, если его задевают HVN-полосы ≥ этой доли дней
-                                                  // композита; иначе это не баланс — композит не используется (0 — выкл.)   // ядро — где совпадают HVN-полосы ≥ половины дней композита
+        public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
+        public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
+        public double coreMinDaysShare = 0.5;     // ядро признаётся, если его задевают VA ≥ этой доли дней композита;
+                                                  // иначе это не баланс — композит не используется (0 — выкл.)
         public double joinGapPts = 0.25;          // режим «по композиту»: зона того же вида ближе этого к более
                                                   // старой — её подтверждение (ядро не создаётся / не рисуется); < 0 — выкл.
         public double zoneMaxWidthPts = 0;        // > 0: HVN-полоса дня и ядро композита шире — сужаются до окна
@@ -508,12 +509,11 @@ public final class ZoneEngine {
             int poc = va[0];
             int cap = (int) Math.round(p.zoneMaxWidthPts / p.tick);
             if (p.coreFromSessions && !p.coreByVa) {
-                // ширина — от HVN-полосы композита (≤ лимита), место — где окно накрывают дневные HVN-полосы
-                int w = band[1] - band[0];
-                if (cap > 0) w = Math.min(w, cap);
-                band = sessionWindow(cand, cp, w);
+                // ядро — от POC композита до обрыва TPO (и не ниже hvnShare максимума), не шире лимита;
+                // композит — баланс, если VA его дней задевают ядро
+                band = narrow(cp, cliffBand(cp, poc, p.hvnShare, p.coreCliffTpo, 4), poc, cap);
                 int hit = 0;
-                for (Day d : cand) if (d.bandLo <= band[1] && d.bandHi >= band[0]) hit++;
+                for (Day d : cand) if (d.val <= band[1] && d.vah >= band[0]) hit++;
                 if (p.coreMinDaysShare > 0 && hit < Math.ceil(p.coreMinDaysShare * n - 1e-9)) {
                     band = null;                // не баланс: дни композита не сходятся в одной зоне
                 }
@@ -537,31 +537,17 @@ public final class ZoneEngine {
         }
     }
 
-    /** Ядро по сессионным профилям: окно шириной w тиков внутри диапазона композита, которое задевает
-     *  больше всего дневных HVN-полос его дней; при равенстве — сильнее накрытое (сумма по строкам:
-     *  сколько дней накрывает строку), затем с наибольшим TPO композита, затем ближе к POC композита. */
-    static int[] sessionWindow(List<Day> days, Profile cp, int w) {
-        int n = cp.counts.length;
-        w = Math.min(w, n - 1);
-        int[] cov = new int[n + 1];
-        for (Day d : days) {
-            int a = Math.max(0, d.bandLo - cp.low), b = Math.min(n - 1, d.bandHi - cp.low);
-            if (a <= b) { cov[a]++; cov[b + 1]--; }
-        }
-        for (int i = 1; i <= n; i++) cov[i] += cov[i - 1];
-        int poc = pocIndex(cp);
-        long bestC = -1, bestT = -1; int bestLo = 0, bestH = -1; double bestD = Double.MAX_VALUE;
-        for (int lo = 0; lo + w < n; lo++) {
-            long c = 0, t = 0;
-            for (int i = lo; i <= lo + w; i++) { c += cov[i]; t += cp.counts[i]; }
-            int h = 0;
-            for (Day dd : days) if (dd.bandLo <= cp.low + lo + w && dd.bandHi >= cp.low + lo) h++;
-            double d = Math.abs(lo + w / 2.0 - poc);
-            boolean better = h != bestH ? h > bestH : c != bestC ? c > bestC : t != bestT ? t > bestT : d < bestD;
-            if (better) { bestH = h; bestC = c; bestT = t; bestLo = lo; bestD = d; }
-        }
-        return new int[]{cp.low + bestLo, cp.low + bestLo + w};
+    /** Полоса вокруг POC до обрыва: строка входит, пока её TPO ≥ share × максимум и не ниже
+     *  максимума предыдущих look строк (в сторону POC) на cliff принтов и больше. */
+    static int[] cliffBand(Profile p, int pocTicks, double share, int cliff, int look) {
+        int[] c = p.counts; int i = pocTicks - p.low; double thr = share * p.max();
+        int lo = i, hi = i;
+        while (hi + 1 < c.length && c[hi + 1] >= thr && (cliff <= 0 || c[hi + 1] > maxOf(c, Math.max(i, hi - look + 1), hi) - cliff)) hi++;
+        while (lo - 1 >= 0 && c[lo - 1] >= thr && (cliff <= 0 || c[lo - 1] > maxOf(c, lo, Math.min(i, lo + look - 1)) - cliff)) lo--;
+        return new int[]{p.low + lo, p.low + hi};
     }
+
+    private static int maxOf(int[] c, int a, int b) { int m = 0; for (int k = a; k <= b; k++) m = Math.max(m, c[k]); return m; }
 
     /** Полоса [lo, hi] шире maxW тиков → окно шириной maxW внутри неё, содержащее POC, с максимумом TPO
      *  (при равенстве — с POC ближе к середине). */
