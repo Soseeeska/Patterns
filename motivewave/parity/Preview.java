@@ -111,7 +111,7 @@ public class Preview {
         for (ZonePlan.Rect r : plan.rects) {
             double x0 = tx.applyAsDouble(r.t0), x1 = tx.applyAsDouble(r.t1);
             if (x1 < 0) continue;
-            double y0 = ty.applyAsDouble(r.z.bhi), y1 = ty.applyAsDouble(r.z.blo);
+            double y0 = ty.applyAsDouble(r.hi), y1 = ty.applyAsDouble(r.lo);
             Color c = base.get(r.kind);
             int op = 30;                                   // заливка по умолчанию в индикаторе, границ нет
             g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.round(op * 2.55f)));

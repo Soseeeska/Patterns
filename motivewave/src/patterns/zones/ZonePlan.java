@@ -21,7 +21,10 @@ public final class ZonePlan {
     /** Зона на подряд идущих сессиях с одним видом. */
     public static final class Rect {
         public final Zone z; public final Kind kind; public final long t0, t1; public final String tip;
-        Rect(Zone z, Kind kind, long t0, long t1, String tip) { this.z = z; this.kind = kind; this.t0 = t0; this.t1 = t1; this.tip = tip; }
+        public final double lo, hi;
+        Rect(Zone z, Kind kind, long t0, long t1, String tip, double lo, double hi) {
+            this.z = z; this.kind = kind; this.t0 = t0; this.t1 = t1; this.tip = tip; this.lo = lo; this.hi = hi;
+        }
     }
 
     /** Уровень вчерашнего RTH-профиля на сессию. */
@@ -56,8 +59,9 @@ public final class ZonePlan {
             while (i < n) {
                 if (row[i] == null) { i++; continue; }
                 int j = i;
-                while (j + 1 < n && row[j + 1] != null && row[j + 1].st.kind == row[i].st.kind) j++;
-                plan.rects.add(new Rect(z, row[i].st.kind, t0[i], t1[j], tip(z, row[j], ss.get(j).date, p)));
+                while (j + 1 < n && row[j + 1] != null && row[j + 1].st.kind == row[i].st.kind
+                        && row[j + 1].lo == row[i].lo && row[j + 1].hi == row[i].hi) j++;
+                plan.rects.add(new Rect(z, row[i].st.kind, t0[i], t1[j], tip(z, row[j], ss.get(j).date, p), row[i].lo, row[i].hi));
                 i = j + 1;
             }
         }
@@ -74,7 +78,9 @@ public final class ZonePlan {
 
     static String tip(Zone z, Shown v, LocalDate on, Params p) {
         StringBuilder b = new StringBuilder();
-        b.append(v.st.kind.title).append("  ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi));
+        b.append(v.st.kind.title).append("  ").append(fmt(v.lo)).append(" – ").append(fmt(v.hi));
+        if (v.lo != z.blo || v.hi != z.bhi) b.append(" (обрезана соседними, полностью ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi)).append(')');
+        if ("node".equals(z.src)) b.append("\nузел ядра композита");
         b.append("\nпоявилась ").append(z.av).append(", возраст ").append(v.st.age).append(" дн. (на ").append(on).append(')');
         b.append("\nотторжений ").append(v.st.rej).append(" (лонг ").append(v.st.nl).append(" / шорт ").append(v.st.ns);
         if (v.st.purity != null) b.append(", чистота ").append(Math.round(v.st.purity * 100)).append('%');

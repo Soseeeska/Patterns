@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -91,6 +91,11 @@ public class TpoZonesStudy extends Study {
         g.addRow(new BooleanDescriptor(CORE_SESS, "Ядро по профилю композита: от POC до обрыва TPO, баланс — по VA дней", true));
         g.addRow(new IntegerDescriptor(CLIFF, "Обрыв TPO: строка на N принтов ниже максимума предыдущего 1 п. — граница ядра (0 — выкл.)", 4, 0, 50, 1));
         g.addRow(new DoubleDescriptor(CORE_DAYS, "Композит — баланс, если ядро задевают VA ≥ доли его дней (0 — любой)", 0.5, 0, 1, 0.05));
+        g.addRow(new BooleanDescriptor(NODES, "Ядро композита — узлами профиля (тонкие зоны вокруг вершин TPO)", true));
+        g.addRow(new DoubleDescriptor(NODE_DIP, "Узлы: провал между вершинами от, TPO", 2.0, 0.5, 20, 0.5));
+        g.addRow(new DoubleDescriptor(NODE_DROP, "Узлы: строки не ниже вершины узла на, TPO", 2.0, 0.5, 20, 0.5));
+        g.addRow(new BooleanDescriptor(NO_OVERLAP, "Зоны не налезают друг на друга (младшие обрезаются)", true));
+        g.addRow(new DoubleDescriptor(MIN_PIECE, "Обрезанная зона уже, п. — не рисуется", 1.0, 0.25, 10, 0.25));
         g.addRow(new BooleanDescriptor(SHORT_DAYS, "Короткие дни (ранние закрытия) входят в композиты", true));
         g.addRow(new DoubleDescriptor(SUB_OV, "Уточнение: ≥ доли диапазона композита внутри раннего баланса — его ядро серое (0 — выкл.)", 0.70, 0, 1, 0.05));
         g.addRow(new DoubleDescriptor(SUB_RATIO, "Уточнение: если тот баланс не шире композита больше чем в, раз", 2.0, 1, 10, 0.1));
@@ -247,6 +252,11 @@ public class TpoZonesStudy extends Study {
         p.coreCliffTpo = st.getInteger(CLIFF, 4);
         p.subOverlap = st.getDouble(SUB_OV, 0.70);
         p.compositeShortDays = st.getBoolean(SHORT_DAYS, true);
+        p.coreNodes = st.getBoolean(NODES, true);
+        p.nodeDipTpo = st.getDouble(NODE_DIP, 2.0);
+        p.nodeDropTpo = st.getDouble(NODE_DROP, 2.0);
+        p.noOverlap = st.getBoolean(NO_OVERLAP, true);
+        p.minPiecePts = st.getDouble(MIN_PIECE, 1.0);
         p.subMaxRatio = st.getDouble(SUB_RATIO, 2.0);
         p.joinGapPts = st.getDouble(JOIN_GAP, 0.25);
         p.minWickTicks = st.getInteger(WICK, 2);
@@ -288,14 +298,14 @@ public class TpoZonesStudy extends Study {
         Color none = new Color(0, 0, 0, 0);
         List<Figure> figs = new ArrayList<>();
         for (ZonePlan.Rect r : plan.rects) {
-            Box b = new Box(r.t0, r.z.bhi, r.t1, r.z.blo);
+            Box b = new Box(r.t0, r.hi, r.t1, r.lo);
             b.setFillColor(fill.get(r.kind));
             b.setLineColor(none);
             b.setUnderlay(true);
             b.setPopupMessage(r.tip);
             figs.add(b);
             if (!edges) continue;
-            for (double y : new double[]{r.z.bhi, r.z.blo}) {
+            for (double y : new double[]{r.hi, r.lo}) {
                 Line ln = new Line(r.t0, y, r.t1, y);
                 ln.setColor(line.get(r.kind)); ln.setStroke(solid); ln.setUnderlay(true);
                 ln.setPopupMessage(r.tip);

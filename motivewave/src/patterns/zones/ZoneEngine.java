@@ -82,7 +82,12 @@ public final class ZoneEngine {
         public double coreAbsorb = 0.30;
         public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
         public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
-        public boolean compositeShortDays = true; // режим «по композиту»: короткие дни входят в композиты
+        public boolean compositeShortDays = true;
+        public boolean coreNodes = true;          // ядро рисуется узлами профиля (локальные вершины, разделённые провалами)
+        public double nodeDipTpo = 2.0;           // провал между узлами — не меньше стольких TPO от обеих вершин (сглаж. 1 п.)
+        public double nodeDropTpo = 2.0;          // узел — строки не ниже вершины узла на столько TPO
+        public boolean noOverlap = true;          // зоны в сессии не налезают друг на друга: младшие обрезаются
+        public double minPiecePts = 1.0;          // обрезанная зона уже этого — не рисуется // режим «по композиту»: короткие дни входят в композиты
         public double subOverlap = 0.70;          // ≥ этой доли диапазона композита внутри раннего баланса — уточнение (0 — выкл.)
         public double subMaxRatio = 2.0;          // ... если тот баланс не шире композита больше чем в столько раз
         public double coreMinDaysShare = 0.5;     // ядро признаётся, если его задевают VA ≥ этой доли дней композита;
@@ -204,6 +209,8 @@ public final class ZoneEngine {
         public boolean young; public LocalDate greyUntil;   // young && greyUntil == null — серая всё время
         public boolean fixedGrey;                            // ядро композита-уточнения: всегда серая
         public String info = "";                             // ядро: как посчитано (для подсказки)
+        public List<Zone> nodes = List.of();                 // ядро: узлы профиля (рисуются вместо ядра)
+        Zone nodeOf;                                         // узел: его ядро
         int formationDays; List<LocalDate> conf = List.of();
         // события (дни от 1970-01-01)
         public long[] L = new long[0], S = new long[0];
@@ -235,7 +242,8 @@ public final class ZoneEngine {
     /** Видимая в сессию зона. */
     public static final class Shown {
         public final Zone z; public final State st;
-        Shown(Zone z, State st) { this.z = z; this.st = st; }
+        public double lo, hi;                               // границы на эту сессию (после обрезки пересечений)
+        Shown(Zone z, State st) { this.z = z; this.st = st; lo = z.blo; hi = z.bhi; }
     }
 
     public static final class Result {
@@ -371,7 +379,10 @@ public final class ZoneEngine {
                 else { cores.add(c.core); cc.put(c.core, new ArrayList<>()); }
             }
             for (Zone e : cores) e.coreConf = cc.get(e).stream().mapToLong(Long::longValue).toArray();
-            zones.addAll(cores);
+            for (Zone e : cores) {
+                if (e.nodes.isEmpty()) { zones.add(e); continue; }
+                for (Zone nz : e.nodes) { nz.coreConf = e.coreConf; zones.add(nz); }
+            }
         }
 
         // ---------- события по RTH-барам: отторжения (лонг / шорт)
@@ -442,6 +453,13 @@ public final class ZoneEngine {
         }
 
         if (p.compositeMode) {
+            // ядро, нарисованное узлами, в списке зон нет: его границы — от нижнего до верхнего узла
+            for (Comp c : res.comps) {
+                Zone e = c.core;
+                if (e.nodes.isEmpty()) continue;
+                e.blo = Double.MAX_VALUE; e.bhi = -Double.MAX_VALUE;
+                for (Zone nz : e.nodes) { e.blo = Math.min(e.blo, nz.blo); e.bhi = Math.max(e.bhi, nz.bhi); }
+            }
             for (Zone z : zones) {
                 if (z.k != K_HVN && z.k != K_GREY) continue;
                 double mid = (z.blo + z.bhi) / 2;
@@ -518,10 +536,46 @@ public final class ZoneEngine {
                 }
                 if (!hide) out.add(v);
             }
+            if (p.compositeMode && p.noOverlap) out = layout(out, p);
             res.visible.add(out);
         }
         return res;
     }
+
+    /** Раскладка без пересечений: ядра, затем остальные зоны (старшие первыми), затем серые; зона,
+     *  налезающая на уже уложенные, обрезается до самого широкого свободного куска (≥ minPiecePts). */
+    static List<Shown> layout(List<Shown> in, Params p) {
+        List<Shown> order = new ArrayList<>(in);
+        order.sort((x, y) -> {
+            int rx = rank(x.st.kind), ry = rank(y.st.kind);
+            if (rx != ry) return rx - ry;
+            int c = x.z.av.compareTo(y.z.av);
+            return c != 0 ? c : Double.compare(x.z.blo, y.z.blo);
+        });
+        List<double[]> used = new ArrayList<>();
+        List<Shown> out = new ArrayList<>();
+        for (Shown v : order) {
+            double bestLo = 0, bestHi = -1;
+            List<double[]> pieces = new ArrayList<>(); pieces.add(new double[]{v.z.blo, v.z.bhi});
+            for (double[] u : used) {
+                List<double[]> next = new ArrayList<>();
+                for (double[] q : pieces) {
+                    if (u[1] <= q[0] || u[0] >= q[1]) { next.add(q); continue; }
+                    if (u[0] > q[0]) next.add(new double[]{q[0], u[0]});
+                    if (u[1] < q[1]) next.add(new double[]{u[1], q[1]});
+                }
+                pieces = next;
+            }
+            for (double[] q : pieces) if (q[1] - q[0] > bestHi - bestLo) { bestLo = q[0]; bestHi = q[1]; }
+            if (bestHi - bestLo < p.minPiecePts - 1e-9) continue;
+            v.lo = bestLo; v.hi = bestHi;
+            used.add(new double[]{bestLo, bestHi});
+            out.add(v);
+        }
+        return out;
+    }
+
+    private static int rank(Kind k) { return k == Kind.CORE ? 0 : k == Kind.GREY ? 2 : 1; }
 
     // ------------------------------------------------------------------ композиты
     private static void closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
@@ -554,6 +608,21 @@ public final class ZoneEngine {
                 core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
                 c.core = core;
                 comps.add(c);
+                if (p.coreNodes) {
+                    List<int[]> nd = nodes(cp, poc, p.hvnShare, p.nodeDipTpo, p.nodeDropTpo, (int) Math.round(1.0 / p.tick));
+                    if (!nd.isEmpty()) {
+                        List<Zone> zs = new ArrayList<>();
+                        int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+                        for (int[] q : nd) {
+                            Zone nz = new Zone();
+                            nz.k = K_CORE; nz.av = endDay; nz.src = "node"; nz.info = core.info; nz.nodeOf = core;
+                            nz.lo = q[0] * p.tick; nz.hi = q[1] * p.tick;
+                            zs.add(nz); lo = Math.min(lo, q[0]); hi = Math.max(hi, q[1]);
+                        }
+                        core.nodes = zs;
+                        core.lo = lo * p.tick; core.hi = hi * p.tick;      // ядро для классов — от нижнего до верхнего узла
+                    }
+                }
             }
         }
         Zone z = new Zone();
@@ -584,6 +653,52 @@ public final class ZoneEngine {
         if (i2 >= 0) b.append(String.format(Locale.ROOT, ", %.2f (%d)", (cp.low + i2) * tick, cp.counts[i2]));
         return b.toString();
     }
+
+    /** Узлы профиля: участок строк не ниже share × максимум (сглаживание 1 п.) вокруг POC делится по
+     *  провалам глубиной ≥ dip TPO от обеих соседних вершин; узел — строки около вершины участка, не ниже
+     *  её на drop TPO, не уже 1 п. {lo, hi} в тиках, снизу вверх. */
+    static List<int[]> nodes(Profile p, int pocTicks, double share, double dip, double drop, int onePt) {
+        int[] c = p.counts; int n = c.length, half = onePt / 2;
+        double[] sm = new double[n];
+        for (int i = 0; i < n; i++) {
+            double sum = 0; int k = 0;
+            for (int j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { sum += c[j]; k++; }
+            sm[i] = sum / k;
+        }
+        double mx = 0; for (double v : sm) mx = Math.max(mx, v);
+        int pi = pocTicks - p.low, a = pi, b = pi;
+        while (a > 0 && sm[a - 1] >= share * mx) a--;
+        while (b < n - 1 && sm[b + 1] >= share * mx) b++;
+        // локальные вершины и провалы внутри [a, b]
+        List<Integer> peaks = new ArrayList<>();
+        for (int i = a; i <= b; i++) {
+            boolean up = i == a || sm[i] >= sm[i - 1], dn = i == b || sm[i] >= sm[i + 1];
+            if (up && dn && (peaks.isEmpty() || i - peaks.get(peaks.size() - 1) > 1)) peaks.add(i);
+        }
+        // склейка вершин, между которыми провал мельче dip
+        boolean merged = true;
+        while (merged && peaks.size() > 1) {
+            merged = false;
+            for (int k = 0; k + 1 < peaks.size(); k++) {
+                int x = peaks.get(k), y = peaks.get(k + 1);
+                double low = Double.MAX_VALUE; for (int i = x; i <= y; i++) low = Math.min(low, sm[i]);
+                if (Math.min(sm[x], sm[y]) - low < dip) { peaks.remove(sm[x] >= sm[y] ? k + 1 : k); merged = true; break; }
+            }
+        }
+        List<int[]> out = new ArrayList<>();
+        for (int k = 0; k < peaks.size(); k++) {
+            int x = peaks.get(k);
+            int lim0 = k == 0 ? a : argMin(sm, peaks.get(k - 1), x), lim1 = k == peaks.size() - 1 ? b : argMin(sm, x, peaks.get(k + 1));
+            int lo = x, hi = x;
+            while (lo - 1 > lim0 && sm[lo - 1] >= sm[x] - drop) lo--;
+            while (hi + 1 < lim1 && sm[hi + 1] >= sm[x] - drop) hi++;
+            while (hi - lo < onePt) { if (lo > lim0 && (hi >= lim1 || sm[lo - 1] >= sm[Math.min(n - 1, hi + 1)])) lo--; else if (hi < lim1) hi++; else break; }
+            out.add(new int[]{p.low + lo, p.low + hi});
+        }
+        return out;
+    }
+
+    private static int argMin(double[] v, int a, int b) { int m = a; for (int i = a; i <= b; i++) if (v[i] < v[m]) m = i; return m; }
 
     /** Полоса вокруг POC до обрыва: строка входит, пока её TPO ≥ share × максимум и не ниже
      *  максимума предыдущих look строк (в сторону POC) на cliff принтов и больше. */
