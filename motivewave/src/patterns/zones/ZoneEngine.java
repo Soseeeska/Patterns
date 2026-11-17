@@ -107,6 +107,8 @@ public final class ZoneEngine {
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
                                                   // накрывшему); иначе — только первый композит после её рождения
+        public boolean compShortNoBreak = false;  // короткий день не рвёт кандидата: входит в профиль, выходом быть не может
+        public boolean compVaPrevDay = true;      // наслоение VA — с VA кандидата или с VA предыдущего (полного) дня кандидата
         public boolean compRollBreak = true;      // ролл разрывает композит: кандидат закрывается на смене контракта (на несклеенном
                                                   // графике баланс до и после ролла — в разных местах), ложный выход через ролл не доклеивает
         public boolean liveComposite = true;      // формирующийся композит: с compositeMinDays дней — со следующей сессии задаёт роли
@@ -402,10 +404,13 @@ public final class ZoneEngine {
                     cand = new ArrayList<>(); cand.add(d); cp = d.profile;
                     continue;
                 }
+                if (p.compositeMode && p.compShortNoBreak && d.shortDay) {        // короткий день — в профиль, не выход
+                    cand.add(d); cp = merge(cp, d.profile); live(cand, cp, nextTradeDay.get(d.date), p, live); continue;
+                }
                 int c = ticks(d.close, tick);
                 if (cand.size() >= p.compositeMinDays) lastCand = null;
                 if (p.compositeMode && p.compFalseBreak && lastCand != null && c >= lastCp.low && c <= lastCp.high()
-                        && (!p.compJoinBoth || vaJoins(d, lastCp, p) || insideDay(d, lastCp, p))
+                        && (!p.compJoinBoth || vaJoins(d, lastCp, p) || vaPrev(d, lastCand, p) || insideDay(d, lastCp, p))
                         && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts && extCount < p.compFalseBreakMax) {
                     // ложный выход: композит закрылся, новый ещё не набрал дней, а цена закрылась обратно в его
                     // диапазоне — дни после выхода доклеиваются к нему, композит продолжается
@@ -419,8 +424,9 @@ public final class ZoneEngine {
                 }
                 boolean join = c >= cp.low && c <= cp.high();
                 boolean or = !p.compJoinBoth || insideDay(d, cp, p);          // день внутри композита — ИЛИ, иначе И
-                if (p.compositeMode && !or) join = join && vaJoins(d, cp, p);   // close в диапазоне И наслоение VA
-                else if (!join && p.compositeMode && p.compVaOverlap > 0) join = vaJoins(d, cp, p);   // ... ИЛИ
+                boolean va = vaJoins(d, cp, p) || vaPrev(d, cand, p);
+                if (p.compositeMode && !or) join = join && va;                  // close в диапазоне И наслоение VA
+                else if (!join && p.compositeMode && p.compVaOverlap > 0) join = va;   // ... ИЛИ
                 if (join) { cand.add(d); cp = merge(cp, d.profile); live(cand, cp, nextTradeDay.get(d.date), p, live); continue; }
                 Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
                 if (made != null) made.extendsOf = extOf;
@@ -847,6 +853,17 @@ public final class ZoneEngine {
     }
 
     // ------------------------------------------------------------------ композиты
+    /** compVaPrevDay: VA дня пересекается с VA последнего полного дня кандидата на ≥ compVaOverlap меньшей из двух. */
+    static boolean vaPrev(Day d, List<Day> cand, Params p) {
+        if (!p.compVaPrevDay || p.compVaOverlap <= 0 || cand == null) return false;
+        Day y = null;
+        for (int i = cand.size() - 1; i >= 0 && y == null; i--) if (!cand.get(i).shortDay) y = cand.get(i);
+        if (y == null) return false;
+        int inter = Math.min(d.vah, y.vah) - Math.max(d.val, y.val) + 1;
+        int narrow = Math.min(d.vah - d.val, y.vah - y.val) + 1;
+        return inter > 0 && inter / (double) narrow >= p.compVaOverlap;
+    }
+
     /** VA дня и VA композита пересекаются на ≥ compVaOverlap меньшей из двух (compVaOverlap = 0 — проверка выключена). */
     static boolean vaJoins(Day d, Profile cp, Params p) {
         if (p.compVaOverlap <= 0) return true;
