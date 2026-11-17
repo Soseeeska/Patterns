@@ -38,14 +38,14 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 
 /**
- * TPO Zones 1.7 — карта зон ES (ветка Zones-1.1 + класс по композиту) прямо на графике MotiveWave.
+ * TPO Zones 1.8 — плотная карта зон ES (ветка Zones-1.1 + класс по композиту) прямо на графике MotiveWave.
  * Расчёт — ZoneEngine (порт scripts/zone_map_export.py + фильтров страницы карты зон),
  * по 30m-барам инструмента; рисуется на любом таймфрейме графика.
  */
 @StudyHeader(
     namespace = "com.patterns",
-    id = "TPO_ZONES_1_2",
-    name = "TPO Zones 1.7",
+    id = "TPO_ZONES_1_8",
+    name = "TPO Zones 1.8",
     label = "TPO Zones",
     desc = "Карта зон по RTH TPO-профилям: старые балансы, первородные HVN-зоны с классом по отторжениям, серые зоны",
     menu = "Patterns",
@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String MINOR = "sessMinor", CORE_TOUCH = "sessCoreTouch", REFINE = "sessRefine", VA_PREV = "compVaPrevDay", RESYNC = "sessResyncLater", ROLL_BRK = "compRollBreak", ONE_COLOR = "drawOneColor", LIVE = "liveComposite", ROLL = "rollAdjust", ROLL_GAP = "rollMinGap", FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", COMP_OUT = "compOutsideDays", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String S_MAX = "sessMax", MINOR = "sessMinor", CORE_TOUCH = "sessCoreTouch", REFINE = "sessRefine", VA_PREV = "compVaPrevDay", RESYNC = "sessResyncLater", ROLL_BRK = "compRollBreak", ONE_COLOR = "drawOneColor", LIVE = "liveComposite", ROLL = "rollAdjust", ROLL_GAP = "rollMinGap", FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", COMP_OUT = "compOutsideDays", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -96,11 +96,12 @@ public class TpoZonesStudy extends Study {
         g.addRow(new DoubleDescriptor(PMAXB, "Разметка: тело не шире, п. (шире — остаётся плотная середина)", 100, 20, 400, 5));
         g.addRow(new DoubleDescriptor(FIT_B, "Подгонка по телам: меньше доли максимума тел свечей — пустота (0 — без подгонки)", 0.20, 0, 0.8, 0.05));
         g.addRow(new BooleanDescriptor(SESS, "Зоны из сессий: узлы RTH TPO дня, подогнанные по телам; композит задаёт роль и один раз перекрашивает", true));
-        g.addRow(new DoubleDescriptor(S_GAP, "Сессионные зоны: узел ближе, п., к существующей зоне — её подтверждение (зазор между зонами)", 3.0, 0, 20, 0.5));
-        g.addRow(new BooleanDescriptor(MINOR, "Минорные серые зоны: слабый узел сессии там, где нет других зон; сильный узел позже его вытесняет", false));
-        g.addRow(new BooleanDescriptor(CORE_TOUCH, "Сессионные зоны: синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела", true));
+        g.addRow(new DoubleDescriptor(S_GAP, "Сессионные зоны: узел ближе, п., к существующей зоне — её подтверждение (зазор между зонами)", 0.5, 0, 20, 0.25));
+        g.addRow(new DoubleDescriptor(S_MAX, "Сессионные зоны: не шире, п.", 4.0, 1, 20, 0.5));
+        g.addRow(new BooleanDescriptor(MINOR, "Минорные серые зоны: слабый узел сессии там, где нет других зон; сильный узел позже его вытесняет", true));
+        g.addRow(new BooleanDescriptor(CORE_TOUCH, "Сессионные зоны: синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела", false));
         g.addRow(new BooleanDescriptor(REFINE, "Сессионные зоны: уточнение — внутри узла пошире все скопления тел свечей, каждое — зона (выкл. — одно скопление)", true));
-        g.addRow(new DoubleDescriptor(S_SHARE, "Сессионные зоны: узел — вершина не ниже доли главного узла дня", 0.5, 0, 1, 0.05));
+        g.addRow(new DoubleDescriptor(S_SHARE, "Сессионные зоны: узел — вершина не ниже доли главного узла дня", 0.25, 0, 1, 0.05));
         g.addRow(new IntegerDescriptor(S_PEAK, "Сессионные зоны: вершина узла от, TPO", 3, 1, 13, 1));
         g.addRow(new DoubleDescriptor(S_BODY, "Сессионные зоны: подгонка — тела не ниже доли максимума тел", 0.5, 0.1, 0.95, 0.05));
         g.addRow(new BooleanDescriptor(CLUST, "Зоны — скопления тел свечей (границы на провалах), без нарезки равными кусками", true));
@@ -139,7 +140,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.GREY), Kind.GREY.title, true));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.CORE), Kind.CORE.title + " (режим «по композиту»)", true));
         g = tab.addGroup("Фильтры (как на странице карты зон)");
-        g.addRow(new IntegerDescriptor(NEAR, "Ближайших к open сессии зон (0 — все)", 6, 0, 100, 1));
+        g.addRow(new IntegerDescriptor(NEAR, "Ближайших к open сессии зон (0 — все)", 0, 0, 100, 1));
         g.addRow(new IntegerDescriptor(SESSIONS, "Сколько последних сессий показывать", 250, 5, 5000, 5));
         g.addRow(new IntegerDescriptor(ALIGN, "Подгонка границ по телам свечей, сессий (0 — без)", 0, 0, 200, 1));
         g.addRow(new IntegerDescriptor(PROMOTE, "Серая → основная: отторжений за подгонку (0 — не переводить)", 3, 0, 50, 1));
@@ -309,11 +310,12 @@ public class TpoZonesStudy extends Study {
         p.bodyClusters = st.getBoolean(CLUST, true);
         p.sessionZones = st.getBoolean(SESS, true);
         p.sessMinPeak = st.getInteger(S_PEAK, 3);
-        p.sessMinGapPts = st.getDouble(S_GAP, 3.0);
+        p.sessMinGapPts = st.getDouble(S_GAP, 0.5);
+        p.sessMaxPts = st.getDouble(S_MAX, 4.0);
         p.sessRefine = st.getBoolean(REFINE, true);
-        p.sessCoreTouch = st.getBoolean(CORE_TOUCH, true);
-        p.sessMinor = st.getBoolean(MINOR, false);
-        p.sessPeakShare = st.getDouble(S_SHARE, 0.5);
+        p.sessCoreTouch = st.getBoolean(CORE_TOUCH, false);
+        p.sessMinor = st.getBoolean(MINOR, true);
+        p.sessPeakShare = st.getDouble(S_SHARE, 0.25);
         p.sessBodyShare = st.getDouble(S_BODY, 0.5);
         p.clusterDip = st.getDouble(CL_DIP, 0.10);
         p.clusterMaxPts = st.getDouble(CL_MAX, 8);
@@ -326,7 +328,7 @@ public class TpoZonesStudy extends Study {
         p.joinGapPts = st.getDouble(JOIN_GAP, 0.25);
         p.minWickTicks = st.getInteger(WICK, 2);
         p.sessions = st.getInteger(SESSIONS, 250);
-        p.nearest = st.getInteger(NEAR, 6);
+        p.nearest = st.getInteger(NEAR, 0);
         p.alignSessions = st.getInteger(ALIGN, 0);
         p.promoteRejections = st.getInteger(PROMOTE, 3);
         p.minRejections = st.getInteger(MIN_REJ, 0);

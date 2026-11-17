@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Сборка TPO Zones для MotiveWave 7: dist/TpoZones-1.7.jar
+# Сборка TPO Zones для MotiveWave 7: dist/TpoZones-1.8.jar
 #   MW_SDK=/путь/к/mwave_sdk.jar ./build.sh      (по умолчанию lib/mwave_sdk.jar)
 # SDK берётся из установки MotiveWave или с motivewave.com/sdk; в репозиторий не кладётся.
 # Без SDK сборка идёт против sdk-stubs/ — заглушек тех классов и методов SDK, которые вызывает индикатор
@@ -20,5 +20,5 @@ else
   CP=build/stubs
 fi
 "${JAVAC:-javac}" --release 21 -encoding UTF-8 -cp "$CP" -d build/classes src/patterns/zones/*.java
-jar --create --file dist/TpoZones-1.7.jar -C build/classes .
-echo "dist/TpoZones-1.7.jar"
+jar --create --file dist/TpoZones-1.8.jar -C build/classes .
+echo "dist/TpoZones-1.8.jar"

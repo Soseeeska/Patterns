@@ -101,16 +101,16 @@ public final class ZoneEngine {
                                                   // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
         public double sessNodeDip = 0.15;         // провал между узлами — от доли меньшей вершины (и ≥ 1 TPO)
-        public double sessPeakShare = 0.5;         // узел — вершина не ниже этой доли максимума TPO дня (0 — любая ≥ sessMinPeak)
+        public double sessPeakShare = 0.25;        // узел — вершина не ниже этой доли максимума TPO дня (0 — любая ≥ sessMinPeak)
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
-        public double sessMaxPts = 8;             // зона не шире, п.
-        public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
+        public double sessMaxPts = 4;             // зона не шире, п.
+        public double sessMinGapPts = 0.5;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
                                                   // накрывшему); иначе — только первый композит после её рождения
-        public boolean sessMinor = false;         // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного, но ≥ sessMinPeak
+        public boolean sessMinor = true;          // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного, но ≥ sessMinPeak
                                                   // TPO) — серая зона там, где нет других (общее правило зазора sessMinGapPts); всегда серая
         public int sessMinorMinPeak = 2;          // ... вершина минорного узла — от стольких TPO (тонкий профиль тренда: 1–2 TPO на строку)
-        public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
+        public boolean sessCoreTouch = false;     // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
         public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
                                                   // все скопления тел свечей сессии (не одно), каждое — зона
         public double sessParentShare = 0.7;      // ... мнимая зона: строки профиля не ниже этой доли вершины узла
@@ -166,7 +166,7 @@ public final class ZoneEngine {
         public int promoteRejections = 3;        // перевод серой в основную; 0 — не переводить
         // фильтры страницы
         public int sessions = 250;               // сколько последних сессий показывать
-        public int nearest = 6;                  // ближайших к open сессии зон; 0 — все
+        public int nearest = 0;                  // ближайших к open сессии зон; 0 — все
         public int minRejections = 0;
         public int purityMinPct = 0, purityMaxPct = 100;
         public int minConfirmations = 0;
