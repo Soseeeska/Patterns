@@ -130,6 +130,8 @@ public final class ZoneEngine {
                                                   // графика; после подгонки по телам край — к ближайшей границе, пополам — квадрат целиком
                                                   // (принт в приоритете); 0 — выкл.
         public double gridOffsetPts = 0;          // ... сдвиг сетки квадратов от целых, п.
+        public boolean gridNarrowGrey = true;     // зона, чьё скопление тел уже одного квадрата (gridPts; без сетки — 1 п.), — один квадрат и всегда
+                                                  // серая (узкое место без проторговки — минорная структура)
         public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
                                                   // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
                                                   // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
@@ -284,6 +286,7 @@ public final class ZoneEngine {
         public Kind recolorKind; long recolorAt = Long.MAX_VALUE;   // сессионная зона: роль после (первой) перекраски композитом
         public LocalDate born;                               // сессионная зона: RTH-день, из узла которого она родилась
         public boolean minor;                                // сессионная минорная зона (слабый узел): всегда серая
+        public boolean narrow;                               // сессионная зона уже одного квадрата TPO (gridNarrowGrey): всегда серая
         long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии вытеснена сильным узлом — не рисуется
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
@@ -585,7 +588,9 @@ public final class ZoneEngine {
                 double gsh = rollShift(res, av.atStartOfDay(p.tz).toInstant().toEpochMilli());   // цены графика = цены расчёта − сдвиг
                 for (int[] nd : dayNodes(d, p, onePt, maxW)) {
                     if (p.gridPts > 0) {                                // края — по квадратам профиля на графике
-                        double[] g = snapGrid(nd[0] * tick - gsh, nd[1] * tick - gsh, p);
+                        double glo = nd[0] * tick - gsh, ghi = nd[1] * tick - gsh;
+                        if (nd[4] == 1) { double m = (glo + ghi) / 2; glo = m - 0.01; ghi = m + 0.01; }   // уже квадрата — один квадрат
+                        double[] g = snapGrid(glo, ghi, p);
                         nd[0] = ticks(g[0] + gsh, tick); nd[1] = ticks(g[1] + gsh, tick);
                     }
                     Zone best = null;
@@ -612,7 +617,7 @@ public final class ZoneEngine {
                     if (best != null) { cf.get(best).add(av.toEpochDay()); continue; }
                     Zone z = new Zone();
                     z.k = K_SESS; z.src = "sess"; z.av = av; z.lo = nd[0] * tick; z.hi = nd[1] * tick;
-                    z.minor = nd[3] == 1; z.born = d.date;
+                    z.minor = nd[3] == 1; z.born = d.date; z.narrow = p.gridNarrowGrey && nd[4] == 1;
                     sibling.put(z, new int[]{(int) d.date.toEpochDay(), nd[2]});
                     double mid = (z.lo + z.hi) / 2;
                     Comp gov = null;
@@ -1112,6 +1117,7 @@ public final class ZoneEngine {
      *  Ширина — от 1 п. до sessMaxPts. {lo, hi} в тиках. */
     static List<int[]> dayNodes(Day d, Params p, int onePt, int maxW) {
         Profile pf = d.profile; int[] c = pf.counts; int n = c.length, half = onePt / 2;
+        int sq = p.gridPts > 0 ? (int) Math.round(p.gridPts / p.tick) : onePt;   // квадрат TPO в тиках
         double[] sm = new double[n];
         for (int i = 0; i < n; i++) {
             double sum = 0; int k = 0;
@@ -1167,15 +1173,17 @@ public final class ZoneEngine {
                     while (x0 > u[0] && od[x0 - 1] >= thr) x0--;
                     while (x1 < u[1] && od[x1 + 1] >= thr) x1++;
                     int zl = x0 - onePt, zh = x1 - onePt;
+                    int nw = zh - zl < sq ? 1 : 0;                   // скопление тел уже одного квадрата
                     if (zh - zl < onePt) { int mid = (zl + zh) / 2; zl = mid - onePt / 2; zh = zl + onePt; }
                     if (zh - zl > maxW) { int mid = (zl + zh) / 2; zl = mid - maxW / 2; zh = zl + maxW; }
-                    out.add(new int[]{pf.low + zl, pf.low + zh, q[0], weak}); added++;
+                    out.add(new int[]{pf.low + zl, pf.low + zh, q[0], weak, nw}); added++;
                 }
                 if (added > 0) continue;                           // тел нет — как раньше, узел целиком
             }
+            int nw = hi - lo < sq ? 1 : 0;
             if (hi - lo < onePt) { int mid = (lo + hi) / 2; lo = mid - onePt / 2; hi = lo + onePt; }
             if (hi - lo > maxW) { int mid = (lo + hi) / 2; lo = mid - maxW / 2; hi = lo + maxW; }
-            out.add(new int[]{pf.low + lo, pf.low + hi, q[0], weak});
+            out.add(new int[]{pf.low + lo, pf.low + hi, q[0], weak, nw});
         }
         out.sort((x, y) -> Integer.compare(x[3], y[3]));       // основные узлы первыми — место у них, минорные потом
         return out;
@@ -1570,6 +1578,7 @@ public final class ZoneEngine {
             st.kind = rc ? z.rcKind[ri] : z.partKind; st.comp = rc ? (z.rcComp[ri].live ? z.rcComp[ri] : null) : z.partOf;
             st.recolored = rc;
             if (z.minor) st.kind = o >= z.minorEnd ? null : Kind.GREY;   // минорная — всегда серая; вытеснена — не рисуется
+            else if (z.narrow) st.kind = Kind.GREY;                   // уже одного квадрата — всегда серая
             if (!rc && z.partOf == null && p.sessRoleMode == 2) {     // мало информации — серая, пока не наберёт отторжений
                 int idx = z.ai + p.sessConfirm;
                 long f = idx < fullOrd.length ? fullOrd[idx] : Long.MAX_VALUE;
