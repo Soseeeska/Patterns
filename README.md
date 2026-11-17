@@ -7,7 +7,7 @@
 - `SPEC.md` — журнал исследования: определения, все проверки и их цифры, в порядке, в котором они делались.
 - `docs/SUMMARY.md`, `docs/patterns_report_ES.md` — сводка и отчёт параллельной ветки работы (этап 7 по заметкам, композиты, место открытия).
 - `config.yaml` — все пороги; код читает числа только оттуда.
-- `motivewave/` — индикатор TPO Zones 1.8 для MotiveWave 7 (Java-порт карты зон, `dist/TpoZones-1.8.jar`), см. `motivewave/README.md`.
+- `motivewave/` — индикатор TPO Zones 1.8 для MotiveWave 7 (плотная карта зон по сессионным TPO-профилям, цвет по композиту; `dist/TpoZones-1.8.jar`): принцип действия — `motivewave/README.md`, история — `motivewave/HISTORY.md`.
 
 ## Данные
 
@@ -25,7 +25,7 @@
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q tests          # 43 теста
+python -m pytest -q tests          # 45 тестов
 ```
 
 Все скрипты запускаются из корня: `python -m scripts.<имя> [аргументы]`. Результаты пишутся в `output/`
