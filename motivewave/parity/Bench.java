@@ -45,6 +45,12 @@ public class Bench {
             f.set(p, t == boolean.class ? (Object) Boolean.parseBoolean(kv[1]) : t == int.class ? (Object) Integer.parseInt(kv[1]) : (Object) Double.parseDouble(kv[1]));
         }
         Result res = ZoneEngine.run(bars, p);
+        if (p.rollAdjust && res.rollMs.length > 0)         // ручные зоны в ценах графика (manual_zones_bench_raw.csv) → в цены движка
+            for (String[] mz : man) {
+                long t = LocalDate.parse(mz[1]).atStartOfDay(p.tz).toInstant().toEpochMilli();
+                double sh = ZoneEngine.rollShift(res, t);
+                mz[2] = String.valueOf(Double.parseDouble(mz[2]) + sh); mz[3] = String.valueOf(Double.parseDouble(mz[3]) + sh);
+            }
         long[] ord = res.sessions.stream().mapToLong(s -> s.ord).toArray();
         int n = 0, m3 = 0, m5 = 0, colorOk = 0; double sumIou = 0, sumEdge = 0, dens = 0, densMan = 0; int densN = 0;
         List<Double> ious = new ArrayList<>(), widths = new ArrayList<>();

@@ -132,6 +132,9 @@ def main(path=str(ROOT / "data" / "manual_zones_ESZ6.mwml")):
     df = pd.DataFrame(out)
     # для замера Java-движка (motivewave/parity/Bench.java): зоны в склеенных ценах и сессия начала
     df[["color", "session", "lo", "hi"]].to_csv(ROOT / "output" / "manual_zones_bench.csv", index=False, header=False)
+    # то же в ценах графика (без склейки) — для Bench на сырых барах (-Droll=true): склейку роллов делает движок
+    raw = df.assign(lo=df.lo - df.offset, hi=df.hi - df.offset)
+    raw[["color", "session", "lo", "hi"]].to_csv(ROOT / "output" / "manual_zones_bench_raw.csv", index=False, header=False)
     (ROOT / "output").mkdir(exist_ok=True)
     df.to_csv(ROOT / "output" / "manual_zones.csv", index=False)
     pd.set_option("display.width", 250)

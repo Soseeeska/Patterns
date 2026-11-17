@@ -105,6 +105,10 @@ public final class ZoneEngine {
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
         public double sessMaxPts = 8;             // зона не шире, п.
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
+        public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
+                                                  // накрывшему); иначе — только первый композит после её рождения
+        public boolean compRollBreak = true;      // ролл разрывает композит: кандидат закрывается на смене контракта (на несклеенном
+                                                  // графике баланс до и после ролла — в разных местах), ложный выход через ролл не доклеивает
         public boolean liveComposite = true;      // формирующийся композит: с compositeMinDays дней — со следующей сессии задаёт роли
                                                   // (снимок по уже прошедшим дням); зоны синхронизируются с ним один раз, как с закрытым
         public boolean drawOneColor = true;       // зона рисуется одной полосой: цвет и границы — на последнюю сессию, где она видна
@@ -390,6 +394,14 @@ public final class ZoneEngine {
             // режим «по композиту»: короткие дни (ранние закрытия) тоже входят в композит, как в TPO платформы
             for (Day d : p.compositeMode && p.compositeShortDays ? all : full) {
                 if (cand.isEmpty()) { cand.add(d); cp = d.profile; continue; }
+                if (p.compositeMode && p.compRollBreak && rollBetween(res, p, cand.get(cand.size() - 1).date, d.date)) {
+                    // ролл между последним днём кандидата и этим днём: кандидат закрывается, этот день открывает новый
+                    Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
+                    if (made != null) made.extendsOf = extOf;
+                    lastCand = null; lastCp = null; lastComp = made; extOf = null; lastExt = 0; extCount = 0;
+                    cand = new ArrayList<>(); cand.add(d); cp = d.profile;
+                    continue;
+                }
                 int c = ticks(d.close, tick);
                 if (cand.size() >= p.compositeMinDays) lastCand = null;
                 if (p.compositeMode && p.compFalseBreak && lastCand != null && c >= lastCp.low && c <= lastCp.high()
@@ -563,10 +575,12 @@ public final class ZoneEngine {
                     List<Long> at = new ArrayList<>(); List<Kind> kd = new ArrayList<>(); List<Comp> cc = new ArrayList<>();
                     for (Comp c : bal) {
                         if (!c.av.isAfter(av) || c.bodyLo > mid || mid > c.bodyHi) continue;
-                        if (grp == null) grp = c.start;
-                        if (!c.start.equals(grp)) continue;
+                        if (!p.sessResyncLater) {
+                            if (grp == null) grp = c.start;
+                            if (!c.start.equals(grp)) continue;
+                        }
                         at.add(c.av.toEpochDay()); kd.add(roleIn(c, mid)); cc.add(c);
-                        if (!c.live) break;
+                        if (!c.live && !p.sessResyncLater) break;
                     }
                     if (!at.isEmpty()) {
                         z.rcAt = at.stream().mapToLong(Long::longValue).toArray(); z.rcKind = kd.toArray(new Kind[0]); z.rcComp = cc.toArray(new Comp[0]);
@@ -808,6 +822,15 @@ public final class ZoneEngine {
             out.add(sh == 0 ? b : new Bar(b.t, b.o + sh, b.h + sh, b.l + sh, b.c + sh));
         }
         return out;
+    }
+
+    /** Ролл после RTH дня a и не позже дня b (a < b): смена контракта в 15:00 CT дня ролла — после его RTH. */
+    static boolean rollBetween(Result res, Params p, LocalDate a, LocalDate b) {
+        for (long t : res.rollMs) {
+            LocalDate r = LocalDateTime.ofInstant(Instant.ofEpochMilli(t), p.tz).toLocalDate();
+            if (!r.isBefore(a) && r.isBefore(b)) return true;
+        }
+        return false;
     }
 
     /** Сдвиг цен бара, начавшегося в t, к текущему контракту: сумма гэпов роллов после t. */
