@@ -110,7 +110,7 @@ public final class ZoneEngine {
         public boolean sessMinor = true;          // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного, но ≥ sessMinPeak
                                                   // TPO) — серая зона там, где нет других (общее правило зазора sessMinGapPts); всегда серая
         public int sessMinorMinPeak = 2;          // ... вершина минорного узла — от стольких TPO (тонкий профиль тренда: 1–2 TPO на строку)
-        public boolean sessCoreTouch = false;     // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
+        public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
         public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
                                                   // все скопления тел свечей сессии (не одно), каждое — зона
         public double sessParentShare = 0.7;      // ... мнимая зона: строки профиля не ниже этой доли вершины узла

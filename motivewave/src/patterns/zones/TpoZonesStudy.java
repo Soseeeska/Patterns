@@ -99,7 +99,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new DoubleDescriptor(S_GAP, "Сессионные зоны: узел ближе, п., к существующей зоне — её подтверждение (зазор между зонами)", 0.5, 0, 20, 0.25));
         g.addRow(new DoubleDescriptor(S_MAX, "Сессионные зоны: не шире, п.", 4.0, 1, 20, 0.5));
         g.addRow(new BooleanDescriptor(MINOR, "Минорные серые зоны: слабый узел сессии там, где нет других зон; сильный узел позже его вытесняет", true));
-        g.addRow(new BooleanDescriptor(CORE_TOUCH, "Сессионные зоны: синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела", false));
+        g.addRow(new BooleanDescriptor(CORE_TOUCH, "Сессионные зоны: синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела", true));
         g.addRow(new BooleanDescriptor(REFINE, "Сессионные зоны: уточнение — внутри узла пошире все скопления тел свечей, каждое — зона (выкл. — одно скопление)", true));
         g.addRow(new DoubleDescriptor(S_SHARE, "Сессионные зоны: узел — вершина не ниже доли главного узла дня", 0.25, 0, 1, 0.05));
         g.addRow(new IntegerDescriptor(S_PEAK, "Сессионные зоны: вершина узла от, TPO", 3, 1, 13, 1));
@@ -313,7 +313,7 @@ public class TpoZonesStudy extends Study {
         p.sessMinGapPts = st.getDouble(S_GAP, 0.5);
         p.sessMaxPts = st.getDouble(S_MAX, 4.0);
         p.sessRefine = st.getBoolean(REFINE, true);
-        p.sessCoreTouch = st.getBoolean(CORE_TOUCH, false);
+        p.sessCoreTouch = st.getBoolean(CORE_TOUCH, true);
         p.sessMinor = st.getBoolean(MINOR, true);
         p.sessPeakShare = st.getDouble(S_SHARE, 0.25);
         p.sessBodyShare = st.getDouble(S_BODY, 0.5);
