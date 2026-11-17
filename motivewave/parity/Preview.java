@@ -49,6 +49,7 @@ public class Preview {
         p.sessRefine = !"false".equals(System.getProperty("refine", "true"));     // -Drefine=true — уточнение зон внутри мнимой
         p.sessMinor = Boolean.getBoolean("minor");       // -Dminor=true — минорные серые зоны   // -Dlive=true — формирующийся композит задаёт роли   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
         p.chartNoOverlap = !"false".equals(System.getProperty("chartNoOverlap", "true"));   // -DchartNoOverlap=false — как до раскладки в ценах графика
+        p.gridPts = Double.parseDouble(System.getProperty("gridPts", "1"));   // -DgridPts=0 — края без квадратов TPO
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         if (a.length > 5) p.compositeMode = a[5].equals("comp");
         if (a.length > 5 && a[5].equals("sess")) { p.compositeMode = true; p.sessionZones = true; }
@@ -108,6 +109,11 @@ public class Preview {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setColor(new Color(0x15181c)); g.fillRect(0, 0, W, H);
         g.setClip(0, 0, PW, H - 30);
+        if (Boolean.getBoolean("grid") && p.gridPts > 0) {   // -Dgrid=true — сетка квадратов TPO (gridPts)
+            g.setColor(new Color(0x2a3038));
+            for (double y = Math.ceil((pLo - p.gridOffsetPts) / p.gridPts) * p.gridPts + p.gridOffsetPts; y <= pHi; y += p.gridPts)
+                g.drawLine(0, (int) Math.round(ty.applyAsDouble(y)), PW, (int) Math.round(ty.applyAsDouble(y)));
+        }
         // разделители сессий и RTH-подсветка
         for (var s : res.sessions) {
             double x = tx.applyAsDouble(s.startMs);

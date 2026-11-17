@@ -126,6 +126,10 @@ public final class ZoneEngine {
         public boolean drawOneColor = true;       // зона рисуется одной полосой: цвет и границы — на последнюю сессию, где она видна
                                                   // (иначе — по участкам, как менялась по сессиям)
         public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
+        public double gridPts = 1.0;              // квадрат TPO на графике, п. (tickInterval 4): края зоны — на границах квадратов, в ценах
+                                                  // графика; после подгонки по телам край — к ближайшей границе, пополам — квадрат целиком
+                                                  // (принт в приоритете); 0 — выкл.
+        public double gridOffsetPts = 0;          // ... сдвиг сетки квадратов от целых, п.
         public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
                                                   // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
                                                   // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
@@ -578,7 +582,12 @@ public final class ZoneEngine {
             for (Day d : full) {
                 LocalDate av = nextTradeDay.get(d.date);
                 if (av == null) continue;
+                double gsh = rollShift(res, av.atStartOfDay(p.tz).toInstant().toEpochMilli());   // цены графика = цены расчёта − сдвиг
                 for (int[] nd : dayNodes(d, p, onePt, maxW)) {
+                    if (p.gridPts > 0) {                                // края — по квадратам профиля на графике
+                        double[] g = snapGrid(nd[0] * tick - gsh, nd[1] * tick - gsh, p);
+                        nd[0] = ticks(g[0] + gsh, tick); nd[1] = ticks(g[1] + gsh, tick);
+                    }
                     Zone best = null;
                     long avd = av.toEpochDay();
                     for (Zone e : ses) {
@@ -798,6 +807,18 @@ public final class ZoneEngine {
         return res;
     }
 
+    /** Края зоны (цены графика) — на границы квадратов TPO (gridPts, сдвиг gridOffsetPts): каждый край — к ближайшей границе,
+     *  край посередине квадрата — наружу (квадрат с принтами не режется, а входит целиком). Зона уже квадрата — один квадрат,
+     *  в котором больше её середина. */
+    static double[] snapGrid(double lo, double hi, Params p) {
+        double g = p.gridPts, o = p.gridOffsetPts, eps = 1e-9;
+        double fl = (lo - o) / g, L = Math.floor(fl + eps), fh = (hi - o) / g, H = Math.floor(fh + eps);
+        double nLo = (fl - L <= 0.5 + eps ? L : L + 1) * g + o;
+        double nHi = (fh - H >= 0.5 - eps ? H + 1 : H) * g + o;
+        if (nHi - nLo < g - eps) { double c = Math.floor(((lo + hi) / 2 - o) / g + eps); nLo = c * g + o; nHi = nLo + g; }
+        return new double[]{nLo, nHi};
+    }
+
     /** Раскладка в ценах графика: зона рисуется одной полосой в ценах контракта сессии появления (ZonePlan), поэтому
      *  зоны разных контрактов, не пересекающиеся в склеенных ценах, на графике могут лечь друг на друга. Зоны по
      *  порядку появления (старшая — главная; в один день — ядро, остальные, серые): младшая, которая в общие с уже
@@ -845,7 +866,8 @@ public final class ZoneEngine {
             }
             double bLo = 0, bHi = -1;
             for (double[] q : pieces) if (q[1] - q[0] > bHi - bLo) { bLo = q[0]; bHi = q[1]; }
-            bLo = Math.ceil(bLo / p.tick - eps) * p.tick; bHi = Math.floor(bHi / p.tick + eps) * p.tick;   // на тики внутрь
+            double q = p.gridPts > 0 ? p.gridPts : p.tick, qo = p.gridPts > 0 ? p.gridOffsetPts : 0;   // внутрь: на квадраты (или тики)
+            bLo = Math.ceil((bLo - qo) / q - eps) * q + qo; bHi = Math.floor((bHi - qo) / q + eps) * q + qo;
             if (bHi - bLo < p.minPiecePts - eps) { drop.addAll(rows.get(z)); continue; }
             for (Shown v : rows.get(z)) {
                 v.lo = Math.max(v.lo, bLo + sh); v.hi = Math.min(v.hi, bHi + sh);
