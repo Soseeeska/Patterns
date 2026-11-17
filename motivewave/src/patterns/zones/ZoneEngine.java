@@ -132,6 +132,7 @@ public final class ZoneEngine {
         public double gridOffsetPts = 0;          // ... сдвиг сетки квадратов от целых, п.
         public boolean gridNarrowGrey = true;     // зона, чьё скопление тел уже одного квадрата (gridPts; без сетки — 1 п.), — один квадрат и всегда
                                                   // серая (узкое место без проторговки — минорная структура)
+        public boolean gridNarrowKeepBlue = true; // ... кроме синей: узкая зона у ядра композита остаётся синей (баланс не перекрашиваем)
         public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
                                                   // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
                                                   // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
@@ -1578,7 +1579,7 @@ public final class ZoneEngine {
             st.kind = rc ? z.rcKind[ri] : z.partKind; st.comp = rc ? (z.rcComp[ri].live ? z.rcComp[ri] : null) : z.partOf;
             st.recolored = rc;
             if (z.minor) st.kind = o >= z.minorEnd ? null : Kind.GREY;   // минорная — всегда серая; вытеснена — не рисуется
-            else if (z.narrow) st.kind = Kind.GREY;                   // уже одного квадрата — всегда серая
+            else if (z.narrow && !(p.gridNarrowKeepBlue && st.kind == Kind.CORE)) st.kind = Kind.GREY;   // уже квадрата — серая (кроме синей)
             if (!rc && z.partOf == null && p.sessRoleMode == 2) {     // мало информации — серая, пока не наберёт отторжений
                 int idx = z.ai + p.sessConfirm;
                 long f = idx < fullOrd.length ? fullOrd[idx] : Long.MAX_VALUE;
