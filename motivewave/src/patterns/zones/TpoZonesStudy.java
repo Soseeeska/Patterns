@@ -72,10 +72,10 @@ public class TpoZonesStudy extends Study {
         SHOW.put(Kind.HVN_NEW, "showNew"); SHOW.put(Kind.OLD_BALANCE, "showOld"); SHOW.put(Kind.GREY, "showGrey");
         SHOW.put(Kind.CORE, "showCore");
         for (Kind k : Kind.values()) COLOR.put(k, "color_" + k.name());
-        DEF_COLOR.put(Kind.HVN_S, new Color(0x0f8a3c)); DEF_COLOR.put(Kind.HVN_R, new Color(0xd63b3a));
+        DEF_COLOR.put(Kind.HVN_S, new Color(0x006400)); DEF_COLOR.put(Kind.HVN_R, new Color(0x8B0000));
         DEF_COLOR.put(Kind.HVN_RANGE, new Color(0x6250d6)); DEF_COLOR.put(Kind.HVN_NEW, new Color(0x7d858c));
-        DEF_COLOR.put(Kind.OLD_BALANCE, new Color(0x2a78d6)); DEF_COLOR.put(Kind.GREY, new Color(0x7d858c));
-        DEF_COLOR.put(Kind.CORE, new Color(0x2a78d6));
+        DEF_COLOR.put(Kind.OLD_BALANCE, new Color(0x00158B)); DEF_COLOR.put(Kind.GREY, new Color(0x7d858c));
+        DEF_COLOR.put(Kind.CORE, new Color(0x00158B));
     }
 
     private LocalDate computedFor;   // сессия последнего бара на момент расчёта

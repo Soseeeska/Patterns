@@ -99,9 +99,9 @@ public class Preview {
         java.util.function.DoubleUnaryOperator ty = v -> (pHi - v) / (pHi - pLo) * PH + 10;
 
         Map<Kind, Color> base = new EnumMap<>(Kind.class);
-        base.put(Kind.HVN_S, new Color(0x2fb35e)); base.put(Kind.HVN_R, new Color(0xef5a59));
+        base.put(Kind.HVN_S, new Color(0x006400)); base.put(Kind.HVN_R, new Color(0x8B0000));
         base.put(Kind.HVN_RANGE, new Color(0x8f84ea)); base.put(Kind.HVN_NEW, new Color(0x8d959c));
-        base.put(Kind.OLD_BALANCE, new Color(0x4a8fe6)); base.put(Kind.CORE, new Color(0x4a8fe6)); base.put(Kind.GREY, new Color(0x8d959c));
+        base.put(Kind.OLD_BALANCE, new Color(0x00158B)); base.put(Kind.CORE, new Color(0x00158B)); base.put(Kind.GREY, new Color(0x8d959c));
         BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
