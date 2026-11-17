@@ -45,8 +45,9 @@ public class Preview {
         int k = a.length > 2 ? Integer.parseInt(a[2]) : 5;
         Params p = new Params();
         p.rollAdjust = Boolean.getBoolean("roll");
-        p.liveComposite = Boolean.getBoolean("live");
-        p.sessRefine = Boolean.getBoolean("refine");     // -Drefine=true — уточнение зон внутри мнимой   // -Dlive=true — формирующийся композит задаёт роли   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
+        p.liveComposite = !"false".equals(System.getProperty("live", "true"));
+        p.sessRefine = !"false".equals(System.getProperty("refine", "true"));     // -Drefine=true — уточнение зон внутри мнимой
+        p.sessMinor = Boolean.getBoolean("minor");       // -Dminor=true — минорные серые зоны   // -Dlive=true — формирующийся композит задаёт роли   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         if (a.length > 5) p.compositeMode = a[5].equals("comp");
         if (a.length > 5 && a[5].equals("sess")) { p.compositeMode = true; p.sessionZones = true; }

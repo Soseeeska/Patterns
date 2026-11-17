@@ -107,6 +107,9 @@ public final class ZoneEngine {
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
                                                   // накрывшему); иначе — только первый композит после её рождения
+        public boolean sessMinor = false;         // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного, но ≥ sessMinPeak
+                                                  // TPO) — серая зона там, где нет других (общее правило зазора sessMinGapPts); всегда серая
+        public int sessMinorMinPeak = 2;          // ... вершина минорного узла — от стольких TPO (тонкий профиль тренда: 1–2 TPO на строку)
         public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
         public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
                                                   // все скопления тел свечей сессии (не одно), каждое — зона
@@ -272,6 +275,9 @@ public final class ZoneEngine {
         public List<Zone> nodes = List.of();                 // ядро: узлы профиля (рисуются вместо ядра)
         public Kind partKind; public Comp partOf;            // кусок разметки композита: вид и композит
         public Kind recolorKind; long recolorAt = Long.MAX_VALUE;   // сессионная зона: роль после (первой) перекраски композитом
+        public LocalDate born;                               // сессионная зона: RTH-день, из узла которого она родилась
+        public boolean minor;                                // сессионная минорная зона (слабый узел): всегда серая
+        long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии вытеснена сильным узлом — не рисуется
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
         Zone nodeOf;                                         // узел: его ядро
@@ -571,15 +577,30 @@ public final class ZoneEngine {
                 if (av == null) continue;
                 for (int[] nd : dayNodes(d, p, onePt, maxW)) {
                     Zone best = null;
+                    long avd = av.toEpochDay();
                     for (Zone e : ses) {
+                        if (e.minor && e.minorEnd <= avd) continue;            // вытесненная минорная — уровня не держит
                         double gap = Math.max(e.lo, nd[0] * tick) - Math.min(e.hi, nd[1] * tick);   // < 0 — пересекаются
                         int[] sb = sibling.get(e);                  // зона из той же мнимой зоны того же дня — ближе можно
                         boolean sis = p.sessRefine && sb != null && sb[0] == d.date.toEpochDay() && sb[1] == nd[2];
                         if (gap < (sis ? p.sessSiblingGapPts : p.sessMinGapPts) - 1e-9) { best = e; break; }
                     }
+                    if (best != null && best.minor && nd[3] == 0) {
+                        // сильный узел на месте минорной зоны — вытесняет её: минорная пропадает, встаёт основная
+                        best.minorEnd = avd;
+                        best = null;
+                        for (Zone e : ses) {
+                            if (e.minor && e.minorEnd <= avd) continue;
+                            double gap = Math.max(e.lo, nd[0] * tick) - Math.min(e.hi, nd[1] * tick);
+                            int[] sb = sibling.get(e);
+                            boolean sis = p.sessRefine && sb != null && sb[0] == d.date.toEpochDay() && sb[1] == nd[2];
+                            if (gap < (sis ? p.sessSiblingGapPts : p.sessMinGapPts) - 1e-9) { best = e; break; }
+                        }
+                    }
                     if (best != null) { cf.get(best).add(av.toEpochDay()); continue; }
                     Zone z = new Zone();
                     z.k = K_SESS; z.src = "sess"; z.av = av; z.lo = nd[0] * tick; z.hi = nd[1] * tick;
+                    z.minor = nd[3] == 1; z.born = d.date;
                     sibling.put(z, new int[]{(int) d.date.toEpochDay(), nd[2]});
                     double mid = (z.lo + z.hi) / 2;
                     Comp gov = null;
@@ -1026,8 +1047,9 @@ public final class ZoneEngine {
         for (int[] q : pcs) {
             int m = q[0];
             for (int i = q[0]; i <= q[1]; i++) if (sm[i] > sm[m]) m = i;
-            if (c[m] < p.sessMinPeak && sm[m] < p.sessMinPeak) continue;
-            if (p.sessPeakShare > 0 && sm[m] < p.sessPeakShare * dayMax) continue;
+            int weak = (p.sessPeakShare > 0 && sm[m] < p.sessPeakShare * dayMax)
+                    || (c[m] < p.sessMinPeak && sm[m] < p.sessMinPeak) ? 1 : 0;           // слабый узел — минорная зона
+            if (weak == 1 && (!p.sessMinor || (c[m] < p.sessMinorMinPeak && sm[m] < p.sessMinorMinPeak))) continue;
             int lo = m, hi = m;
             while (lo > q[0] && sm[lo - 1] >= sm[m] - p.sessNodeDrop) lo--;
             while (hi < q[1] && sm[hi + 1] >= sm[m] - p.sessNodeDrop) hi++;
@@ -1062,14 +1084,15 @@ public final class ZoneEngine {
                     int zl = x0 - onePt, zh = x1 - onePt;
                     if (zh - zl < onePt) { int mid = (zl + zh) / 2; zl = mid - onePt / 2; zh = zl + onePt; }
                     if (zh - zl > maxW) { int mid = (zl + zh) / 2; zl = mid - maxW / 2; zh = zl + maxW; }
-                    out.add(new int[]{pf.low + zl, pf.low + zh, q[0]}); added++;
+                    out.add(new int[]{pf.low + zl, pf.low + zh, q[0], weak}); added++;
                 }
                 if (added > 0) continue;                           // тел нет — как раньше, узел целиком
             }
             if (hi - lo < onePt) { int mid = (lo + hi) / 2; lo = mid - onePt / 2; hi = lo + onePt; }
             if (hi - lo > maxW) { int mid = (lo + hi) / 2; lo = mid - maxW / 2; hi = lo + maxW; }
-            out.add(new int[]{pf.low + lo, pf.low + hi, q[0]});
+            out.add(new int[]{pf.low + lo, pf.low + hi, q[0], weak});
         }
+        out.sort((x, y) -> Integer.compare(x[3], y[3]));       // основные узлы первыми — место у них, минорные потом
         return out;
     }
 
@@ -1461,6 +1484,7 @@ public final class ZoneEngine {
             boolean rc = ri >= 0;
             st.kind = rc ? z.rcKind[ri] : z.partKind; st.comp = rc ? (z.rcComp[ri].live ? z.rcComp[ri] : null) : z.partOf;
             st.recolored = rc;
+            if (z.minor) st.kind = o >= z.minorEnd ? null : Kind.GREY;   // минорная — всегда серая; вытеснена — не рисуется
             if (!rc && z.partOf == null && p.sessRoleMode == 2) {     // мало информации — серая, пока не наберёт отторжений
                 int idx = z.ai + p.sessConfirm;
                 long f = idx < fullOrd.length ? fullOrd[idx] : Long.MAX_VALUE;
