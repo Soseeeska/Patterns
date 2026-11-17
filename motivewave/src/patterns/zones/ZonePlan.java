@@ -55,6 +55,10 @@ public final class ZonePlan {
                 byZone.computeIfAbsent(v.z, z -> { order.add(z); return new Shown[n]; })[i] = v;
         for (Zone z : order) {
             Shown[] row = byZone.get(z);
+            if (p.drawOneColor) {                   // вся полоса — цвет и границы на последнюю сессию, где зона видна
+                int lv = n - 1; while (row[lv] == null) lv--;
+                for (int k = 0; k < n; k++) if (row[k] != null) row[k] = row[lv];
+            }
             int i = 0;
             while (i < n) {
                 if (row[i] == null) { i++; continue; }
