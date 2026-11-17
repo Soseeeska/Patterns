@@ -133,6 +133,8 @@ public final class ZoneEngine {
         public boolean gridNarrowGrey = true;     // зона, чьё скопление тел уже одного квадрата (gridPts; без сетки — 1 п.), — один квадрат и всегда
                                                   // серая (узкое место без проторговки — минорная структура)
         public boolean gridNarrowKeepBlue = true; // ... кроме синей: узкая зона у ядра композита остаётся синей (баланс не перекрашиваем)
+        public boolean oneSquareGrey = true;      // зона шириной в один квадрат (gridPts; без сетки — 1 п.) на графике — всегда серая (кроме синей,
+                                                  // если gridNarrowKeepBlue); в т. ч. суженная раскладкой до одного квадрата
         public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
                                                   // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
                                                   // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
@@ -288,6 +290,7 @@ public final class ZoneEngine {
         public LocalDate born;                               // сессионная зона: RTH-день, из узла которого она родилась
         public boolean minor;                                // сессионная минорная зона (слабый узел): всегда серая
         public boolean narrow;                               // сессионная зона уже одного квадрата TPO (gridNarrowGrey): всегда серая
+        public boolean oneSquare;                            // сессионная зона в один квадрат на графике (oneSquareGrey): всегда серая
         long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии вытеснена сильным узлом — не рисуется
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
@@ -810,6 +813,14 @@ public final class ZoneEngine {
             res.visible.add(out);
         }
         if (p.compositeMode && p.chartNoOverlap) chartLayout(res, p);
+        if (p.compositeMode && p.oneSquareGrey) {                // один квадрат на графике — всегда серая (кроме синей)
+            double sq = p.gridPts > 0 ? p.gridPts : 1.0;
+            for (List<Shown> l : res.visible) for (Shown v : l) {
+                if (v.z.k != K_SESS || v.hi - v.lo > sq + 1e-9 || v.st.kind == Kind.GREY) continue;
+                if (p.gridNarrowKeepBlue && v.st.kind == Kind.CORE) continue;
+                v.st.kind = Kind.GREY; v.z.oneSquare = true;
+            }
+        }
         return res;
     }
 
