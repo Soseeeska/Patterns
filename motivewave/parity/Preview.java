@@ -24,12 +24,19 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 import patterns.zones.ZonePlan;
 
-/** Превью того, что рисует TpoZonesStudy (тот же ZoneEngine + ZonePlan, цвета и прозрачность по умолчанию):
+/** Превью того, что рисует TpoZonesStudy (тот же ZoneEngine + ZonePlan, настройки, цвета и прозрачность по умолчанию):
  *  java Preview bars.csv out.png [сессий на картинке] [N подгонки] [выделить топ зон по отторжениям] [comp|rej] [последний день YYYY-MM-DD]
+ *               [поле=значение ...]
+ *  bars.csv — из export_bars.py --raw (несклеенные, как в MotiveWave). Поля — ZoneEngine.Params (например rollRaw=false,
+ *  invertGrey=false); без них — как индикатор по умолчанию. -Dmanual=output/manual_zones_bench_raw.csv — ручные зоны пунктиром,
+ *  -Dgrid=true — сетка квадратов TPO.
  *  Топ — тесты и отторжения на всех барах (ETH + RTH) показанных сессий, обводка пунктиром.
  *  Ось времени — по барам (без пустых выходных), как у MotiveWave. */
 public class Preview {
-    public static void main(String[] a) throws Exception {
+    public static void main(String[] args) throws Exception {
+        List<String> pos = new ArrayList<>(), set = new ArrayList<>();
+        for (String s : args) (s.contains("=") ? set : pos).add(s);
+        String[] a = pos.toArray(new String[0]);
         List<Bar> bars = new ArrayList<>();
         try (BufferedReader r = new BufferedReader(new FileReader(a[0]))) {
             for (String s; (s = r.readLine()) != null; ) {
@@ -44,20 +51,10 @@ public class Preview {
         }
         int k = a.length > 2 ? Integer.parseInt(a[2]) : 5;
         Params p = new Params();
-        p.rollAdjust = Boolean.getBoolean("roll");
-        p.liveComposite = !"false".equals(System.getProperty("live", "true"));
-        p.sessRefine = !"false".equals(System.getProperty("refine", "true"));     // -Drefine=true — уточнение зон внутри мнимой
-        p.sessMinor = Boolean.getBoolean("minor");       // -Dminor=true — минорные серые зоны   // -Dlive=true — формирующийся композит задаёт роли   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
-        p.chartNoOverlap = !"false".equals(System.getProperty("chartNoOverlap", "true"));   // -DchartNoOverlap=false — как до раскладки в ценах графика
-        p.gridPts = Double.parseDouble(System.getProperty("gridPts", "1"));   // -DgridPts=0 — края без квадратов TPO
-        p.gridNarrowGrey = !"false".equals(System.getProperty("narrowGrey", "true"));   // -DnarrowGrey=false — узкие зоны не серые
-        p.invertGrey = !"false".equals(System.getProperty("invertGrey", "true"));   // -DinvertGrey=false — стыки не сводить
-        p.rollRaw = !"false".equals(System.getProperty("rollRaw", "true"));   // -DrollRaw=false — склейка роллов (расчёт в ценах текущего контракта)
-        p.sessMinorPromote = !"false".equals(System.getProperty("promote", "true"));   // -Dpromote=false — сильный узел вытесняет минорную
+        p.compositeMode = true; p.zoneMaxWidthPts = 10;   // как в индикаторе
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
-        if (a.length > 5) p.compositeMode = a[5].equals("comp");
-        if (a.length > 5 && a[5].equals("sess")) { p.compositeMode = true; p.sessionZones = true; }
-        p.zoneMaxWidthPts = 10;                        // как в индикаторе по умолчанию
+        if (a.length > 5) p.compositeMode = !a[5].equals("rej");
+        for (String kv : set) Bench.setField(p, kv);
         Result res = ZoneEngine.run(bars, p);
         ZonePlan plan = ZonePlan.of(res, p);
         int top = a.length > 4 ? Integer.parseInt(a[4]) : 0;

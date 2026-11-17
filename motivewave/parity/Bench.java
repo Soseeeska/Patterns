@@ -16,8 +16,9 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 import patterns.zones.ZoneEngine.Shown;
 
-/** Замер движка против ручных зон (output/manual_zones_bench.csv из scripts/manual_zones.py).
- *  java Bench bars.csv manual.csv [поле=значение ...]   (поля ZoneEngine.Params, например compositeMode=true)
+/** Замер движка против ручных зон (scripts/manual_zones.py).
+ *  java Bench bars_raw.csv output/manual_zones_bench_raw.csv [поле=значение ...]   (поля ZoneEngine.Params; без них — как индикатор)
+ *  bars_raw.csv — export_bars.py --raw (несклеенные, как в MotiveWave); ручные зоны — в ценах графика.
  *
  *  Для ручной зоны (цвет, сессия начала, lo, hi): лучшая по IoU видимая зона алгоритма в сессиях
  *  [начало, начало + 10). Совпадение — IoU ≥ 0.3 / ≥ 0.5. Цвет: зелёная — поддержка, красная —
@@ -36,14 +37,9 @@ public class Bench {
         List<String[]> man = new ArrayList<>();
         try (BufferedReader r = new BufferedReader(new FileReader(a[1]))) { for (String s; (s = r.readLine()) != null; ) man.add(s.split(",")); }
         Params p = new Params();
-        p.rollAdjust = Boolean.getBoolean("roll");   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
-        p.sessions = 1000; p.zoneMaxWidthPts = 10;
-        for (int i = 2; i < a.length; i++) {
-            String[] kv = a[i].split("=");
-            Field f = Params.class.getField(kv[0]);
-            Class<?> t = f.getType();
-            f.set(p, t == boolean.class ? (Object) Boolean.parseBoolean(kv[1]) : t == int.class ? (Object) Integer.parseInt(kv[1]) : (Object) Double.parseDouble(kv[1]));
-        }
+        p.compositeMode = true; p.zoneMaxWidthPts = 10;   // как в индикаторе
+        p.sessions = 1000;
+        for (int i = 2; i < a.length; i++) setField(p, a[i]);
         Result res = ZoneEngine.run(bars, p);
         if (p.rollAdjust && res.rollMs.length > 0)         // ручные зоны в ценах графика (manual_zones_bench_raw.csv) → в цены движка
             for (String[] mz : man) {
@@ -94,6 +90,14 @@ public class Bench {
         double lastClose = res.sessions.get(res.sessions.size() - 1).open;
         int near = 0; for (Shown v : last) if (Math.abs((v.lo + v.hi) / 2 - lastClose) <= 150) near++;
         System.out.printf(Locale.ROOT, "   последняя сессия: зон %d, в ± 150 п. от цены %d (%.1f на 100 п.; у ручных ≈ 8)%n", last.size(), near, near / 3.0);
+    }
+
+    /** поле=значение → ZoneEngine.Params (boolean / int / double). */
+    static void setField(Params p, String kv) throws Exception {
+        String[] f = kv.split("=", 2);
+        Field fd = Params.class.getField(f[0]);
+        Class<?> t = fd.getType();
+        fd.set(p, t == boolean.class ? (Object) Boolean.parseBoolean(f[1]) : t == int.class ? (Object) Integer.parseInt(f[1]) : (Object) Double.parseDouble(f[1]));
     }
 
     static boolean agree(String c, Kind k) {

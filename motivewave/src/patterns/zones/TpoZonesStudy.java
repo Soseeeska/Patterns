@@ -38,16 +38,16 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 
 /**
- * TPO Zones 1.8 — плотная карта зон ES (ветка Zones-1.1 + класс по композиту) прямо на графике MotiveWave.
- * Расчёт — ZoneEngine (порт scripts/zone_map_export.py + фильтров страницы карты зон),
- * по 30m-барам инструмента; рисуется на любом таймфрейме графика.
+ * TPO Zones 1.8 — плотная карта зон ES прямо на графике MotiveWave: обёртка SDK (настройки и фигуры).
+ * Расчёт — ZoneEngine, что рисовать — ZonePlan (оба без SDK); по 30m-барам инструмента, на любом таймфрейме графика.
+ * Принцип действия — motivewave/README.md.
  */
 @StudyHeader(
     namespace = "com.patterns",
     id = "TPO_ZONES_1_8",
     name = "TPO Zones 1.8",
     label = "TPO Zones",
-    desc = "Карта зон по RTH TPO-профилям: старые балансы, первородные HVN-зоны с классом по отторжениям, серые зоны",
+    desc = "Плотная карта зон по RTH TPO-профилям: сессионные зоны по телам свечей и квадратам TPO, цвет по композиту, серые — минорные, узкие, колеблющиеся",
     menu = "Patterns",
     overlay = true,
     studyOverlay = false,
@@ -61,7 +61,7 @@ public class TpoZonesStudy extends Study {
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
             GREY_WMIN = "greyWMin", GREY_WMAX = "greyWMax", REJ_SHARE = "rejShare", WICK = "wickTicks",
-            SESSIONS = "sessions", NEAR = "near", ALIGN = "align", PROMOTE = "promote", MIN_REJ = "minRej",
+            SESSIONS = "sessions", NEAR = "near", ALIGN = "align", PROMOTE = "promote", MINOR_PROMOTE = "sessMinorPromote", MIN_REJ = "minRej",
             PUR_MIN = "purMin", PUR_MAX = "purMax", MIN_CONF = "minConf", CONF_NEAR = "confNear",
             MIN_AGE = "minAge", MAX_W = "maxW", EDGES = "edges", PREV = "prev", PREV_VA = "prevVaColor",
             PREV_POC = "prevPocColor", OP_MAIN = "opMain", OP_OLD = "opOld", OP_GREY = "opGrey", OP_EDGE = "opEdge";
@@ -84,66 +84,65 @@ public class TpoZonesStudy extends Study {
     public void initialize(Defaults defaults) {
         SettingsDescriptor sd = createSD();
 
-        SettingTab tab = sd.addTab("Карта зон");
-        SettingGroup g = tab.addGroup("Класс зон");
-        g.addRow(new BooleanDescriptor(MODE, "По положению в композите: выше ядра — сопротивление, ниже — поддержка (иначе — по отторжениям, как на странице)", true));
-        g.addRow(new BooleanDescriptor(CORE_VA, "Ядро композита — VA (иначе HVN-полоса вокруг POC)", false));
-        g.addRow(new BooleanDescriptor(CORE_SESS, "Ядро по профилю композита: от POC до обрыва TPO, баланс — по VA дней", true));
+        // Вкладки по шагам алгоритма (принцип действия — motivewave/README.md). Ключи настроек не менялись: сохранённые
+        // в MotiveWave значения подхватываются.
+        SettingTab tab = sd.addTab("Зоны");
+        SettingGroup g = tab.addGroup("Композиты");
+        g.addRow(new IntegerDescriptor(COMP_DAYS, "Композит от, дней", 3, 2, 30, 1));
+        g.addRow(new BooleanDescriptor(COMP_AND, "День входит, только если close в диапазоне И наслоение VA (выкл. — ИЛИ)", true));
+        g.addRow(new DoubleDescriptor(COMP_VA, "Наслоение VA — VA дня и композита пересекаются на ≥ долю меньшей (0 — не проверять)", 0.5, 0, 1, 0.05));
+        g.addRow(new BooleanDescriptor(VA_PREV, "Наслоение VA — с VA композита или с VA предыдущего дня (value переходит изо дня в день)", true));
+        g.addRow(new DoubleDescriptor(COMP_IN, "Внутренний день (High–Low на ≥ долю внутри диапазона композита) входит по ИЛИ (0 — выкл.)", 0.8, 0, 1, 0.05));
+        g.addRow(new BooleanDescriptor(COMP_OUT, "Внешний день (диапазон композита на ≥ ту же долю внутри дня) — тоже по ИЛИ", true));
+        g.addRow(new BooleanDescriptor(FALSE_BRK, "Ложный выход: возврат close в диапазон закрытого композита доклеивает дни к нему", true));
+        g.addRow(new BooleanDescriptor(SHORT_DAYS, "Короткие дни (ранние закрытия) входят в композиты", true));
+        g.addRow(new BooleanDescriptor(ROLL_BRK, "Ролл разрывает композит", true));
+        g.addRow(new BooleanDescriptor(CORE_SESS, "Ядро — от POC до обрыва TPO; баланс — если ядро задевают VA его дней", true));
         g.addRow(new IntegerDescriptor(CLIFF, "Обрыв TPO: строка на N принтов ниже максимума предыдущего 1 п. — граница ядра (0 — выкл.)", 4, 0, 50, 1));
         g.addRow(new DoubleDescriptor(CORE_DAYS, "Композит — баланс, если ядро задевают VA ≥ доли его дней (0 — любой)", 0.5, 0, 1, 0.05));
-        g.addRow(new BooleanDescriptor(PART, "Разметка композита: тело целиком режется на зоны (ядро / поддержка / сопротивление)", true));
-        g.addRow(new DoubleDescriptor(BODY, "Разметка: тело — строки не ниже доли максимума TPO (хвосты отпадают)", 0.15, 0.02, 0.6, 0.01));
-        g.addRow(new DoubleDescriptor(PMAXB, "Разметка: тело не шире, п. (шире — остаётся плотная середина)", 100, 20, 400, 5));
-        g.addRow(new DoubleDescriptor(FIT_B, "Подгонка по телам: меньше доли максимума тел свечей — пустота (0 — без подгонки)", 0.20, 0, 0.8, 0.05));
-        g.addRow(new BooleanDescriptor(SESS, "Зоны из сессий: узлы RTH TPO дня, подогнанные по телам; композит задаёт роль и один раз перекрашивает", true));
-        g.addRow(new DoubleDescriptor(S_GAP, "Сессионные зоны: узел ближе, п., к существующей зоне — её подтверждение (зазор между зонами)", 0.5, 0, 20, 0.25));
-        g.addRow(new DoubleDescriptor(S_MAX, "Сессионные зоны: не шире, п.", 4.0, 1, 20, 0.5));
-        g.addRow(new BooleanDescriptor(MINOR, "Минорные серые зоны: слабый узел сессии там, где нет других зон; сильный узел позже его вытесняет", true));
-        g.addRow(new BooleanDescriptor(CORE_TOUCH, "Сессионные зоны: синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела", true));
-        g.addRow(new BooleanDescriptor(REFINE, "Сессионные зоны: уточнение — внутри узла пошире все скопления тел свечей, каждое — зона (выкл. — одно скопление)", true));
-        g.addRow(new DoubleDescriptor(S_SHARE, "Сессионные зоны: узел — вершина не ниже доли главного узла дня", 0.25, 0, 1, 0.05));
-        g.addRow(new IntegerDescriptor(S_PEAK, "Сессионные зоны: вершина узла от, TPO", 3, 1, 13, 1));
-        g.addRow(new DoubleDescriptor(S_BODY, "Сессионные зоны: подгонка — тела не ниже доли максимума тел", 0.5, 0.1, 0.95, 0.05));
-        g.addRow(new BooleanDescriptor(CLUST, "Зоны — скопления тел свечей (границы на провалах), без нарезки равными кусками", true));
-        g.addRow(new DoubleDescriptor(CL_DIP, "Скопления: провал между ними от доли меньшей вершины", 0.10, 0.02, 0.6, 0.02));
-        g.addRow(new DoubleDescriptor(CL_MAX, "Скопление не шире, п. (шире — остаётся самая плотная часть)", 8, 2, 10, 0.5));
-        g.addRow(new BooleanDescriptor(SUB_ADD, "Композиты-уточнения внутри баланса добавляют свои зоны", false));
-        g.addRow(new BooleanDescriptor(FIT_ETH, "Подгонка по телам всех свечей сессии (ETH + RTH); профиль — только RTH", true));
-        g.addRow(new DoubleDescriptor(FIT_C, "Подгонка по телам: зона — тела не ниже доли вершины скопления", 0.70, 0.2, 0.95, 0.05));
-        g.addRow(new DoubleDescriptor(PCORE, "Разметка: ядро — строки не ниже доли максимума TPO", 0.65, 0.3, 0.95, 0.05));
-        g.addRow(new DoubleDescriptor(PTGT, "Разметка: ширина куска ≈, п. (кусок шире 10 п. делится)", 8.0, 2, 10, 0.5));
-        g.addRow(new BooleanDescriptor(NODES, "Ядро композита — узлами профиля (тонкие зоны вокруг вершин TPO)", true));
-        g.addRow(new DoubleDescriptor(NODE_DIP, "Узлы: провал между вершинами от, TPO", 2.0, 0.5, 20, 0.5));
-        g.addRow(new DoubleDescriptor(NODE_DROP, "Узлы: строки не ниже вершины узла на, TPO", 2.0, 0.5, 20, 0.5));
-        g.addRow(new BooleanDescriptor(NO_OVERLAP, "Зоны не налезают друг на друга (младшие обрезаются)", true));
+        g.addRow(new DoubleDescriptor(ZONE_W, "Ядро композита не шире, п. (сужается до окна с POC; 0 — без лимита)", 10.0, 0, 60, 0.5));
+        g.addRow(new DoubleDescriptor(BODY, "Тело композита — строки не ниже доли максимума TPO (зона в теле получает роль от композита)", 0.15, 0.02, 0.6, 0.01));
+        g.addRow(new DoubleDescriptor(PMAXB, "Тело композита не шире, п. (шире — остаётся плотная середина)", 100, 20, 400, 5));
+        g.addRow(new DoubleDescriptor(PCORE, "Ядро тела — строки не ниже доли максимума TPO (если синяя — не только у ядра)", 0.65, 0.3, 0.95, 0.05));
+        g.addRow(new DoubleDescriptor(SUB_OV, "Уточнение: ≥ доли диапазона композита внутри раннего баланса — своего баланса не даёт (0 — выкл.)", 0.70, 0, 1, 0.05));
+        g.addRow(new DoubleDescriptor(SUB_RATIO, "Уточнение: если тот баланс не шире композита больше чем в, раз", 2.0, 1, 10, 0.1));
+        g.addRow(new BooleanDescriptor(LIVE, "Формирующийся композит: с 3-го полного дня задаёт роли; пока формируется — пересинхронизация", true));
+        g.addRow(new BooleanDescriptor(RESYNC, "Старую зону синхронизирует и более поздний композит, сложившийся на ней (выкл. — только первый)", false));
+
+        g = tab.addGroup("Сессионные зоны");
+        g.addRow(new BooleanDescriptor(SESS, "Зоны из сессий: узлы RTH TPO дня, подогнанные по телам свечей; композит задаёт роль", true));
+        g.addRow(new DoubleDescriptor(S_SHARE, "Узел — вершина не ниже доли главного узла дня", 0.25, 0, 1, 0.05));
+        g.addRow(new IntegerDescriptor(S_PEAK, "Вершина узла от, TPO", 3, 1, 13, 1));
+        g.addRow(new BooleanDescriptor(REFINE, "Уточнение: внутри узла пошире — все скопления тел свечей, каждое — зона (выкл. — одно скопление)", true));
+        g.addRow(new DoubleDescriptor(S_BODY, "Подгонка: скопление — тела не ниже доли максимума тел", 0.5, 0.1, 0.95, 0.05));
+        g.addRow(new DoubleDescriptor(S_MAX, "Зона не шире, п.", 4.0, 1, 20, 0.5));
         g.addRow(new DoubleDescriptor(GRID, "Квадрат TPO на графике, п.: края зон — по целым квадратам, квадрат с принтами не режется (0 — выкл.)", 1.0, 0, 10, 0.25));
         g.addRow(new DoubleDescriptor(GRID_OFF, "Сетка квадратов TPO: сдвиг от целых, п.", 0, 0, 5, 0.25));
-        g.addRow(new BooleanDescriptor(GRID_GREY, "Зона уже одного квадрата TPO — один квадрат и всегда серая", true));
+        g.addRow(new DoubleDescriptor(S_GAP, "Узел ближе, п., к существующей зоне — её подтверждение (зазор между зонами)", 0.5, 0, 20, 0.25));
+        g.addRow(new BooleanDescriptor(MINOR, "Минорные серые зоны: слабый узел сессии там, где нет других зон", true));
+        g.addRow(new BooleanDescriptor(MINOR_PROMOTE, "Сильный узел на месте минорной зоны продолжает её обычной зоной (выкл. — вытесняет, зона обрывается)", true));
+
+        g = tab.addGroup("Цвет и серые");
+        g.addRow(new BooleanDescriptor(CORE_TOUCH, "Синяя — только зона, задевающая ядро композита (выкл. — всё ядро тела)", true));
+        g.addRow(new BooleanDescriptor(GRID_GREY, "Скопление тел уже одного квадрата TPO — зона в один квадрат, серая", true));
         g.addRow(new BooleanDescriptor(ONE_SQ, "Узкая зона — всегда серая", true));
         g.addRow(new DoubleDescriptor(ONE_SQ_MAX, "... узкая — не шире, п.", 2.0, 0.25, 10, 0.25));
+        g.addRow(new BooleanDescriptor(GRID_BLUE, "Узкие серые — кроме синих: узкая зона у ядра композита остаётся синей", true));
         g.addRow(new BooleanDescriptor(CR, "Красная / зелёная, колеблющаяся в своём композите, — серая", true));
         g.addRow(new DoubleDescriptor(CR_RATIO, "... перевес отторжений за цвет в днях композита не меньше, раз", 2.0, 1, 10, 0.25));
         g.addRow(new IntegerDescriptor(CR_MIN, "... проверять, если отторжений в композите от", 2, 1, 50, 1));
         g.addRow(new BooleanDescriptor(INV, "Стык «зелёные над красными»: две зоны стыка — серые", true));
         g.addRow(new DoubleDescriptor(INV_GAP, "... щель стыка не больше, п.", 3.0, 0, 20, 0.5));
-        g.addRow(new BooleanDescriptor(GRID_BLUE, "Узкие и одноквадратные серые — кроме синих: зона у ядра композита остаётся синей", true));
-        g.addRow(new BooleanDescriptor(CHART_NO_OV, "На графике одна зона на ценовом уровне (и через ролл): младшая налезающая сужается до свободного куска или не рисуется", true));
-        g.addRow(new DoubleDescriptor(MIN_PIECE, "Обрезанная зона уже, п. — не рисуется", 1.0, 0.25, 10, 0.25));
-        g.addRow(new DoubleDescriptor(COMP_VA, "Композит: наслоение VA — VA дня и композита пересекаются на ≥ долю меньшей (0 — не проверять)", 0.5, 0, 1, 0.05));
-        g.addRow(new BooleanDescriptor(COMP_AND, "Композит: день входит, только если close в диапазоне И наслоение VA (выкл. — ИЛИ)", true));
-        g.addRow(new DoubleDescriptor(COMP_IN, "Композит: день, чей High–Low на ≥ долю внутри диапазона композита, входит по ИЛИ (0 — выкл.)", 0.8, 0, 1, 0.05));
-        g.addRow(new BooleanDescriptor(COMP_OUT, "Композит: внешний день (диапазон композита на ≥ ту же долю внутри дня) — тоже по ИЛИ", true));
-        g.addRow(new IntegerDescriptor(EXT_DAYS, "Зоны вправо за последнюю свечу, дней (0 — до конца сессии)", 7, 0, 365, 1));
+        g.addRow(new IntegerDescriptor(WICK, "Хвост (отторжение) от, тиков", 2, 1, 20, 1));
+
+        g = tab.addGroup("На графике");
+        g.addRow(new BooleanDescriptor(NO_OVERLAP, "Зоны в сессии не налезают друг на друга (младшая не рисуется)", true));
+        g.addRow(new BooleanDescriptor(CHART_NO_OV, "Одна зона на ценовом уровне графика: младшая налезающая сужается до свободного куска или не рисуется", true));
+        g.addRow(new DoubleDescriptor(MIN_PIECE, "Суженная зона уже, п. — не рисуется", 1.0, 0.25, 10, 0.25));
         g.addRow(new BooleanDescriptor(ONE_COLOR, "Зона одной полосой: цвет и границы на сегодня по всей длине (выкл. — по участкам, как менялась)", true));
-        g.addRow(new BooleanDescriptor(VA_PREV, "Композит: наслоение VA — с VA композита или с VA предыдущего дня (value переходит изо дня в день)", true));
-        g.addRow(new BooleanDescriptor(ROLL_BRK, "Ролл разрывает композит (баланс до и после смены контракта — отдельно)", true));
-        g.addRow(new BooleanDescriptor(RESYNC, "Старую зону синхронизирует и более поздний композит, сложившийся на ней (выкл. — только первый)", false));
-        g.addRow(new BooleanDescriptor(LIVE, "Формирующийся композит: с 3-го полного дня задаёт роли; пока формируется — пересинхронизация, после закрытия — заморожено", true));
-        g.addRow(new BooleanDescriptor(FALSE_BRK, "Композит: ложный выход — возврат close в диапазон закрытого композита (до 3 дней) доклеивает дни к нему", true));
-        g.addRow(new BooleanDescriptor(SHORT_DAYS, "Короткие дни (ранние закрытия) входят в композиты", true));
-        g.addRow(new DoubleDescriptor(SUB_OV, "Уточнение: ≥ доли диапазона композита внутри раннего баланса — его ядро серое (0 — выкл.)", 0.70, 0, 1, 0.05));
-        g.addRow(new DoubleDescriptor(SUB_RATIO, "Уточнение: если тот баланс не шире композита больше чем в, раз", 2.0, 1, 10, 0.1));
-        g.addRow(new DoubleDescriptor(JOIN_GAP, "Соседние зоны одного вида ближе, п. — подтверждение старой (−1 — выкл.)", 0.25, -1, 10, 0.25));
+        g.addRow(new IntegerDescriptor(EXT_DAYS, "Зоны вправо за последнюю свечу, дней (0 — до конца сессии)", 7, 0, 365, 1));
+        g.addRow(new IntegerDescriptor(SESSIONS, "Сколько последних сессий показывать", 250, 5, 5000, 5));
+
         g = tab.addGroup("Типы зон");
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.HVN_S), Kind.HVN_S.title, true));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.HVN_R), Kind.HVN_R.title, true));
@@ -152,9 +151,38 @@ public class TpoZonesStudy extends Study {
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.OLD_BALANCE), Kind.OLD_BALANCE.title, false));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.GREY), Kind.GREY.title, true));
         g.addRow(new BooleanDescriptor(SHOW.get(Kind.CORE), Kind.CORE.title + " (режим «по композиту»)", true));
-        g = tab.addGroup("Фильтры (как на странице карты зон)");
+
+        tab = sd.addTab("Прежние режимы");
+        g = tab.addGroup("Класс и разметка (1.1–1.6)");
+        g.addRow(new BooleanDescriptor(MODE, "По положению в композите: выше ядра — сопротивление, ниже — поддержка (выкл. — по отторжениям, как на странице, 1.1)", true));
+        g.addRow(new BooleanDescriptor(CORE_VA, "Ядро композита — VA (иначе HVN-полоса вокруг POC)", false));
+        g.addRow(new BooleanDescriptor(PART, "Разметка композита (1.6, без сессионных зон): тело целиком режется на зоны", true));
+        g.addRow(new DoubleDescriptor(FIT_B, "Разметка: подгонка по телам — меньше доли максимума тел свечей — пустота (0 — без подгонки)", 0.20, 0, 0.8, 0.05));
+        g.addRow(new DoubleDescriptor(FIT_C, "Разметка: зона — тела не ниже доли вершины скопления", 0.70, 0.2, 0.95, 0.05));
+        g.addRow(new BooleanDescriptor(FIT_ETH, "Разметка: подгонка по телам всех свечей сессии (ETH + RTH); профиль — только RTH", true));
+        g.addRow(new DoubleDescriptor(PTGT, "Разметка: ширина куска ≈, п. (кусок шире 10 п. делится)", 8.0, 2, 10, 0.5));
+        g.addRow(new BooleanDescriptor(CLUST, "Разметка: зоны — скопления тел свечей (границы на провалах), без нарезки равными кусками", true));
+        g.addRow(new DoubleDescriptor(CL_DIP, "Разметка: провал между скоплениями от доли меньшей вершины", 0.10, 0.02, 0.6, 0.02));
+        g.addRow(new DoubleDescriptor(CL_MAX, "Разметка: скопление не шире, п. (шире — остаётся самая плотная часть)", 8, 2, 10, 0.5));
+        g.addRow(new BooleanDescriptor(SUB_ADD, "Композиты-уточнения внутри баланса добавляют свои зоны", false));
+        g.addRow(new BooleanDescriptor(NODES, "Ядро композита — узлами профиля (без разметки)", true));
+        g.addRow(new DoubleDescriptor(NODE_DIP, "Узлы: провал между вершинами от, TPO", 2.0, 0.5, 20, 0.5));
+        g.addRow(new DoubleDescriptor(NODE_DROP, "Узлы: строки не ниже вершины узла на, TPO", 2.0, 0.5, 20, 0.5));
+        g.addRow(new DoubleDescriptor(JOIN_GAP, "Соседние зоны одного вида ближе, п. — подтверждение старой (−1 — выкл.)", 0.25, -1, 10, 0.25));
+        g = tab.addGroup("Первородные HVN-зоны (config.yaml)");
+        g.addRow(new DoubleDescriptor(HVN_SHARE, "HVN-полоса: TPO ≥ доли максимума (и ядро композита)", 0.70, 0.3, 1.0, 0.05));
+        g.addRow(new IntegerDescriptor(HVN_MIN, "Первородные: HVN в VA от, TPO", 8, 1, 30, 1));
+        g.addRow(new IntegerDescriptor(HVN_MAX, "Первородные: HVN в VA до, TPO", 10, 1, 30, 1));
+        g.addRow(new IntegerDescriptor(GHVN_MIN, "Серые: HVN в VA от, TPO", 5, 1, 30, 1));
+        g.addRow(new IntegerDescriptor(GHVN_MAX, "Серые: HVN в VA до, TPO", 7, 1, 30, 1));
+        g.addRow(new DoubleDescriptor(MERGE_OV, "Пересечение для склейки, доля", 0.50, 0.05, 1.0, 0.05));
+        g.addRow(new DoubleDescriptor(MERGE_W, "Ширина первородной зоны до, п.", 10.0, 1, 50, 0.5));
+        g.addRow(new IntegerDescriptor(GREY_HIST, "Молодая первородная серая, пока истории < дней", 2, 0, 20, 1));
+        g.addRow(new DoubleDescriptor(GREY_WMIN, "Серые: ширина от, п.", 1.0, 0, 50, 0.25));
+        g.addRow(new DoubleDescriptor(GREY_WMAX, "Серые: ширина до, п.", 10.0, 0, 50, 0.25));
+        g.addRow(new DoubleDescriptor(REJ_SHARE, "Класс HVN: доля отторжений в одну сторону", 0.60, 0.5, 1.0, 0.05));
+        g = tab.addGroup("Фильтры страницы карты зон");
         g.addRow(new IntegerDescriptor(NEAR, "Ближайших к open сессии зон (0 — все)", 0, 0, 100, 1));
-        g.addRow(new IntegerDescriptor(SESSIONS, "Сколько последних сессий показывать", 250, 5, 5000, 5));
         g.addRow(new IntegerDescriptor(ALIGN, "Подгонка границ по телам свечей, сессий (0 — без)", 0, 0, 200, 1));
         g.addRow(new IntegerDescriptor(PROMOTE, "Серая → основная: отторжений за подгонку (0 — не переводить)", 3, 0, 50, 1));
         g.addRow(new IntegerDescriptor(MIN_REJ, "Отторжений не меньше", 0, 0, 500, 1));
@@ -191,22 +219,8 @@ public class TpoZonesStudy extends Study {
         g.addRow(new StringDescriptor(RTH_END, "RTH конец (ЧЧ:ММ)", "15:00"));
         g.addRow(new StringDescriptor(ETH_START, "Начало Globex-сессии (ЧЧ:ММ)", "17:00"));
         g.addRow(new DoubleDescriptor(TICK, "Тик (0 — из инструмента)", 0, 0, 100, 0.01));
-        g = tab.addGroup("Профиль и зоны (config.yaml)");
+        g = tab.addGroup("Профиль");
         g.addRow(new DoubleDescriptor(VA_PCT, "Value Area, доля", 0.70, 0.5, 0.95, 0.01));
-        g.addRow(new DoubleDescriptor(HVN_SHARE, "HVN-полоса: TPO ≥ доли максимума", 0.70, 0.3, 1.0, 0.05));
-        g.addRow(new IntegerDescriptor(HVN_MIN, "Первородные: HVN в VA от, TPO", 8, 1, 30, 1));
-        g.addRow(new IntegerDescriptor(HVN_MAX, "Первородные: HVN в VA до, TPO", 10, 1, 30, 1));
-        g.addRow(new IntegerDescriptor(GHVN_MIN, "Серые: HVN в VA от, TPO", 5, 1, 30, 1));
-        g.addRow(new IntegerDescriptor(GHVN_MAX, "Серые: HVN в VA до, TPO", 7, 1, 30, 1));
-        g.addRow(new DoubleDescriptor(MERGE_OV, "Пересечение для склейки, доля", 0.50, 0.05, 1.0, 0.05));
-        g.addRow(new DoubleDescriptor(MERGE_W, "Ширина первородной зоны до, п.", 10.0, 1, 50, 0.5));
-        g.addRow(new DoubleDescriptor(ZONE_W, "Зоны не шире, п.: HVN-полоса дня и ядро композита сужаются до окна с POC (0 — без лимита)", 10.0, 0, 60, 0.5));
-        g.addRow(new IntegerDescriptor(COMP_DAYS, "Композит «старый баланс» от, дней", 3, 2, 30, 1));
-        g.addRow(new IntegerDescriptor(GREY_HIST, "Молодая первородная серая, пока истории < дней", 2, 0, 20, 1));
-        g.addRow(new DoubleDescriptor(GREY_WMIN, "Серые: ширина от, п.", 1.0, 0, 50, 0.25));
-        g.addRow(new DoubleDescriptor(GREY_WMAX, "Серые: ширина до, п.", 10.0, 0, 50, 0.25));
-        g.addRow(new DoubleDescriptor(REJ_SHARE, "Класс HVN: доля отторжений в одну сторону", 0.60, 0.5, 1.0, 0.05));
-        g.addRow(new IntegerDescriptor(WICK, "Хвост от, тиков", 2, 1, 20, 1));
 
         RuntimeDescriptor rd = createRD();
         rd.setLabelSettings(NEAR, ALIGN);
@@ -331,6 +345,7 @@ public class TpoZonesStudy extends Study {
         p.sessRefine = st.getBoolean(REFINE, true);
         p.sessCoreTouch = st.getBoolean(CORE_TOUCH, true);
         p.sessMinor = st.getBoolean(MINOR, true);
+        p.sessMinorPromote = st.getBoolean(MINOR_PROMOTE, true);
         p.sessPeakShare = st.getDouble(S_SHARE, 0.25);
         p.sessBodyShare = st.getDouble(S_BODY, 0.5);
         p.clusterDip = st.getDouble(CL_DIP, 0.10);

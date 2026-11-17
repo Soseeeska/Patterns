@@ -16,25 +16,23 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * Карта зон ES (ветка Zones-1.1) на чистой Java, без зависимостей от MotiveWave.
+ * Расчёт карты зон TPO Zones на чистой Java, без зависимостей от MotiveWave (тестируется вне платформы).
  *
- * Порт Python-пайплайна scripts/zone_map_export.py + логики страницы
- * scripts/zone_map_template.html:
- *   1. RTH-дни из 30m-баров, TPO-профиль дня (POC, VA по Далтону), HVN-полоса вокруг POC;
- *   2. композиты close_in_range: ≥ 3 дней — «старый баланс» (VA композита),
- *      2 дня — серая зона (HVN-полоса композита);
- *   3. первородные HVN-зоны (дни с HVN в VA 8–10 TPO), серые — из дней 5–7 TPO;
- *      молодая первородная зона серая, пока формирование + подтверждения < 2 дней;
- *   4. класс HVN-зоны на дату — по отторжениям хвостом на RTH-барах (≥ 60% в одну сторону);
- *   5. подгонка границ по краям тел 30m-свечей за первые N сессий (N = 0 — без подгонки),
- *      перевод серой зоны в основную по отторжениям за эти N сессий;
- *   режим «по композиту» (Params.compositeMode): ядро композита ≥ 3 дней (HVN-полоса вокруг POC
- *      или VA) — проторговка; ядро, пересекающее уже существующее, его подтверждает, новой зоны нет.
- *      HVN- и серые зоны внутри диапазона композита: выше ядра — сопротивление, ниже — поддержка,
- *      на ядре — поглощаются им; вне всех композитов — серые. Правит последний доступный композит;
- *   6. фильтры страницы: типы, «ближайшие к open сессии», отторжения, чистота,
- *      подтверждения, возраст, ширина; серая скрывается, если на > 30% заходит на основную.
- * Все цены профиля — в целых тиках, как в tpo/profile.py.
+ * Режим по умолчанию (1.8: compositeMode + sessionZones; принцип действия — motivewave/README.md):
+ *   1. роллы: находятся по гэпу между соседними 30m-барами; расчёт в ценах графика (rollRaw) или в склейке;
+ *   2. RTH-дни из 30m-баров, TPO-профиль дня (POC, VA по Далтону);
+ *   3. композиты: день входит по close в диапазоне И наслоению VA (внутренний / внешний день — ИЛИ), ложный
+ *      выход доклеивает, ролл рвёт; ≥ 3 дней и VA дней задевают ядро — баланс; внутри раннего баланса —
+ *      уточнение; формирующийся композит задаёт роли с 3-го дня;
+ *   4. сессионные зоны: узлы RTH-профиля дня → мнимая зона → скопления тел 30m-свечей сессии → края по
+ *      квадратам TPO; узел рядом с существующей зоной — её подтверждение; слабые узлы — минорные (серые);
+ *   5. роль: у ядра композита — синяя, выше — красная, ниже — зелёная; вне композита — по отторжениям в
+ *      сессию рождения;
+ *   6. по сессиям: зоны не налезают (младшая не рисуется), раскладка в ценах графика (одна зона на уровне),
+ *      серые: колеблющиеся в своём композите, узкие, стык «зелёные над красными».
+ * Прежние режимы (1.1–1.6) — первородные HVN-зоны с классом по отторжениям, «старые балансы», разметка тела
+ * композита, фильтры страницы карты зон (scripts/zone_map_export.py + zone_map_template.html) — включаются
+ * настройками и по умолчанию не рисуются. Все цены профиля — в целых тиках, как в tpo/profile.py.
  */
 public final class ZoneEngine {
 
@@ -50,159 +48,161 @@ public final class ZoneEngine {
     }
 
     // ------------------------------------------------------------------ параметры
-    /** Все пороги — как в config.yaml и DEF страницы карты зон. */
+    /** Все пороги. Значение по умолчанию задаётся здесь и в TpoZonesStudy (descriptor + getXxx(KEY, def)) — менять в обоих
+     *  местах. Индикатор сам ставит compositeMode = true и zoneMaxWidthPts = 10. */
     public static final class Params {
-        // данные и сессии
+        // ---- данные, сессии, роллы
         public double tick = 0.25;
-        public boolean rollAdjust = true;        // склейка роллов: сырой ряд (MotiveWave) рвётся на смене контракта — цены до ролла
-                                                 // сдвигаются на гэп, расчёт идёт в ценах текущего контракта
-        public boolean rollRaw = true;           // расчёт в ценах графика: роллы только находятся (рвут композиты), цены не сдвигаются —
-                                                 // гэп ролла настоящий, зоны взаимодействуют так, как видны на графике (иначе — склейка)
-        public double rollMinGapPts = 20;        // ролл — скачок между соседними 30m-барами не меньше, п. (в окне 10 дней до 3-й пятницы
-                                                 // мар / июн / сен / дек; обычный скачок между соседними барами — 1–2 п.)
         public ZoneId tz = ZoneId.of("America/Chicago");
         public int rthStartMin = 8 * 60 + 30, rthEndMin = 15 * 60;   // RTH 08:30–15:00 CT
         public int ethStartMin = 17 * 60;                              // Globex с 17:00 — дата следующего дня
         public int periodMinutes = 30;
         public int fullDayPeriods = 13;
-        // профиль
+        public boolean rollAdjust = true;        // роллы ищутся: сырой ряд (MotiveWave) рвётся на смене контракта
+        public boolean rollRaw = true;           // расчёт в ценах графика: роллы только находятся (рвут композиты), цены не сдвигаются —
+                                                 // гэп ролла настоящий, зоны взаимодействуют так, как видны на графике (иначе — склейка:
+                                                 // цены до ролла сдвигаются на гэп, расчёт в ценах текущего контракта)
+        public double rollMinGapPts = 20;        // ролл — скачок между соседними 30m-барами не меньше, п. (в окне 10 дней до 3-й пятницы
+                                                 // мар / июн / сен / дек; обычный скачок между соседними барами — 1–2 п.)
+
+        // ---- профиль дня
         public double valueAreaPct = 0.70;
-        public double hvnShare = 0.70;
-        // композиты
+        public double hvnShare = 0.70;            // HVN-полоса / ядро композита — строки не ниже этой доли максимума TPO
+        public int minWickTicks = 2;              // хвост свечи (отторжение) — от стольких тиков
+
+        // ---- композиты
+        public boolean compositeMode = false;     // класс зоны по положению в композите (индикатор: true), иначе — по отторжениям (1.1)
         public int compositeMinDays = 3;
-        public int greyCompositeMinDays = 2;
-        // первородные зоны
-        public int hvnMinTpo = 8, hvnMaxTpo = 10;
-        public double mergeOverlapMin = 0.50;
-        public double mergeMaxWidthPts = 10.0;
-        // серые
-        public int greyHvnMinTpo = 5, greyHvnMaxTpo = 7;
-        public int greyMinHistoryDays = 2;
-        public double greyMinWidthPts = 1.0, greyMaxWidthPts = 10.0;
-        public double greyMaxOverlap = 0.30;
-        // классы
-        public double rejectionShare = 0.60;
-        // режим «по композиту»
-        public boolean compositeMode = false;     // класс зоны по положению в композите, а не по отторжениям
-        public boolean coreByVa = false;          // ядро композита: VA (иначе HVN-полоса вокруг POC)
-        public double coreAbsorb = 0.30;
-        public boolean coreFromSessions = true;   // ядро до обрыва TPO; баланс — если VA дней задевают ядро
-        public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
-        public boolean compositeShortDays = true;
-        public double compFalseBreakMaxPts = 100; // ... если диапазон закрытого композита не шире, п.
-        public int compFalseBreakMax = 2;         // ... и не больше стольких продолжений подряд
-        public boolean compFalseBreak = true;     // ложный выход: возврат close в диапазон закрытого композита, пока новый
-                                                  // не набрал compositeMinDays дней, — дни доклеиваются к нему
+        public boolean compositeShortDays = true; // короткие дни (ранние закрытия) входят в профиль композита, как в TPO платформы
         public double compVaOverlap = 0.5;        // VA дня и VA композита пересекаются на ≥ эту долю меньшей из двух (0 — не проверять)
-        public boolean compJoinBoth = true;       // склейка: close в диапазоне И пересечение VA (иначе — close в диапазоне ИЛИ пересечение VA);
-                                                  // так же и доклейка после ложного выхода
+        public boolean compJoinBoth = true;       // склейка: close в диапазоне И пересечение VA (иначе — ИЛИ); так же доклейка после
+                                                  // ложного выхода
         public double compInsideShare = 0.8;      // ... но день, чей High–Low на ≥ эту долю внутри диапазона композита, клеится по ИЛИ
                                                   // (0 — выкл.)
         public boolean compOutsideDays = true;    // ... и внешний день: диапазон композита на ≥ ту же долю внутри High–Low дня
-        public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам / теням свечей;
-                                                  // композит только задаёт роль (ядро / выше / ниже) и один раз перекрашивает
+        public boolean compVaPrevDay = true;      // наслоение VA — с VA кандидата или с VA предыдущего (полного) дня кандидата
+        public boolean compFalseBreak = true;     // ложный выход: возврат close в диапазон закрытого композита, пока новый не набрал
+                                                  // compositeMinDays дней, — дни доклеиваются к нему
+        public double compFalseBreakMaxPts = 100; // ... если диапазон закрытого композита не шире, п.
+        public int compFalseBreakMax = 2;         // ... и не больше стольких продолжений подряд
+        public boolean compRollBreak = true;      // ролл разрывает композит: кандидат закрывается на смене контракта, ложный выход через
+                                                  // ролл не доклеивает
+        public boolean compShortNoBreak = false;  // короткий день не рвёт кандидата: входит в профиль, выходом быть не может (отвергнуто)
+        public boolean coreFromSessions = true;   // ядро — от POC композита до обрыва TPO; баланс — если VA дней задевают ядро
+        public int coreCliffTpo = 4;              // обрыв: строка на N принтов ниже максимума предыдущего 1 п. (4 тика)
+        public double coreMinDaysShare = 0.5;     // ядро признаётся, если его задевают VA ≥ этой доли дней композита; иначе это не
+                                                  // баланс — композит не используется (0 — выкл.)
+        public boolean coreByVa = false;          // ядро композита — VA (иначе HVN-полоса вокруг POC)
+        public double zoneMaxWidthPts = 0;        // > 0: ядро композита (и HVN-полоса дня) шире — сужается до окна с POC и максимумом
+                                                  // TPO (индикатор: 10 п.)
+        public double bodyShare = 0.15;           // тело композита — строки не ниже этой доли максимума (сглаж. 1 п.), хвосты отпадают;
+                                                  // зона, чья середина в теле, получает роль от композита
+        public double partCoreShare = 0.65;       // ядро тела — часть тела не ниже этой доли максимума (роль, если sessCoreTouch выкл.)
+        public double partMaxBodyPts = 100;       // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
+        public double subOverlap = 0.70;          // ≥ этой доли диапазона композита внутри раннего баланса — уточнение: своего баланса
+                                                  // не даёт, ценой управляет родитель (0 — выкл.)
+        public double subMaxRatio = 2.0;          // ... если тот баланс не шире композита больше чем в столько раз
+        public boolean liveComposite = true;      // формирующийся композит: с compositeMinDays дней — со следующей сессии задаёт роли
+                                                  // (снимок по уже прошедшим дням); пока формируется — пересинхронизация
+
+        // ---- сессионные зоны (1.7–1.8)
+        public boolean sessionZones = true;       // зоны из узлов RTH TPO каждой сессии, подогнанные по телам свечей; композит задаёт роль
         public double sessNodeDrop = 1.0;         // узел — строки не ниже вершины на столько TPO (сглаж. 1 п.)
         public double sessNodeDip = 0.15;         // провал между узлами — от доли меньшей вершины (и ≥ 1 TPO)
-        public double sessPeakShare = 0.25;        // узел — вершина не ниже этой доли максимума TPO дня (0 — любая ≥ sessMinPeak)
+        public double sessPeakShare = 0.25;       // узел — вершина не ниже этой доли максимума TPO дня (0 — любая ≥ sessMinPeak)
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
-        public double sessMaxPts = 4;             // зона не шире, п.
-        public double sessMinGapPts = 0.5;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
-        public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
-                                                  // накрывшему); иначе — только первый композит после её рождения
-        public boolean sessMinor = true;          // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного, но ≥ sessMinPeak
-                                                  // TPO) — серая зона там, где нет других (общее правило зазора sessMinGapPts); всегда серая
-        public boolean sessMinorPromote = true;   // сильный узел на месте минорной зоны её не обрывает, а продолжает: зона идёт дальше без
-                                                  // разрыва и с этой сессии — обычная (роль — как посчитана при её рождении); иначе — вытесняет
-        public int sessMinorMinPeak = 2;          // ... вершина минорного узла — от стольких TPO (тонкий профиль тренда: 1–2 TPO на строку)
-        public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
+        public double sessBodyShare = 0.5;        // подгонка узла по телам: скопление — тела не ниже этой доли максимума тел
         public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
                                                   // все скопления тел свечей сессии (не одно), каждое — зона
         public double sessParentShare = 0.7;      // ... мнимая зона: строки профиля не ниже этой доли вершины узла
         public double sessClusterMin = 0.5;       // ... скопление — вершина тел не ниже этой доли максимума тел в мнимой зоне (и ≥ 2 тел)
         public double sessClusterDip = 0.15;      // ... скопления разделены провалом ≥ этой доли меньшей вершины (и ≥ 1.5 тела)
         public double sessSiblingGapPts = 1.0;    // ... зоны из одной мнимой могут стоять ближе sessMinGapPts — от стольких п.
-        public boolean compShortNoBreak = false;  // короткий день не рвёт кандидата: входит в профиль, выходом быть не может
-        public boolean compVaPrevDay = true;      // наслоение VA — с VA кандидата или с VA предыдущего (полного) дня кандидата
-        public boolean compRollBreak = true;      // ролл разрывает композит: кандидат закрывается на смене контракта (на несклеенном
-                                                  // графике баланс до и после ролла — в разных местах), ложный выход через ролл не доклеивает
-        public boolean liveComposite = true;      // формирующийся композит: с compositeMinDays дней — со следующей сессии задаёт роли
-                                                  // (снимок по уже прошедшим дням); зоны синхронизируются с ним один раз, как с закрытым
-        public int drawExtendDays = 7;            // зоны, дошедшие до последней сессии, рисуются вправо ещё на столько дней после её планового конца
-                                                  // (в пустое место справа от последней свечи, в лайве — дальше новых баров); 0 — до конца сессии
-        public boolean drawOneColor = true;       // зона рисуется одной полосой: цвет и границы — на последнюю сессию, где она видна
-                                                  // (иначе — по участкам, как менялась по сессиям)
-        public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
+        public double sessMaxPts = 4;             // зона не шире, п.
+        public double sessMinGapPts = 0.5;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public double gridPts = 1.0;              // квадрат TPO на графике, п. (tickInterval 4): края зоны — на границах квадратов, в ценах
                                                   // графика; после подгонки по телам край — к ближайшей границе, пополам — квадрат целиком
                                                   // (принт в приоритете); 0 — выкл.
         public double gridOffsetPts = 0;          // ... сдвиг сетки квадратов от целых, п.
-        public boolean gridNarrowGrey = true;     // зона, чьё скопление тел уже одного квадрата (gridPts; без сетки — 1 п.), — один квадрат и всегда
-                                                  // серая (узкое место без проторговки — минорная структура)
-        public boolean gridNarrowKeepBlue = true; // ... кроме синей: узкая зона у ядра композита остаётся синей (баланс не перекрашиваем)
-        public boolean oneSquareGrey = true;      // зона шириной в один квадрат (gridPts; без сетки — 1 п.) на графике — всегда серая (кроме синей,
-                                                  // если gridNarrowKeepBlue); в т. ч. суженная раскладкой до одного квадрата
-        public double oneSquareMaxPts = 2.0;      // ... серая — зона не шире стольких п. (1 — только один квадрат)
+        public boolean gridNarrowGrey = true;     // скопление тел уже одного квадрата (gridPts; без сетки — 1 п.) — зона в один квадрат,
+                                                  // всегда серая
+        public boolean sessMinor = true;          // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного или
+                                                  // < sessMinPeak TPO) — серая зона там, где нет других
+        public int sessMinorMinPeak = 2;          // ... вершина минорного узла — от стольких TPO (тонкий профиль тренда: 1–2 TPO на строку)
+        public boolean sessMinorPromote = true;   // сильный узел на месте минорной зоны её не обрывает, а продолжает: зона идёт дальше без
+                                                  // разрыва и с этой сессии — обычная (роль — как посчитана при её рождении); иначе — вытесняет
+        public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения в сессию рождения, затем её закрытие; 1 — только закрытие
+        public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ zoneMaxWidthPts), а не всё ядро тела
+        public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (отвергнуто: синие
+                                                  // копятся); иначе — только первый композит после её рождения
+
+        // ---- серые и цвет (1.8)
+        public boolean gridNarrowKeepBlue = true; // узкие (gridNarrowGrey, oneSquareGrey) — кроме синей: зона у ядра композита остаётся синей
+        public boolean oneSquareGrey = true;      // узкая зона на графике (не шире oneSquareMaxPts; в т. ч. суженная раскладкой) — всегда серая
+        public double oneSquareMaxPts = 2.0;      // ... узкая — не шире стольких п.
         public boolean compRejGrey = true;        // красная / зелёная, колеблющаяся в своём композите, — серая: в днях композита, задавшего ей
                                                   // цвет (с её появления), ≥ compRejMin отторжений и перевес за цвет (красная — снизу, зелёная —
                                                   // сверху) меньше compRejRatio : 1; не тестировалась (меньше compRejMin) — цвет остаётся
         public double compRejRatio = 2.0;
         public int compRejMin = 2;
-        public boolean invertGrey = true;         // стык «зелёные над красными»: кластер зелёных (подряд по цене) стоит над кластером красных
-                                                  // ближе invertGapPts — две зоны стыка серые (роли разных композитов друг другу противоречат)
+        public boolean invertGrey = true;         // стык «зелёные над красными»: зелёная стоит сразу над красной (без серых / синих между)
+                                                  // ближе invertGapPts — обе серые (роли разных композитов противоречат друг другу)
         public double invertGapPts = 3;           // ... щель стыка не больше, п. (цены графика)
+
+        // ---- раскладка и рисование
+        public boolean noOverlap = true;          // зоны в сессии не налезают друг на друга
+        public boolean layoutDropYounger = true;  // ... младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
+        public double minPiecePts = 1.0;          // обрезанная зона уже этого — не рисуется
         public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
                                                   // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
                                                   // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
-        public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
-        public double sessBodyShare = 0.5;
-        public int sessConfirm = 5;               // режим 2: зона рождается серой, через столько полных дней — цвет по отторжениям за них        // подгонка узла по телам: скопление не ниже этой доли максимума тел
+        public boolean drawOneColor = true;       // зона рисуется одной полосой: цвет и границы — на последнюю сессию, где она видна
+                                                  // (иначе — по участкам, как менялась по сессиям)
+        public int drawExtendDays = 7;            // зоны, дошедшие до последней сессии, рисуются вправо ещё на столько дней после её планового
+                                                  // конца (в пустое место справа от последней свечи, в лайве — дальше новых баров); 0 — до конца сессии
+        public int sessions = 250;                // сколько последних сессий показывать
+
+        // ---- прежние режимы (1.1–1.6): первородные HVN-зоны, «старые балансы», разметка композита, фильтры страницы
+        public int greyCompositeMinDays = 2;      // композит из 2 дней — серая зона
+        public int hvnMinTpo = 8, hvnMaxTpo = 10; // первородные зоны: дни с HVN в VA 8–10 TPO
+        public double mergeOverlapMin = 0.50;
+        public double mergeMaxWidthPts = 10.0;
+        public int greyHvnMinTpo = 5, greyHvnMaxTpo = 7;
+        public int greyMinHistoryDays = 2;
+        public double greyMinWidthPts = 1.0, greyMaxWidthPts = 10.0;
+        public double greyMaxOverlap = 0.30;      // серая скрывается, если на > этой доли ширины заходит на основную
+        public double rejectionShare = 0.60;      // класс HVN-зоны: ≥ этой доли отторжений в одну сторону
+        public double coreAbsorb = 0.30;          // зона, на > этой доли своей ширины лежащая на ядре, поглощается им
+        public double joinGapPts = 0.25;          // зона того же вида ближе этого к более старой — её подтверждение; < 0 — выкл.
         public boolean partition = true;          // разметка композита: тело целиком режется на зоны (ядро / подд. / сопр.)
-        public double bodyShare = 0.15;           // тело — строки не ниже этой доли максимума (сглаж. 1 п.), хвосты отпадают
-        public double partCoreShare = 0.65;       // ядро — часть тела не ниже этой доли максимума
         public double partDipShare = 0.06;        // провал для нарезки — не мельче этой доли максимума (и не мельче 2 TPO)
         public double partTargetPts = 8, partMaxPts = 10, partMinPts = 2;
-        public double partMaxBodyPts = 100;      // тело шире — порог тела поднимается, пока не уложится (остаётся плотная середина)
-        public double fitBodyShare = 0.20;        // подгонка по телам: строки, где тел 30m-свечей дней композита меньше этой
-                                                  // доли максимума (и меньше 3), — пустота (0 — без подгонки)
+        public double fitBodyShare = 0.20;        // подгонка по телам: строки, где тел 30m-свечей дней композита меньше этой доли
+                                                  // максимума (и меньше 3), — пустота (0 — без подгонки)
         public double fitClusterShare = 0.70;     // зона — скопление тел вокруг вершины: не ниже этой доли её
         public boolean fitEthBodies = true;       // подгонка по телам всех свечей сессии (ETH + RTH), профиль — только RTH
-        public double clusterMaxPts = 8;
-        public boolean subAddsZones = false;      // уточнения внутри баланса добавляют свои зоны (иначе зоны даёт только главный)          // скопление шире — порог поднимается, остаётся самая плотная часть
-        public boolean bodyClusters = true;       // зоны — скопления тел свечей (вершины профиля тел, границы на провалах),
-                                                  // без нарезки равными кусками; TPO-профиль задаёт только ядро / выше / ниже
+        public boolean bodyClusters = true;       // зоны — скопления тел свечей (вершины профиля тел, границы на провалах)
         public double clusterDip = 0.10;          // провал между скоплениями — не мельче этой доли меньшей вершины (и ≥ 1.5 тела)
+        public double clusterMaxPts = 8;          // скопление шире — порог поднимается, остаётся самая плотная часть
+        public boolean subAddsZones = false;      // уточнения внутри баланса добавляют свои зоны (иначе зоны даёт только главный)
         public boolean coreNodes = true;          // ядро рисуется узлами профиля (локальные вершины, разделённые провалами)
         public double nodeDipTpo = 2.0;           // провал между узлами — не меньше стольких TPO от обеих вершин (сглаж. 1 п.)
         public double nodeDropTpo = 2.0;          // узел — строки не ниже вершины узла на столько TPO
-        public boolean noOverlap = true;          // зоны в сессии не налезают друг на друга: младшие обрезаются
-        public double minPiecePts = 1.0;          // обрезанная зона уже этого — не рисуется // режим «по композиту»: короткие дни входят в композиты
-        public double subOverlap = 0.70;          // ≥ этой доли диапазона композита внутри раннего баланса — уточнение (0 — выкл.)
-        public double subMaxRatio = 2.0;          // ... если тот баланс не шире композита больше чем в столько раз
-        public double coreMinDaysShare = 0.5;     // ядро признаётся, если его задевают VA ≥ этой доли дней композита;
-                                                  // иначе это не баланс — композит не используется (0 — выкл.)
-        public double joinGapPts = 0.25;          // режим «по композиту»: зона того же вида ближе этого к более
-                                                  // старой — её подтверждение (ядро не создаётся / не рисуется); < 0 — выкл.
-        public double zoneMaxWidthPts = 0;        // > 0: HVN-полоса дня и ядро композита шире — сужаются до окна
-                                                  // с POC и максимумом TPO (на странице карты зон лимита нет)          // зона, на > 30% своей ширины лежащая на ядре, поглощается им
-        public int minWickTicks = 2;
-        // подгонка границ
-        public int alignSessions = 0;            // 0 — без подгонки (по умолчанию на странице)
+        public int alignSessions = 0;             // подгонка границ по телам за первые N сессий (0 — без подгонки)
         public double alignSearchFrac = 0.5, alignSearchMinPts = 2.0, alignWPlain = 0.5, alignMinScore = 3;
         public int alignMinWidthTicks = 2;
         public double alignMaxWidthPts = 10.0, alignMaxWidthMult = 1.5;
-        public int promoteRejections = 3;        // перевод серой в основную; 0 — не переводить
-        // фильтры страницы
-        public int sessions = 250;               // сколько последних сессий показывать
-        public int nearest = 0;                  // ближайших к open сессии зон; 0 — все
+        public int promoteRejections = 3;         // перевод серой в основную по отторжениям за подгонку; 0 — не переводить
+        public int nearest = 0;                   // фильтр: ближайших к open сессии зон; 0 — все
         public int minRejections = 0;
         public int purityMinPct = 0, purityMaxPct = 100;
         public int minConfirmations = 0;
-        public double confirmNearPts = 0;        // подтверждение: зазор полосы HVN до зоны ≤ N п.
+        public double confirmNearPts = 0;         // подтверждение: зазор полосы HVN до зоны ≤ N п.
         public int minAgeDays = 0;
-        public double maxWidthPts = 60;          // ≥ 60 — любая
+        public double maxWidthPts = 60;           // ≥ 60 — любая
         public final Set<Kind> types = new HashSet<>(Arrays.asList(
                 Kind.HVN_S, Kind.HVN_R, Kind.HVN_RANGE, Kind.HVN_NEW, Kind.GREY, Kind.CORE));
-        public double confirmStoreMaxPts = 10.0; // MAX_NEAR экспорта
+        public double confirmStoreMaxPts = 10.0;  // MAX_NEAR экспорта
     }
 
     // ------------------------------------------------------------------ входные бары
@@ -305,10 +305,10 @@ public final class ZoneEngine {
         public LocalDate born;                               // сессионная зона: RTH-день, из узла которого она родилась
         public boolean minor;                                // сессионная минорная зона (слабый узел): всегда серая
         public boolean narrow;                               // сессионная зона уже одного квадрата TPO (gridNarrowGrey): всегда серая
-        public boolean oneSquare;                            // сессионная зона в один квадрат на графике (oneSquareGrey): всегда серая
+        public boolean oneSquare;                            // сессионная зона не шире oneSquareMaxPts на графике (oneSquareGrey): серая
         public boolean inverted;                             // сведена в серую на стыке «зелёные над красными» (invertGrey)
         public boolean wavering;                             // серая: колеблется в своём композите (compRejGrey)
-        long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии вытеснена сильным узлом — не рисуется
+        long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии на её месте сильный узел: продолжена обычной (или вытеснена)
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
         Zone nodeOf;                                         // узел: его ядро
@@ -358,14 +358,14 @@ public final class ZoneEngine {
         public final List<Session> sessions = new ArrayList<>();     // показываемые сессии
         public final List<List<Shown>> visible = new ArrayList<>();  // по сессиям
         public int rthDays, fullDays, composites;
-        public final List<Comp> comps = new ArrayList<>();
-        public final List<Comp> notBalance = new ArrayList<>();
-        public final List<Comp> subComps = new ArrayList<>();
+        public final List<Comp> comps = new ArrayList<>();           // балансы (закрытые композиты, ядро признано)
+        public final List<Comp> notBalance = new ArrayList<>();      // композиты, где дни не сошлись (без ядра)
+        public final List<Comp> subComps = new ArrayList<>();        // уточнения внутри более раннего баланса
         public final List<Comp> liveComps = new ArrayList<>();       // снимки формирующихся композитов (балансы, не уточнения)
         public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
         public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
         public boolean rawPrices;                                    // rollRaw: цены не сдвигались (rollShift = 0, расчёт в ценах графика)
-        public List<Bar> bars = List.of();                           // бары расчёта (после склейки роллов)        // уточнения внутри баланса (ядро — серая зона)      // композиты, где дни не сошлись (без ядра)
+        public List<Bar> bars = List.of();                           // бары расчёта (после склейки роллов, если она включена)
         public String note = "";
     }
 
@@ -833,18 +833,23 @@ public final class ZoneEngine {
             if (p.compositeMode && p.noOverlap) out = layout(out, p);
             res.visible.add(out);
         }
+        // ---------- после раскладки по сессиям, по порядку: одна зона на ценовом уровне графика → колеблющиеся в композите
+        //            серые → узкие серые → стык «зелёные над красными» серый (каждый шаг видит цвета после предыдущего)
         if (p.compositeMode && p.chartNoOverlap) chartLayout(res, p);
         if (p.compositeMode && p.compRejGrey) compRejToGrey(res, p);
-        if (p.compositeMode && p.oneSquareGrey) {                // не шире oneSquareMaxPts на графике — всегда серая (кроме синей)
-            double sq = p.oneSquareMaxPts;
-            for (List<Shown> l : res.visible) for (Shown v : l) {
-                if (v.z.k != K_SESS || v.hi - v.lo > sq + 1e-9 || v.st.kind == Kind.GREY) continue;
-                if (p.gridNarrowKeepBlue && v.st.kind == Kind.CORE) continue;
-                v.st.kind = Kind.GREY; v.z.oneSquare = true;
-            }
-        }
+        if (p.compositeMode && p.oneSquareGrey) narrowToGrey(res, p);
         if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
         return res;
+    }
+
+    /** Узкая — серая (oneSquareGrey): сессионная зона не шире oneSquareMaxPts на графике (после раскладки), кроме синей
+     *  (gridNarrowKeepBlue). */
+    static void narrowToGrey(Result res, Params p) {
+        for (List<Shown> l : res.visible) for (Shown v : l) {
+            if (v.z.k != K_SESS || v.hi - v.lo > p.oneSquareMaxPts + 1e-9 || v.st.kind == Kind.GREY) continue;
+            if (p.gridNarrowKeepBlue && v.st.kind == Kind.CORE) continue;
+            v.st.kind = Kind.GREY; v.z.oneSquare = true;
+        }
     }
 
     /** Колеблющаяся в своём композите — серая (compRejGrey): по сессиям, композит — тот, что задал зоне цвет к этой сессии
@@ -1128,7 +1133,7 @@ public final class ZoneEngine {
                 core.lo = band[0] * p.tick; core.hi = band[1] * p.tick;
                 c.core = core;
                 comps.add(c);
-                if (p.partition) {
+                if (p.partition || p.sessionZones) {      // тело и ядро тела: по телу сессионные зоны получают роль
                     int[] body = new int[4];
                     c.segs = partition(cand, cp, poc, p, body);
                     c.bodyLo = body[0] * p.tick; c.bodyHi = body[1] * p.tick;
@@ -1656,19 +1661,11 @@ public final class ZoneEngine {
             boolean rc = ri >= 0;
             st.kind = rc ? z.rcKind[ri] : z.partKind; st.comp = rc ? (z.rcComp[ri].live ? z.rcComp[ri] : null) : z.partOf;
             st.recolored = rc;
-            if (z.minor && o < z.minorEnd) st.kind = Kind.GREY;          // минорная — серая
-            else if (z.minor && !p.sessMinorPromote) st.kind = null;      // вытеснена сильным узлом — не рисуется
-            // (sessMinorPromote: с minorEnd — обычная зона, роль как посчитана при рождении)
+            // минорная — серая; с minorEnd (сильный узел на её месте): sessMinorPromote — обычная зона с ролью, посчитанной при
+            // рождении, иначе вытеснена — не рисуется
+            if (z.minor && o < z.minorEnd) st.kind = Kind.GREY;
+            else if (z.minor && !p.sessMinorPromote) st.kind = null;
             else if (z.narrow && !(p.gridNarrowKeepBlue && st.kind == Kind.CORE)) st.kind = Kind.GREY;   // уже квадрата — серая (кроме синей)
-            if (!rc && z.partOf == null && p.sessRoleMode == 2) {     // мало информации — серая, пока не наберёт отторжений
-                int idx = z.ai + p.sessConfirm;
-                long f = idx < fullOrd.length ? fullOrd[idx] : Long.MAX_VALUE;
-                if (o < f) st.kind = Kind.GREY;
-                else {
-                    int nl = lowerBound(z.L, f), ns = lowerBound(z.S, f);
-                    st.kind = nl > ns ? Kind.HVN_S : ns > nl ? Kind.HVN_R : Kind.GREY;
-                }
-            }
             st.rej = tot; st.purity = tot >= 1 ? Math.max(st.nl, st.ns) / (double) tot : null;
             st.age = o - z.avOrd(); st.conf = lowerBound(z.coreConf, o);
             return st;
