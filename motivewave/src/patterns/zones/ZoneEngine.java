@@ -107,7 +107,6 @@ public final class ZoneEngine {
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
                                                   // накрывшему); иначе — только первый композит после её рождения
-        public double greyNarrowPts = 2.0;        // зона уже стольких п. — серая (минорная), какой бы цвет ей ни дали; 0 — выкл.
         public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
         public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
                                                   // все скопления тел свечей сессии (не одно), каждое — зона
@@ -1449,12 +1448,6 @@ public final class ZoneEngine {
 
     // ------------------------------------------------------------------ состояние и фильтры
     public static State stateAt(Zone z, long o, Params p, long[] fullOrd) {
-        State st = stateAt0(z, o, p, fullOrd);
-        if (p.greyNarrowPts > 0 && st.kind != null && z.bhi - z.blo < p.greyNarrowPts - 1e-9) st.kind = Kind.GREY;   // узкая — серая
-        return st;
-    }
-
-    static State stateAt0(Zone z, long o, Params p, long[] fullOrd) {
         State st = new State();
         st.nl = lowerBound(z.L, o); st.ns = lowerBound(z.S, o);
         int tot = st.nl + st.ns;
