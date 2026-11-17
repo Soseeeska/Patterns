@@ -52,6 +52,8 @@ public class Preview {
         p.gridPts = Double.parseDouble(System.getProperty("gridPts", "1"));   // -DgridPts=0 — края без квадратов TPO
         p.gridNarrowGrey = !"false".equals(System.getProperty("narrowGrey", "true"));   // -DnarrowGrey=false — узкие зоны не серые
         p.invertGrey = !"false".equals(System.getProperty("invertGrey", "true"));   // -DinvertGrey=false — стыки не сводить
+        p.rollRaw = !"false".equals(System.getProperty("rollRaw", "true"));   // -DrollRaw=false — склейка роллов (расчёт в ценах текущего контракта)
+        p.sessMinorPromote = !"false".equals(System.getProperty("promote", "true"));   // -Dpromote=false — сильный узел вытесняет минорную
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         if (a.length > 5) p.compositeMode = a[5].equals("comp");
         if (a.length > 5 && a[5].equals("sess")) { p.compositeMode = true; p.sessionZones = true; }

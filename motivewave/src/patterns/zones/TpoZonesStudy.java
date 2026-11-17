@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String S_MAX = "sessMax", MINOR = "sessMinor", CORE_TOUCH = "sessCoreTouch", REFINE = "sessRefine", VA_PREV = "compVaPrevDay", RESYNC = "sessResyncLater", ROLL_BRK = "compRollBreak", ONE_COLOR = "drawOneColor", LIVE = "liveComposite", ROLL = "rollAdjust", ROLL_GAP = "rollMinGap", FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", COMP_OUT = "compOutsideDays", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", CHART_NO_OV = "chartNoOverlap", GRID = "gridPts", GRID_OFF = "gridOffset", GRID_GREY = "gridNarrowGrey", GRID_BLUE = "gridNarrowKeepBlue", ONE_SQ = "oneSquareGrey", INV = "invertGrey", INV_GAP = "invertGap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String S_MAX = "sessMax", MINOR = "sessMinor", CORE_TOUCH = "sessCoreTouch", REFINE = "sessRefine", VA_PREV = "compVaPrevDay", RESYNC = "sessResyncLater", ROLL_BRK = "compRollBreak", ONE_COLOR = "drawOneColor", LIVE = "liveComposite", ROLL = "rollAdjust", ROLL_RAW = "rollRaw", ROLL_GAP = "rollMinGap", FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", COMP_OUT = "compOutsideDays", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", CHART_NO_OV = "chartNoOverlap", GRID = "gridPts", GRID_OFF = "gridOffset", GRID_GREY = "gridNarrowGrey", GRID_BLUE = "gridNarrowKeepBlue", ONE_SQ = "oneSquareGrey", INV = "invertGrey", INV_GAP = "invertGap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -178,6 +178,7 @@ public class TpoZonesStudy extends Study {
         g = tab.addGroup("Данные");
         g.addRow(new BarSizeDescriptor(BAR30, "Бары профиля (TPO-период)", BarSize.minute(30)));
         g.addRow(new IntegerDescriptor(HISTORY_DAYS, "Загружать историю, календарных дней", 1500, 60, 6000, 30));
+        g.addRow(new BooleanDescriptor(ROLL_RAW, "Роллы: расчёт в ценах графика — гэп настоящий, цены не сдвигаются (выкл. — склейка)", true));
         g.addRow(new BooleanDescriptor(ROLL, "Склейка роллов: зоны до смены контракта сдвигаются на гэп ролла (ряд MotiveWave не склеен)", true));
         g.addRow(new DoubleDescriptor(ROLL_GAP, "Ролл: скачок между соседними 30m-барами от, п. (окно 10 дней до 3-й пятницы мар / июн / сен / дек)", 20.0, 1, 500, 1));
         g.addRow(new StringDescriptor(TZ, "Часовой пояс сессий", "America/Chicago"));
@@ -233,7 +234,7 @@ public class TpoZonesStudy extends Study {
             computedFor = res.sessions.get(res.sessions.size() - 1).date;
             draw(res, p);
             info("TPO Zones: RTH-дней " + res.rthDays + " (полных " + res.fullDays + "), зон " + res.zones.size()
-                    + ", роллов склеено " + res.rollMs.length
+                    + (res.rawPrices ? ", роллов найдено " + res.rollMs.length + " (цены графика)" : ", роллов склеено " + res.rollMs.length)
                     + ", сессий на графике " + res.sessions.size() + (res.note.isEmpty() ? "" : " — " + res.note));
         } catch (Exception e) {
             error("TPO Zones: " + e);
@@ -272,6 +273,7 @@ public class TpoZonesStudy extends Study {
         double tick = st.getDouble(TICK, 0);
         p.tick = tick > 0 ? tick : ins != null && ins.getTickSize() > 0 ? ins.getTickSize() : 0.25;
         p.rollAdjust = st.getBoolean(ROLL, true);
+        p.rollRaw = st.getBoolean(ROLL_RAW, true);
         p.rollMinGapPts = st.getDouble(ROLL_GAP, 20.0);
         try { p.tz = ZoneId.of(st.getString(TZ, "America/Chicago").trim()); } catch (Exception e) { p.tz = ZoneId.of("America/Chicago"); }
         p.rthStartMin = minutes(st.getString(RTH_START, "08:30"), 8 * 60 + 30);

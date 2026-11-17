@@ -95,7 +95,8 @@ public final class ZonePlan {
         b.append(v.st.kind.title).append("  ").append(fmt(v.lo)).append(" – ").append(fmt(v.hi));
         if (v.lo != z.blo || v.hi != z.bhi) b.append(" (обрезана соседними, полностью ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi)).append(')');
         if ("node".equals(z.src)) b.append("\nузел ядра композита");
-        if (z.minor) b.append("\nминорная: слабый узел сессии (ниже 50% главного или < 3 TPO), всегда серая");
+        if (z.minor) b.append(v.st.kind == Kind.GREY ? "\nминорная: слабый узел сессии (ниже 25% главного или < 3 TPO), серая"
+                : "\nбыла минорной (слабый узел), продолжена сильным узлом — обычная зона");
         else if (z.inverted && v.st.kind == Kind.GREY) b.append("\nсведена в серую: стык «зелёные над красными» (роли разных композитов)");
         else if (z.oneSquare && v.st.kind == Kind.GREY) b.append("\nзона в один квадрат TPO — всегда серая");
         else if (z.narrow) b.append(v.st.kind == Kind.GREY ? "\nузкая: скопление тел уже одного квадрата TPO — один квадрат, всегда серая"

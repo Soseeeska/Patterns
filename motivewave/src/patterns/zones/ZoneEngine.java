@@ -56,6 +56,8 @@ public final class ZoneEngine {
         public double tick = 0.25;
         public boolean rollAdjust = true;        // склейка роллов: сырой ряд (MotiveWave) рвётся на смене контракта — цены до ролла
                                                  // сдвигаются на гэп, расчёт идёт в ценах текущего контракта
+        public boolean rollRaw = true;           // расчёт в ценах графика: роллы только находятся (рвут композиты), цены не сдвигаются —
+                                                 // гэп ролла настоящий, зоны взаимодействуют так, как видны на графике (иначе — склейка)
         public double rollMinGapPts = 20;        // ролл — скачок между соседними 30m-барами не меньше, п. (в окне 10 дней до 3-й пятницы
                                                  // мар / июн / сен / дек; обычный скачок между соседними барами — 1–2 п.)
         public ZoneId tz = ZoneId.of("America/Chicago");
@@ -109,6 +111,8 @@ public final class ZoneEngine {
                                                   // накрывшему); иначе — только первый композит после её рождения
         public boolean sessMinor = true;          // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного, но ≥ sessMinPeak
                                                   // TPO) — серая зона там, где нет других (общее правило зазора sessMinGapPts); всегда серая
+        public boolean sessMinorPromote = true;   // сильный узел на месте минорной зоны её не обрывает, а продолжает: зона идёт дальше без
+                                                  // разрыва и с этой сессии — обычная (роль — как посчитана при её рождении); иначе — вытесняет
         public int sessMinorMinPeak = 2;          // ... вершина минорного узла — от стольких TPO (тонкий профиль тренда: 1–2 TPO на строку)
         public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
         public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
@@ -351,6 +355,7 @@ public final class ZoneEngine {
         public final List<Comp> liveComps = new ArrayList<>();       // снимки формирующихся композитов (балансы, не уточнения)
         public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
         public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
+        public boolean rawPrices;                                    // rollRaw: цены не сдвигались (rollShift = 0, расчёт в ценах графика)
         public List<Bar> bars = List.of();                           // бары расчёта (после склейки роллов)        // уточнения внутри баланса (ядро — серая зона)      // композиты, где дни не сошлись (без ядра)
         public String note = "";
     }
@@ -604,13 +609,16 @@ public final class ZoneEngine {
                     Zone best = null;
                     long avd = av.toEpochDay();
                     for (Zone e : ses) {
-                        if (e.minor && e.minorEnd <= avd) continue;            // вытесненная минорная — уровня не держит
+                        if (e.minor && e.minorEnd <= avd && !p.sessMinorPromote) continue;   // вытесненная минорная — уровня не держит
                         double gap = Math.max(e.lo, nd[0] * tick) - Math.min(e.hi, nd[1] * tick);   // < 0 — пересекаются
                         int[] sb = sibling.get(e);                  // зона из той же мнимой зоны того же дня — ближе можно
                         boolean sis = p.sessRefine && sb != null && sb[0] == d.date.toEpochDay() && sb[1] == nd[2];
                         if (gap < (sis ? p.sessSiblingGapPts : p.sessMinGapPts) - 1e-9) { best = e; break; }
                     }
-                    if (best != null && best.minor && nd[3] == 0) {
+                    if (best != null && best.minor && nd[3] == 0 && p.sessMinorPromote) {
+                        // сильный узел на месте минорной зоны — её продолжение: с этой сессии зона обычная, без разрыва
+                        if (best.minorEnd > avd) best.minorEnd = avd;
+                    } else if (best != null && best.minor && nd[3] == 0) {
                         // сильный узел на месте минорной зоны — вытесняет её: минорная пропадает, встаёт основная
                         best.minorEnd = avd;
                         best = null;
@@ -981,6 +989,7 @@ public final class ZoneEngine {
             if (!bestGap.containsKey(f) || Math.abs(g) > Math.abs(bestGap.get(f))) { bestGap.put(f, g); best.put(f, new int[]{i}); }
         }
         if (best.isEmpty()) return bars;
+        res.rawPrices = p.rollRaw;
         List<LocalDate> keys = new ArrayList<>(best.keySet());
         keys.sort(null);
         res.rollMs = new long[keys.size()]; res.rollGap = new double[keys.size()];
@@ -988,6 +997,7 @@ public final class ZoneEngine {
             res.rollMs[k] = bars.get(best.get(keys.get(k))[0]).t;
             res.rollGap[k] = Math.rint(bestGap.get(keys.get(k)) / p.tick) * p.tick;
         }
+        if (res.rawPrices) return bars;                         // роллы найдены, цены — как на графике
         List<Bar> out = new ArrayList<>(bars.size());
         for (Bar b : bars) {
             double sh = rollShift(res, b.t);
@@ -1008,6 +1018,7 @@ public final class ZoneEngine {
     /** Сдвиг цен бара, начавшегося в t, к текущему контракту: сумма гэпов роллов после t. */
     public static double rollShift(Result res, long t) {
         double s = 0;
+        if (res.rawPrices) return 0;                             // расчёт в ценах графика — сдвига нет
         for (int k = 0; k < res.rollMs.length; k++) if (res.rollMs[k] > t) s += res.rollGap[k];
         return s;
     }
@@ -1615,7 +1626,9 @@ public final class ZoneEngine {
             boolean rc = ri >= 0;
             st.kind = rc ? z.rcKind[ri] : z.partKind; st.comp = rc ? (z.rcComp[ri].live ? z.rcComp[ri] : null) : z.partOf;
             st.recolored = rc;
-            if (z.minor) st.kind = o >= z.minorEnd ? null : Kind.GREY;   // минорная — всегда серая; вытеснена — не рисуется
+            if (z.minor && o < z.minorEnd) st.kind = Kind.GREY;          // минорная — серая
+            else if (z.minor && !p.sessMinorPromote) st.kind = null;      // вытеснена сильным узлом — не рисуется
+            // (sessMinorPromote: с minorEnd — обычная зона, роль как посчитана при рождении)
             else if (z.narrow && !(p.gridNarrowKeepBlue && st.kind == Kind.CORE)) st.kind = Kind.GREY;   // уже квадрата — серая (кроме синей)
             if (!rc && z.partOf == null && p.sessRoleMode == 2) {     // мало информации — серая, пока не наберёт отторжений
                 int idx = z.ai + p.sessConfirm;
