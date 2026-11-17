@@ -107,6 +107,12 @@ public final class ZoneEngine {
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
                                                   // накрывшему); иначе — только первый композит после её рождения
+        public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
+                                                  // все скопления тел свечей сессии (не одно), каждое — зона
+        public double sessParentShare = 0.7;      // ... мнимая зона: строки профиля не ниже этой доли вершины узла
+        public double sessClusterMin = 0.5;       // ... скопление — вершина тел не ниже этой доли максимума тел в мнимой зоне (и ≥ 2 тел)
+        public double sessClusterDip = 0.15;      // ... скопления разделены провалом ≥ этой доли меньшей вершины (и ≥ 1.5 тела)
+        public double sessSiblingGapPts = 1.0;    // ... зоны из одной мнимой могут стоять ближе sessMinGapPts — от стольких п.
         public boolean compShortNoBreak = false;  // короткий день не рвёт кандидата: входит в профиль, выходом быть не может
         public boolean compVaPrevDay = true;      // наслоение VA — с VA кандидата или с VA предыдущего (полного) дня кандидата
         public boolean compRollBreak = true;      // ролл разрывает композит: кандидат закрывается на смене контракта (на несклеенном
@@ -556,6 +562,7 @@ public final class ZoneEngine {
             zones.clear();
             List<Zone> ses = new ArrayList<>();
             Map<Zone, List<Long>> cf = new HashMap<>();
+            Map<Zone, int[]> sibling = new HashMap<>();                 // зона → {день, мнимая зона} (уточнение)
             int onePt = (int) Math.round(1.0 / tick), maxW = (int) Math.round(p.sessMaxPts / tick);
             double mwk = p.minWickTicks * tick;
             for (Day d : full) {
@@ -565,11 +572,14 @@ public final class ZoneEngine {
                     Zone best = null;
                     for (Zone e : ses) {
                         double gap = Math.max(e.lo, nd[0] * tick) - Math.min(e.hi, nd[1] * tick);   // < 0 — пересекаются
-                        if (gap < p.sessMinGapPts - 1e-9) { best = e; break; }
+                        int[] sb = sibling.get(e);                  // зона из той же мнимой зоны того же дня — ближе можно
+                        boolean sis = p.sessRefine && sb != null && sb[0] == d.date.toEpochDay() && sb[1] == nd[2];
+                        if (gap < (sis ? p.sessSiblingGapPts : p.sessMinGapPts) - 1e-9) { best = e; break; }
                     }
                     if (best != null) { cf.get(best).add(av.toEpochDay()); continue; }
                     Zone z = new Zone();
                     z.k = K_SESS; z.src = "sess"; z.av = av; z.lo = nd[0] * tick; z.hi = nd[1] * tick;
+                    sibling.put(z, new int[]{(int) d.date.toEpochDay(), nd[2]});
                     double mid = (z.lo + z.hi) / 2;
                     Comp gov = null;
                     for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
@@ -1021,9 +1031,34 @@ public final class ZoneEngine {
                 while (x1 < w1 && occ[x1 + 1] >= thr) x1++;
                 lo = x0 - onePt; hi = x1 - onePt;
             }
+            if (p.sessRefine) {                                    // мнимая зона пошире, внутри — все скопления тел
+                int plo = m, phi = m;
+                while (plo > q[0] && sm[plo - 1] >= p.sessParentShare * sm[m]) plo--;
+                while (phi < q[1] && sm[phi + 1] >= p.sessParentShare * sm[m]) phi++;
+                int v0 = Math.max(0, plo), v1 = Math.min(occ.length - 1, phi + 2 * onePt);   // ± 1 п. (occ со сдвигом onePt)
+                double[] od = new double[occ.length];
+                for (int i = 0; i < occ.length; i++) od[i] = occ[i];
+                double omax = 0; for (int i = v0; i <= v1; i++) omax = Math.max(omax, od[i]);
+                List<int[]> sub = new ArrayList<>();
+                splitRel(od, v0, v1, p.sessClusterDip, 1.5, sub);
+                int added = 0;
+                for (int[] u : sub) {
+                    int b = u[0]; for (int i = u[0]; i <= u[1]; i++) if (od[i] > od[b]) b = i;
+                    if (od[b] < 2 || od[b] < p.sessClusterMin * omax) continue;
+                    double thr = p.sessBodyShare * od[b];
+                    int x0 = b, x1 = b;
+                    while (x0 > u[0] && od[x0 - 1] >= thr) x0--;
+                    while (x1 < u[1] && od[x1 + 1] >= thr) x1++;
+                    int zl = x0 - onePt, zh = x1 - onePt;
+                    if (zh - zl < onePt) { int mid = (zl + zh) / 2; zl = mid - onePt / 2; zh = zl + onePt; }
+                    if (zh - zl > maxW) { int mid = (zl + zh) / 2; zl = mid - maxW / 2; zh = zl + maxW; }
+                    out.add(new int[]{pf.low + zl, pf.low + zh, q[0]}); added++;
+                }
+                if (added > 0) continue;                           // тел нет — как раньше, узел целиком
+            }
             if (hi - lo < onePt) { int mid = (lo + hi) / 2; lo = mid - onePt / 2; hi = lo + onePt; }
             if (hi - lo > maxW) { int mid = (lo + hi) / 2; lo = mid - maxW / 2; hi = lo + maxW; }
-            out.add(new int[]{pf.low + lo, pf.low + hi});
+            out.add(new int[]{pf.low + lo, pf.low + hi, q[0]});
         }
         return out;
     }
