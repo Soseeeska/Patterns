@@ -61,11 +61,10 @@ public final class ZonePlan {
                 int j = i;
                 while (j + 1 < n && row[j + 1] != null && row[j + 1].st.kind == row[i].st.kind
                         && row[j + 1].lo == row[i].lo && row[j + 1].hi == row[i].hi) j++;
-                String tip = tip(z, row[j], ss.get(j).date, p);
-                for (long[] seg : segments(res, t0[i], t1[j])) {            // кусками между роллами, в ценах контракта на графике
-                    double sh = ZoneEngine.rollShift(res, seg[0]);
-                    plan.rects.add(new Rect(z, row[i].st.kind, seg[0], seg[1], rollTip(tip, sh), row[i].lo - sh, row[i].hi - sh));
-                }
+                // ровная полоса через весь график — на цене, где зона родилась (в контракте сессии её появления)
+                double sh = ZoneEngine.rollShift(res, z.av.atStartOfDay(p.tz).toInstant().toEpochMilli());
+                plan.rects.add(new Rect(z, row[i].st.kind, t0[i], t1[j], rollTip(tip(z, row[j], ss.get(j).date, p), sh),
+                        row[i].lo - sh, row[i].hi - sh));
                 i = j + 1;
             }
         }
@@ -73,28 +72,18 @@ public final class ZonePlan {
             Session s = ss.get(i);
             if (s.prevPoc == null) continue;
             String d = "Вчера (" + s.prevDate + ") ";
-            for (long[] seg : segments(res, t0[i], t1[i])) {
-                double sh = ZoneEngine.rollShift(res, seg[0]);
-                plan.levels.add(new Level(seg[0], seg[1], s.prevVah - sh, false, rollTip(d + "VAH " + fmt(s.prevVah), sh)));
-                plan.levels.add(new Level(seg[0], seg[1], s.prevVal - sh, false, rollTip(d + "VAL " + fmt(s.prevVal), sh)));
-                plan.levels.add(new Level(seg[0], seg[1], s.prevPoc - sh, true, rollTip(d + "POC " + fmt(s.prevPoc), sh)));
-            }
+            double sh = ZoneEngine.rollShift(res, t0[i]);              // в контракте начала сессии
+            plan.levels.add(new Level(t0[i], t1[i], s.prevVah - sh, false, rollTip(d + "VAH " + fmt(s.prevVah), sh)));
+            plan.levels.add(new Level(t0[i], t1[i], s.prevVal - sh, false, rollTip(d + "VAL " + fmt(s.prevVal), sh)));
+            plan.levels.add(new Level(t0[i], t1[i], s.prevPoc - sh, true, rollTip(d + "POC " + fmt(s.prevPoc), sh)));
         }
         return plan;
     }
 
-    /** [t0, t1], разрезанный по роллам внутри: {начало, конец} кусков. */
-    static List<long[]> segments(Result res, long t0, long t1) {
-        List<long[]> out = new ArrayList<>();
-        long a = t0;
-        for (long r : res.rollMs) if (r > a && r < t1) { out.add(new long[]{a, r}); a = r; }
-        out.add(new long[]{a, t1});
-        return out;
-    }
-
-    /** Подсказка куска до ролла: цены в ней — текущего контракта, на графике кусок ниже / выше на сдвиг. */
+    /** Подсказка зоны, родившейся до ролла: цены в ней — текущего контракта, на графике она ниже / выше на сдвиг. */
     static String rollTip(String tip, double sh) {
-        return sh == 0 ? tip : tip + "\nцены — текущего контракта; здесь, до ролла, на графике " + (sh > 0 ? "−" : "+") + fmt(Math.abs(sh)) + " п.";
+        return sh == 0 ? tip : tip + "\nцены — текущего контракта; зона нарисована в ценах контракта, где родилась: "
+                + (sh > 0 ? "−" : "+") + fmt(Math.abs(sh)) + " п.";
     }
 
     static String tip(Zone z, Shown v, LocalDate on, Params p) {
