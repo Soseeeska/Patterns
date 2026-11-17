@@ -139,6 +139,12 @@ public final class ZoneEngine {
         public boolean gridNarrowKeepBlue = true; // ... кроме синей: узкая зона у ядра композита остаётся синей (баланс не перекрашиваем)
         public boolean oneSquareGrey = true;      // зона шириной в один квадрат (gridPts; без сетки — 1 п.) на графике — всегда серая (кроме синей,
                                                   // если gridNarrowKeepBlue); в т. ч. суженная раскладкой до одного квадрата
+        public double oneSquareMaxPts = 2.0;      // ... серая — зона не шире стольких п. (1 — только один квадрат)
+        public boolean compRejGrey = true;        // красная / зелёная, колеблющаяся в своём композите, — серая: в днях композита, задавшего ей
+                                                  // цвет (с её появления), ≥ compRejMin отторжений и перевес за цвет (красная — снизу, зелёная —
+                                                  // сверху) меньше compRejRatio : 1; не тестировалась (меньше compRejMin) — цвет остаётся
+        public double compRejRatio = 2.0;
+        public int compRejMin = 2;
         public boolean invertGrey = true;         // стык «зелёные над красными»: кластер зелёных (подряд по цене) стоит над кластером красных
                                                   // ближе invertGapPts — две зоны стыка серые (роли разных композитов друг другу противоречат)
         public double invertGapPts = 3;           // ... щель стыка не больше, п. (цены графика)
@@ -299,6 +305,7 @@ public final class ZoneEngine {
         public boolean narrow;                               // сессионная зона уже одного квадрата TPO (gridNarrowGrey): всегда серая
         public boolean oneSquare;                            // сессионная зона в один квадрат на графике (oneSquareGrey): всегда серая
         public boolean inverted;                             // сведена в серую на стыке «зелёные над красными» (invertGrey)
+        public boolean wavering;                             // серая: колеблется в своём композите (compRejGrey)
         long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии вытеснена сильным узлом — не рисуется
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
@@ -825,8 +832,9 @@ public final class ZoneEngine {
             res.visible.add(out);
         }
         if (p.compositeMode && p.chartNoOverlap) chartLayout(res, p);
-        if (p.compositeMode && p.oneSquareGrey) {                // один квадрат на графике — всегда серая (кроме синей)
-            double sq = p.gridPts > 0 ? p.gridPts : 1.0;
+        if (p.compositeMode && p.compRejGrey) compRejToGrey(res, p);
+        if (p.compositeMode && p.oneSquareGrey) {                // не шире oneSquareMaxPts на графике — всегда серая (кроме синей)
+            double sq = p.oneSquareMaxPts;
             for (List<Shown> l : res.visible) for (Shown v : l) {
                 if (v.z.k != K_SESS || v.hi - v.lo > sq + 1e-9 || v.st.kind == Kind.GREY) continue;
                 if (p.gridNarrowKeepBlue && v.st.kind == Kind.CORE) continue;
@@ -835,6 +843,26 @@ public final class ZoneEngine {
         }
         if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
         return res;
+    }
+
+    /** Колеблющаяся в своём композите — серая (compRejGrey): по сессиям, композит — тот, что задал зоне цвет к этой сессии
+     *  (синхронизация или композит рождения), отторжения на RTH-барах в его днях с появления зоны и до вчера. */
+    static void compRejToGrey(Result res, Params p) {
+        for (int i = 0; i < res.visible.size(); i++) {
+            long o = res.sessions.get(i).ord;
+            for (Shown v : res.visible.get(i)) {
+                if (v.st.kind != Kind.HVN_R && v.st.kind != Kind.HVN_S) continue;
+                Zone z = v.z; Comp cp = z.partOf;
+                if (z.rcAt.length > 0) { int ri = lowerBound(z.rcAt, o + 1) - 1; if (ri >= 0) cp = z.rcComp[ri]; }
+                if (cp == null) continue;                                   // без композита — цвет дня рождения
+                long a0 = Math.max(cp.start.toEpochDay(), z.av.toEpochDay()), a1 = Math.min(cp.end.toEpochDay(), o - 1);
+                int nl = 0, ns = 0;
+                for (long d : z.L) if (d >= a0 && d <= a1) nl++;
+                for (long d : z.S) if (d >= a0 && d <= a1) ns++;
+                int pro = v.st.kind == Kind.HVN_R ? ns : nl, con = v.st.kind == Kind.HVN_R ? nl : ns;
+                if (nl + ns >= p.compRejMin && pro < p.compRejRatio * con - 1e-9) { v.st.kind = Kind.GREY; z.wavering = true; }
+            }
+        }
     }
 
     /** Стык «зелёные над красными» (в ценах графика, по сессиям): зоны по цене, подряд одного цвета — кластер (серые и синие
