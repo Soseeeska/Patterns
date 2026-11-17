@@ -133,6 +133,8 @@ public final class ZoneEngine {
                                                   // разрыва и с этой сессии — обычная (роль — как посчитана при её рождении); иначе — вытесняет
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения в сессию рождения, затем её закрытие; 1 — только закрытие
         public boolean sessCoreTouch = true;      // синяя — только зона, задевающая ядро композита (≤ zoneMaxWidthPts), а не всё ядро тела
+        public boolean coreNearestBlue = true;    // ядро баланса не задевает ни одна зона этого композита — синей становится ближайшая к ядру
+                                                  // из них (реальная зона, а не нарисованное ядро)
         public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (отвергнуто: синие
                                                   // копятся); иначе — только первый композит после её рождения
 
@@ -308,6 +310,7 @@ public final class ZoneEngine {
         public boolean oneSquare;                            // сессионная зона не шире oneSquareMaxPts на графике (oneSquareGrey): серая
         public boolean inverted;                             // сведена в серую на стыке «зелёные над красными» (invertGrey)
         public boolean wavering;                             // серая: колеблется в своём композите (compRejGrey)
+        public boolean nearCore;                             // синяя как ближайшая к ядру, которое не задевает ни одна зона (coreNearestBlue)
         long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии на её месте сильный узел: продолжена обычной (или вытеснена)
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
@@ -675,6 +678,7 @@ public final class ZoneEngine {
                     ses.add(z); cf.put(z, new ArrayList<>());
                 }
             }
+            if (p.sessCoreTouch && p.coreNearestBlue) nearestToCoreBlue(res.comps, ses);
             for (Zone z : ses) { z.coreConf = cf.get(z).stream().mapToLong(Long::longValue).toArray(); zones.add(z); }
         }
 
@@ -840,6 +844,29 @@ public final class ZoneEngine {
         if (p.compositeMode && p.oneSquareGrey) narrowToGrey(res, p);
         if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
         return res;
+    }
+
+    /** coreNearestBlue: для каждого баланса — его зоны (синхронизированы с ним или его снимками, либо родились в нём); если ни
+     *  одна не задевает ядро, ближайшая к ядру становится синей (для этого композита: во всех его снимках). Пример — июнь 2024:
+     *  ядро баланса 18.06–02.07 5531–5532.25 ни одна зона не задевала (узел 17.06 — в старом контракте), синей стала
+     *  5533–5537 (узел 21.06, в 0.75 п. от ядра). */
+    static void nearestToCoreBlue(List<Comp> balances, List<Zone> ses) {
+        for (Comp c : balances) {
+            Zone best = null; double bestGap = Double.MAX_VALUE; boolean touch = false;
+            for (Zone e : ses) {
+                boolean mine = e.partOf != null && e.partOf.start.equals(c.start);
+                for (Comp rc : e.rcComp) if (rc.start.equals(c.start)) mine = true;
+                if (!mine) continue;
+                if (e.hi >= c.core.lo && e.lo <= c.core.hi) { touch = true; break; }
+                double gap = Math.max(e.lo - c.core.hi, c.core.lo - e.hi);
+                if (gap < bestGap) { bestGap = gap; best = e; }
+            }
+            if (touch || best == null) continue;
+            for (int i = 0; i < best.rcComp.length; i++) if (best.rcComp[i].start.equals(c.start)) best.rcKind[i] = Kind.CORE;
+            if (best.partOf != null && best.partOf.start.equals(c.start)) best.partKind = Kind.CORE;
+            if (best.rcKind.length > 0) best.recolorKind = best.rcKind[0];
+            best.nearCore = true;
+        }
     }
 
     /** Узкая — серая (oneSquareGrey): сессионная зона не шире oneSquareMaxPts на графике (после раскладки), кроме синей
