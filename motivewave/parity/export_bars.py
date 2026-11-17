@@ -4,7 +4,9 @@
 RTH-бары до начала ETH-выгрузки + ETH+RTH-бары после.
 Формат: epoch_ms (начало бара, UTC),open,high,low,close
 
-Запуск (из корня):  python -m motivewave.parity.export_bars out.csv
+Запуск (из корня):  python -m motivewave.parity.export_bars out.csv [--raw]
+--raw — без склейки, как ряд в MotiveWave (с гэпами на роллах): для проверки склейки роллов в движке
+(Preview / Bench с -Droll=true).
 """
 from __future__ import annotations
 
@@ -16,10 +18,15 @@ from scripts.stage1_profiles import load_adjusted, load_test_bars
 from tpo.data import load_config
 
 
-def main(path: str) -> None:
+def main(path: str, *flags: str) -> None:
     cfg = load_config(instrument="ES")
-    rbars = load_adjusted("ES", cfg)[0]
-    eth = load_test_bars("ES_ETH")[0]
+    if "--raw" in flags:
+        from tpo.data import load_bars
+        rbars = load_bars("ES", cfg)
+        eth = load_bars("ES_ETH", load_config(instrument="ES_ETH"))
+    else:
+        rbars = load_adjusted("ES", cfg)[0]
+        eth = load_test_bars("ES_ETH")[0]
     t0 = eth.ts.min()
     b = pd.concat([rbars[rbars.ts < t0], eth], ignore_index=True).sort_values("ts")
     ms = (b.ts.dt.tz_convert("UTC") - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta(milliseconds=1)

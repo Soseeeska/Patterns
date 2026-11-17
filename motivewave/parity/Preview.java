@@ -44,6 +44,7 @@ public class Preview {
         }
         int k = a.length > 2 ? Integer.parseInt(a[2]) : 5;
         Params p = new Params();
+        p.rollAdjust = Boolean.getBoolean("roll");   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         if (a.length > 5) p.compositeMode = a[5].equals("comp");
         if (a.length > 5 && a[5].equals("sess")) { p.compositeMode = true; p.sessionZones = true; }

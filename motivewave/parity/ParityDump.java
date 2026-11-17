@@ -26,6 +26,7 @@ public class ParityDump {
             }
         }
         Params p = new Params();
+        p.rollAdjust = Boolean.getBoolean("roll");   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
         if (a.length > 2) p.alignSessions = Integer.parseInt(a[2]);
         if (a.length > 3) p.promoteRejections = Integer.parseInt(a[3]);
         long t0 = System.nanoTime();

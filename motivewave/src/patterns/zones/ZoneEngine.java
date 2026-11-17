@@ -54,6 +54,10 @@ public final class ZoneEngine {
     public static final class Params {
         // данные и сессии
         public double tick = 0.25;
+        public boolean rollAdjust = true;        // склейка роллов: сырой ряд (MotiveWave) рвётся на смене контракта — цены до ролла
+                                                 // сдвигаются на гэп, расчёт идёт в ценах текущего контракта
+        public double rollMinGapPts = 20;        // ролл — скачок между соседними 30m-барами не меньше, п. (в окне 10 дней до 3-й пятницы
+                                                 // мар / июн / сен / дек; обычный скачок между соседними барами — 1–2 п.)
         public ZoneId tz = ZoneId.of("America/Chicago");
         public int rthStartMin = 8 * 60 + 30, rthEndMin = 15 * 60;   // RTH 08:30–15:00 CT
         public int ethStartMin = 17 * 60;                              // Globex с 17:00 — дата следующего дня
@@ -299,7 +303,10 @@ public final class ZoneEngine {
         public int rthDays, fullDays, composites;
         public final List<Comp> comps = new ArrayList<>();
         public final List<Comp> notBalance = new ArrayList<>();
-        public final List<Comp> subComps = new ArrayList<>();        // уточнения внутри баланса (ядро — серая зона)      // композиты, где дни не сошлись (без ядра)
+        public final List<Comp> subComps = new ArrayList<>();
+        public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
+        public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
+        public List<Bar> bars = List.of();                           // бары расчёта (после склейки роллов)        // уточнения внутри баланса (ядро — серая зона)      // композиты, где дни не сошлись (без ядра)
         public String note = "";
     }
 
@@ -309,6 +316,8 @@ public final class ZoneEngine {
         double tick = p.tick;
         bars = new ArrayList<>(bars);
         bars.sort((a, b) -> Long.compare(a.t, b.t));
+        if (p.rollAdjust) bars = rollAdjust(bars, p, res);
+        res.bars = bars;
 
         // ---------- RTH-дни и сессии
         TreeMap<LocalDate, Day> days = new TreeMap<>();
@@ -730,6 +739,51 @@ public final class ZoneEngine {
     }
 
     private static int rank(Kind k) { return k == Kind.CORE ? 0 : k == Kind.GREY ? 2 : 1; }
+
+    // ------------------------------------------------------------------ роллы
+    /** Склейка роллов: в окне 10 дней до 3-й пятницы марта / июня / сентября / декабря — самый большой скачок между
+     *  соседними (через periodMinutes) барами, если он не меньше rollMinGapPts, — смена контракта. Цены всех баров до
+     *  ролла сдвигаются на его гэп (аддитивно, как tpo/rolls.py, но гэп фактический, а не по модели carry). */
+    static List<Bar> rollAdjust(List<Bar> bars, Params p, Result res) {
+        long step = p.periodMinutes * 60_000L;
+        Map<LocalDate, int[]> best = new HashMap<>();          // 3-я пятница → {индекс бара, }
+        Map<LocalDate, Double> bestGap = new HashMap<>();
+        for (int i = 1; i < bars.size(); i++) {
+            Bar b = bars.get(i), a = bars.get(i - 1);
+            if (b.t - a.t != step) continue;
+            LocalDate d = LocalDateTime.ofInstant(Instant.ofEpochMilli(b.t), p.tz).toLocalDate();
+            int m = d.getMonthValue();
+            if (m % 3 != 0) continue;
+            LocalDate f = d.withDayOfMonth(1);
+            while (f.getDayOfWeek() != java.time.DayOfWeek.FRIDAY) f = f.plusDays(1);
+            f = f.plusWeeks(2);                                  // 3-я пятница
+            if (d.isAfter(f) || d.isBefore(f.minusDays(10))) continue;
+            double g = b.o - a.c;
+            if (Math.abs(g) < p.rollMinGapPts - 1e-9) continue;
+            if (!bestGap.containsKey(f) || Math.abs(g) > Math.abs(bestGap.get(f))) { bestGap.put(f, g); best.put(f, new int[]{i}); }
+        }
+        if (best.isEmpty()) return bars;
+        List<LocalDate> keys = new ArrayList<>(best.keySet());
+        keys.sort(null);
+        res.rollMs = new long[keys.size()]; res.rollGap = new double[keys.size()];
+        for (int k = 0; k < keys.size(); k++) {
+            res.rollMs[k] = bars.get(best.get(keys.get(k))[0]).t;
+            res.rollGap[k] = Math.rint(bestGap.get(keys.get(k)) / p.tick) * p.tick;
+        }
+        List<Bar> out = new ArrayList<>(bars.size());
+        for (Bar b : bars) {
+            double sh = rollShift(res, b.t);
+            out.add(sh == 0 ? b : new Bar(b.t, b.o + sh, b.h + sh, b.l + sh, b.c + sh));
+        }
+        return out;
+    }
+
+    /** Сдвиг цен бара, начавшегося в t, к текущему контракту: сумма гэпов роллов после t. */
+    public static double rollShift(Result res, long t) {
+        double s = 0;
+        for (int k = 0; k < res.rollMs.length; k++) if (res.rollMs[k] > t) s += res.rollGap[k];
+        return s;
+    }
 
     // ------------------------------------------------------------------ композиты
     /** VA дня и VA композита пересекаются на ≥ compVaOverlap меньшей из двух (compVaOverlap = 0 — проверка выключена). */
@@ -1387,6 +1441,7 @@ public final class ZoneEngine {
         Map<Zone, Recent> out = new java.util.LinkedHashMap<>();
         for (int i = from; i < n; i++) for (Shown v : res.visible.get(i)) out.computeIfAbsent(v.z, Recent::new);
         double mw = p.minWickTicks * p.tick;
+        if (!res.bars.isEmpty()) bars = res.bars;              // цены после склейки роллов
         for (Bar b : bars) {
             if (b.t < t0) continue;
             LocalDateTime lt = LocalDateTime.ofInstant(Instant.ofEpochMilli(b.t), p.tz);

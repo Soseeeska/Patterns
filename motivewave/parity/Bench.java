@@ -36,6 +36,7 @@ public class Bench {
         List<String[]> man = new ArrayList<>();
         try (BufferedReader r = new BufferedReader(new FileReader(a[1]))) { for (String s; (s = r.readLine()) != null; ) man.add(s.split(",")); }
         Params p = new Params();
+        p.rollAdjust = Boolean.getBoolean("roll");   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
         p.sessions = 1000; p.zoneMaxWidthPts = 10;
         for (int i = 2; i < a.length; i++) {
             String[] kv = a[i].split("=");
