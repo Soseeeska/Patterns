@@ -47,6 +47,7 @@ public final class ZonePlan {
         Session last = ss.get(n - 1);
         long plannedEnd = last.date.atTime(LocalTime.of(16, 0)).atZone(p.tz).toInstant().toEpochMilli();
         if (plannedEnd > t1[n - 1]) t1[n - 1] = plannedEnd;
+        long zoneEnd = t1[n - 1] + Math.max(0, p.drawExtendDays) * 86_400_000L;   // зоны — вправо за последнюю свечу
 
         Map<Zone, Shown[]> byZone = new HashMap<>();
         List<Zone> order = new ArrayList<>();
@@ -67,7 +68,7 @@ public final class ZonePlan {
                         && row[j + 1].lo == row[i].lo && row[j + 1].hi == row[i].hi) j++;
                 // ровная полоса через весь график — на цене, где зона родилась (в контракте сессии её появления)
                 double sh = ZoneEngine.rollShift(res, z.av.atStartOfDay(p.tz).toInstant().toEpochMilli());
-                plan.rects.add(new Rect(z, row[i].st.kind, t0[i], t1[j], rollTip(tip(z, row[j], ss.get(j).date, p), sh),
+                plan.rects.add(new Rect(z, row[i].st.kind, t0[i], j == n - 1 ? zoneEnd : t1[j], rollTip(tip(z, row[j], ss.get(j).date, p), sh),
                         row[i].lo - sh, row[i].hi - sh));
                 i = j + 1;
             }
