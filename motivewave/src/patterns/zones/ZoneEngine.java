@@ -105,6 +105,8 @@ public final class ZoneEngine {
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
         public double sessMaxPts = 8;             // зона не шире, п.
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
+        public boolean liveComposite = false;     // формирующийся композит: с compositeMinDays дней — со следующей сессии задаёт роли
+                                                  // (снимок по уже прошедшим дням); зоны синхронизируются с ним один раз, как с закрытым
         public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
         public double sessBodyShare = 0.5;
@@ -273,6 +275,7 @@ public final class ZoneEngine {
         public double lo, hi; public LocalDate start, end, av; public int days; public Zone core;
         public Comp parent;                                  // уточнение внутри более раннего баланса
         public Comp extendsOf;                               // продолжение этого композита после ложного выхода
+        public boolean live;                                 // снимок формирующегося композита
         public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
         public double coreLo, coreHi;                        // ядро тела (строки не ниже partCoreShare максимума)
         List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
@@ -304,6 +307,7 @@ public final class ZoneEngine {
         public final List<Comp> comps = new ArrayList<>();
         public final List<Comp> notBalance = new ArrayList<>();
         public final List<Comp> subComps = new ArrayList<>();
+        public final List<Comp> liveComps = new ArrayList<>();       // снимки формирующихся композитов (балансы, не уточнения)
         public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
         public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
         public List<Bar> bars = List.of();                           // бары расчёта (после склейки роллов)        // уточнения внутри баланса (ядро — серая зона)      // композиты, где дни не сошлись (без ядра)
@@ -376,6 +380,7 @@ public final class ZoneEngine {
         List<Zone> ob = new ArrayList<>(), greyComp = new ArrayList<>();
         {
             List<Day> cand = new ArrayList<>(); Profile cp = null;
+            List<Comp> live = res.liveComps;
             List<Day> lastCand = null; Profile lastCp = null; Comp lastComp = null, extOf = null;
             int extCount = 0, lastExt = 0;                  // сколько раз текущий / закрытый композит продолжался
             // режим «по композиту»: короткие дни (ранние закрытия) тоже входят в композит, как в TPO платформы
@@ -393,13 +398,14 @@ public final class ZoneEngine {
                     Profile mp = lastCp;
                     for (Day x : cand) mp = merge(mp, x.profile);
                     cand = m; cp = merge(mp, d.profile); extOf = lastComp; lastCand = null; extCount++;
+                    live(cand, cp, nextTradeDay.get(d.date), p, live);
                     continue;
                 }
                 boolean join = c >= cp.low && c <= cp.high();
                 boolean or = !p.compJoinBoth || insideDay(d, cp, p);          // день внутри композита — ИЛИ, иначе И
                 if (p.compositeMode && !or) join = join && vaJoins(d, cp, p);   // close в диапазоне И наслоение VA
                 else if (!join && p.compositeMode && p.compVaOverlap > 0) join = vaJoins(d, cp, p);   // ... ИЛИ
-                if (join) { cand.add(d); cp = merge(cp, d.profile); continue; }
+                if (join) { cand.add(d); cp = merge(cp, d.profile); live(cand, cp, nextTradeDay.get(d.date), p, live); continue; }
                 Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
                 if (made != null) made.extendsOf = extOf;
                 lastCand = cand; lastCp = cp; lastComp = made; extOf = null; lastExt = extCount; extCount = 0;
@@ -451,6 +457,16 @@ public final class ZoneEngine {
                     zones.add(g);
                 }
                 res.comps.clear(); res.comps.addAll(parents);
+                // снимок формирующегося композита внутри более раннего баланса — уточнение, ролей не задаёт
+                res.liveComps.removeIf(c -> {
+                    double w = c.hi - c.lo;
+                    for (Comp q : parents) {
+                        if (!q.av.isBefore(c.av) || (c.start.equals(q.start))) continue;   // только закрытые раньше, не он сам
+                        double inter = Math.min(c.hi, q.hi) - Math.max(c.lo, q.lo);
+                        if (inter >= p.subOverlap * w && q.hi - q.lo <= p.subMaxRatio * w) return true;
+                    }
+                    return false;
+                });
             }
             // ядра: новое, пересекающее существующее ≥ mergeOverlapMin (от более узкого), его подтверждает
             List<Zone> cores = new ArrayList<>();
@@ -513,6 +529,7 @@ public final class ZoneEngine {
         if (p.compositeMode && p.sessionZones) {
             // зоны из сессий: узлы RTH TPO дня, подогнанные по телам; роль — композит / отторжения / выход / серая
             List<Comp> bal = new ArrayList<>(res.comps);
+            if (p.liveComposite) bal.addAll(res.liveComps);
             bal.sort((x, y) -> x.av.compareTo(y.av));
             zones.clear();
             List<Zone> ses = new ArrayList<>();
@@ -804,6 +821,15 @@ public final class ZoneEngine {
         if (in < 0) return false;
         int w = p.compOutsideDays ? Math.min(hi - lo, cp.high() - cp.low) : hi - lo;   // доля от более узкого
         return w == 0 || in / (double) w >= p.compInsideShare - 1e-9;
+    }
+
+    /** Снимок формирующегося композита после дня: кандидат ≥ compositeMinDays дней — композит со следующей сессии av
+     *  (ядро, тело — по уже прошедшим дням). Не баланс — снимка нет. */
+    private static void live(List<Day> cand, Profile cp, LocalDate av, Params p, List<Comp> out) {
+        if (!p.compositeMode || !p.liveComposite || av == null || cand.size() < p.compositeMinDays) return;
+        List<Comp> comps = new ArrayList<>();
+        closeComposite(new ArrayList<>(cand), cp, av, p, new ArrayList<>(), new ArrayList<>(), comps, new ArrayList<>());
+        for (Comp c : comps) { c.live = true; out.add(c); }
     }
 
     private static Comp closeComposite(List<Day> cand, Profile cp, LocalDate endDay, Params p,
