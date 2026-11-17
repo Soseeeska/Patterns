@@ -579,6 +579,12 @@ public final class ZoneEngine {
                             if (grp == null) grp = c.start;
                             if (!c.start.equals(grp)) continue;
                         }
+                        // баланс не перекрашиваем: синяя зона другому (более позднему) композиту не отдаётся; внутри своего
+                        // формирующегося композита — пересинхронизация, как прежде
+                        if (p.sessResyncLater && !kd.isEmpty() && kd.get(kd.size() - 1) == Kind.CORE
+                                && !c.start.equals(cc.get(cc.size() - 1).start)) break;
+                        if (p.sessResyncLater && kd.isEmpty() && z.partKind == Kind.CORE && gov != null
+                                && !c.start.equals(gov.start)) break;
                         at.add(c.av.toEpochDay()); kd.add(roleIn(c, mid)); cc.add(c);
                         if (!c.live && !p.sessResyncLater) break;
                     }
