@@ -107,6 +107,7 @@ public final class ZoneEngine {
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public boolean sessResyncLater = false;   // зону синхронизирует и более поздний композит, сложившийся на ней (роль — по последнему
                                                   // накрывшему); иначе — только первый композит после её рождения
+        public boolean sessCoreTouch = false;     // синяя — только зона, задевающая ядро композита (≤ 10 п.), а не всё ядро тела
         public boolean sessRefine = true;         // уточнение: мнимая зона пошире (строки узла ≥ sessParentShare вершины, ± 1 п.), внутри —
                                                   // все скопления тел свечей сессии (не одно), каждое — зона
         public double sessParentShare = 0.7;      // ... мнимая зона: строки профиля не ниже этой доли вершины узла
@@ -583,7 +584,7 @@ public final class ZoneEngine {
                     double mid = (z.lo + z.hi) / 2;
                     Comp gov = null;
                     for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
-                    z.partKind = gov != null ? roleIn(gov, mid) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
+                    z.partKind = gov != null ? roleOf(gov, z, p) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
                     if (gov != null) z.partOf = gov;
                     // синхронизация с композитом: один композит (первый, накрывший зону после рождения, или формирующийся, в
                     // котором она родилась); пока он формируется — каждый снимок, после закрытия — заморожено
@@ -601,7 +602,7 @@ public final class ZoneEngine {
                                 && !c.start.equals(cc.get(cc.size() - 1).start)) break;
                         if (p.sessResyncLater && kd.isEmpty() && z.partKind == Kind.CORE && gov != null
                                 && !c.start.equals(gov.start)) break;
-                        at.add(c.av.toEpochDay()); kd.add(roleIn(c, mid)); cc.add(c);
+                        at.add(c.av.toEpochDay()); kd.add(roleOf(c, z, p)); cc.add(c);
                         if (!c.live && !p.sessResyncLater) break;
                     }
                     if (!at.isEmpty()) {
@@ -974,6 +975,15 @@ public final class ZoneEngine {
     }
 
     /** Роль цены mid в композите: ядро — проторговка, выше — сопротивление, ниже — поддержка. */
+    /** Роль сессионной зоны в композите: sessCoreTouch — синяя, если зона задевает ядро композита (полоса у POC до обрыва,
+     *  ≤ 10 п.), иначе выше / ниже его середины — сопротивление / поддержка; без него — по ядру тела (roleIn). */
+    static Kind roleOf(Comp c, Zone z, Params p) {
+        double mid = (z.lo + z.hi) / 2;
+        if (!p.sessCoreTouch) return roleIn(c, mid);
+        if (z.hi >= c.core.lo && z.lo <= c.core.hi) return Kind.CORE;
+        return mid > (c.core.lo + c.core.hi) / 2 ? Kind.HVN_R : Kind.HVN_S;
+    }
+
     static Kind roleIn(Comp c, double mid) {
         return mid > c.coreHi ? Kind.HVN_R : mid < c.coreLo ? Kind.HVN_S : Kind.CORE;
     }
