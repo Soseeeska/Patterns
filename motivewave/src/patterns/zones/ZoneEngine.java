@@ -135,6 +135,9 @@ public final class ZoneEngine {
         public boolean gridNarrowKeepBlue = true; // ... кроме синей: узкая зона у ядра композита остаётся синей (баланс не перекрашиваем)
         public boolean oneSquareGrey = true;      // зона шириной в один квадрат (gridPts; без сетки — 1 п.) на графике — всегда серая (кроме синей,
                                                   // если gridNarrowKeepBlue); в т. ч. суженная раскладкой до одного квадрата
+        public boolean invertGrey = true;         // стык «зелёные над красными»: кластер зелёных (подряд по цене) стоит над кластером красных
+                                                  // ближе invertGapPts — две зоны стыка серые (роли разных композитов друг другу противоречат)
+        public double invertGapPts = 3;           // ... щель стыка не больше, п. (цены графика)
         public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
                                                   // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
                                                   // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
@@ -291,6 +294,7 @@ public final class ZoneEngine {
         public boolean minor;                                // сессионная минорная зона (слабый узел): всегда серая
         public boolean narrow;                               // сессионная зона уже одного квадрата TPO (gridNarrowGrey): всегда серая
         public boolean oneSquare;                            // сессионная зона в один квадрат на графике (oneSquareGrey): всегда серая
+        public boolean inverted;                             // сведена в серую на стыке «зелёные над красными» (invertGrey)
         long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии вытеснена сильным узлом — не рисуется
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
@@ -821,7 +825,29 @@ public final class ZoneEngine {
                 v.st.kind = Kind.GREY; v.z.oneSquare = true;
             }
         }
+        if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
         return res;
+    }
+
+    /** Стык «зелёные над красными» (в ценах графика, по сессиям): зоны по цене, подряд одного цвета — кластер (серые и синие
+     *  разрывают); если над кластером красных сразу кластер зелёных и щель между ними ≤ invertGapPts, верхняя красная и нижняя
+     *  зелёная зоны стыка — серые. Обычно это роли от разных композитов: нижние красные — над ядром старого, верхние зелёные —
+     *  под ядром другого. */
+    static void invertedToGrey(Result res, Params p) {
+        for (List<Shown> l0 : res.visible) {
+            List<Shown> l = new ArrayList<>(l0);
+            Map<Shown, Double> sh = new HashMap<>();
+            for (Shown v : l) sh.put(v, rollShift(res, v.z.av.atStartOfDay(p.tz).toInstant().toEpochMilli()));
+            l.sort((x, y) -> Double.compare(x.lo - sh.get(x), y.lo - sh.get(y)));
+            List<Shown> hit = new ArrayList<>();
+            for (int i = 0; i + 1 < l.size(); i++) {
+                Shown a = l.get(i), b = l.get(i + 1);
+                if (a.st.kind != Kind.HVN_R || b.st.kind != Kind.HVN_S) continue;   // соседи по цене: красная, над ней зелёная
+                if ((b.lo - sh.get(b)) - (a.hi - sh.get(a)) > p.invertGapPts + 1e-9) continue;
+                hit.add(a); hit.add(b);
+            }
+            for (Shown v : hit) { v.st.kind = Kind.GREY; v.z.inverted = true; }
+        }
     }
 
     /** Края зоны (цены графика) — на границы квадратов TPO (gridPts, сдвиг gridOffsetPts): каждый край — к ближайшей границе,

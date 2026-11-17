@@ -51,6 +51,7 @@ public class Preview {
         p.chartNoOverlap = !"false".equals(System.getProperty("chartNoOverlap", "true"));   // -DchartNoOverlap=false — как до раскладки в ценах графика
         p.gridPts = Double.parseDouble(System.getProperty("gridPts", "1"));   // -DgridPts=0 — края без квадратов TPO
         p.gridNarrowGrey = !"false".equals(System.getProperty("narrowGrey", "true"));   // -DnarrowGrey=false — узкие зоны не серые
+        p.invertGrey = !"false".equals(System.getProperty("invertGrey", "true"));   // -DinvertGrey=false — стыки не сводить
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         if (a.length > 5) p.compositeMode = a[5].equals("comp");
         if (a.length > 5 && a[5].equals("sess")) { p.compositeMode = true; p.sessionZones = true; }
