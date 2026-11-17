@@ -117,7 +117,7 @@ public class TpoZonesStudy extends Study {
         g.addRow(new BooleanDescriptor(COMP_AND, "Композит: день входит, только если close в диапазоне И наслоение VA (выкл. — ИЛИ)", true));
         g.addRow(new DoubleDescriptor(COMP_IN, "Композит: день, чей High–Low на ≥ долю внутри диапазона композита, входит по ИЛИ (0 — выкл.)", 0.8, 0, 1, 0.05));
         g.addRow(new BooleanDescriptor(COMP_OUT, "Композит: внешний день (диапазон композита на ≥ ту же долю внутри дня) — тоже по ИЛИ", true));
-        g.addRow(new BooleanDescriptor(LIVE, "Формирующийся композит: с 3-го дня задаёт роли зонам (синхронизация один раз)", false));
+        g.addRow(new BooleanDescriptor(LIVE, "Формирующийся композит: с 3-го полного дня задаёт роли; пока формируется — пересинхронизация, после закрытия — заморожено", true));
         g.addRow(new BooleanDescriptor(FALSE_BRK, "Композит: ложный выход — возврат close в диапазон закрытого композита (до 3 дней) доклеивает дни к нему", true));
         g.addRow(new BooleanDescriptor(SHORT_DAYS, "Короткие дни (ранние закрытия) входят в композиты", true));
         g.addRow(new DoubleDescriptor(SUB_OV, "Уточнение: ≥ доли диапазона композита внутри раннего баланса — его ядро серое (0 — выкл.)", 0.70, 0, 1, 0.05));
@@ -285,7 +285,7 @@ public class TpoZonesStudy extends Study {
         p.compInsideShare = st.getDouble(COMP_IN, 0.8);
         p.compOutsideDays = st.getBoolean(COMP_OUT, true);
         p.compFalseBreak = st.getBoolean(FALSE_BRK, true);
-        p.liveComposite = st.getBoolean(LIVE, false);
+        p.liveComposite = st.getBoolean(LIVE, true);
         p.coreNodes = st.getBoolean(NODES, true);
         p.partition = st.getBoolean(PART, true);
         p.bodyShare = st.getDouble(BODY, 0.15);

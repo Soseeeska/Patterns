@@ -91,7 +91,9 @@ public final class ZonePlan {
         b.append(v.st.kind.title).append("  ").append(fmt(v.lo)).append(" – ").append(fmt(v.hi));
         if (v.lo != z.blo || v.hi != z.bhi) b.append(" (обрезана соседними, полностью ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi)).append(')');
         if ("node".equals(z.src)) b.append("\nузел ядра композита");
-        if ("sess".equals(z.src)) b.append(v.st.comp != null || z.recolorKind == null ? "\nсессионная зона (узел TPO, подогнан по телам)" : "\nсессионная зона, перекрашена композитом");
+        if ("sess".equals(z.src)) b.append(!v.st.recolored ? "\nсессионная зона (узел TPO, подогнан по телам)"
+                : v.st.comp != null && v.st.comp.live ? "\nсессионная зона, роль по формирующемуся композиту (снимок по " + v.st.comp.end + ")"
+                : "\nсессионная зона, перекрашена композитом");
         if ("part".equals(z.src)) b.append("\nразметка композита (подтверждений — совпавшими кусками поздних композитов)");
         b.append("\nпоявилась ").append(z.av).append(", возраст ").append(v.st.age).append(" дн. (на ").append(on).append(')');
         b.append("\nотторжений ").append(v.st.rej).append(" (лонг ").append(v.st.nl).append(" / шорт ").append(v.st.ns);

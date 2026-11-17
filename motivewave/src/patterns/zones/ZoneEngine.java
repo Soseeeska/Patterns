@@ -105,7 +105,7 @@ public final class ZoneEngine {
         public int sessMinPeak = 3;               // вершина узла — не меньше стольких TPO
         public double sessMaxPts = 8;             // зона не шире, п.
         public double sessMinGapPts = 3.0;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
-        public boolean liveComposite = false;     // формирующийся композит: с compositeMinDays дней — со следующей сессии задаёт роли
+        public boolean liveComposite = true;      // формирующийся композит: с compositeMinDays дней — со следующей сессии задаёт роли
                                                   // (снимок по уже прошедшим дням); зоны синхронизируются с ним один раз, как с закрытым
         public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
@@ -256,7 +256,8 @@ public final class ZoneEngine {
         public String info = "";                             // ядро: как посчитано (для подсказки)
         public List<Zone> nodes = List.of();                 // ядро: узлы профиля (рисуются вместо ядра)
         public Kind partKind; public Comp partOf;            // кусок разметки композита: вид и композит
-        public Kind recolorKind; long recolorAt = Long.MAX_VALUE;   // сессионная зона: роль после перекраски композитом
+        public Kind recolorKind; long recolorAt = Long.MAX_VALUE;   // сессионная зона: роль после (первой) перекраски композитом
+        long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
         long hideFrom = Long.MAX_VALUE;                      // разметка: с этого дня зона внутри тела композита не рисуется
         Zone nodeOf;                                         // узел: его ядро
         int formationDays; List<LocalDate> conf = List.of();
@@ -285,6 +286,7 @@ public final class ZoneEngine {
     public static final class State {
         public Comp comp;                                   // режим «по композиту»: правящий композит
         public Kind kind; public boolean promoted; public int rej, nl, ns, conf; public Double purity; public long age;
+        public boolean recolored;                           // сессионная зона перекрашена композитом
     }
 
     public static final class Session {
@@ -553,10 +555,21 @@ public final class ZoneEngine {
                     for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
                     z.partKind = gov != null ? roleIn(gov, mid) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
                     if (gov != null) z.partOf = gov;
-                    for (Comp c : bal)
-                        if (c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) {
-                            z.recolorAt = c.av.toEpochDay(); z.recolorKind = roleIn(c, mid); z.info = c.core.info; break;
-                        }
+                    // синхронизация с композитом: один композит (первый, накрывший зону после рождения, или формирующийся, в
+                    // котором она родилась); пока он формируется — каждый снимок, после закрытия — заморожено
+                    LocalDate grp = gov != null && gov.live ? gov.start : null;
+                    List<Long> at = new ArrayList<>(); List<Kind> kd = new ArrayList<>(); List<Comp> cc = new ArrayList<>();
+                    for (Comp c : bal) {
+                        if (!c.av.isAfter(av) || c.bodyLo > mid || mid > c.bodyHi) continue;
+                        if (grp == null) grp = c.start;
+                        if (!c.start.equals(grp)) continue;
+                        at.add(c.av.toEpochDay()); kd.add(roleIn(c, mid)); cc.add(c);
+                        if (!c.live) break;
+                    }
+                    if (!at.isEmpty()) {
+                        z.rcAt = at.stream().mapToLong(Long::longValue).toArray(); z.rcKind = kd.toArray(new Kind[0]); z.rcComp = cc.toArray(new Comp[0]);
+                        z.recolorAt = z.rcAt[0]; z.recolorKind = z.rcKind[0]; z.info = cc.get(cc.size() - 1).core.info;
+                    }
                     ses.add(z); cf.put(z, new ArrayList<>());
                 }
             }
@@ -826,7 +839,9 @@ public final class ZoneEngine {
     /** Снимок формирующегося композита после дня: кандидат ≥ compositeMinDays дней — композит со следующей сессии av
      *  (ядро, тело — по уже прошедшим дням). Не баланс — снимка нет. */
     private static void live(List<Day> cand, Profile cp, LocalDate av, Params p, List<Comp> out) {
-        if (!p.compositeMode || !p.liveComposite || av == null || cand.size() < p.compositeMinDays) return;
+        if (!p.compositeMode || !p.liveComposite || av == null) return;
+        int fullDays = 0; for (Day d : cand) if (!d.shortDay) fullDays++;
+        if (fullDays < p.compositeMinDays) return;                // короткие дни — в профиле, но не в счёте дней
         List<Comp> comps = new ArrayList<>();
         closeComposite(new ArrayList<>(cand), cp, av, p, new ArrayList<>(), new ArrayList<>(), comps, new ArrayList<>());
         for (Comp c : comps) { c.live = true; out.add(c); }
@@ -1349,8 +1364,10 @@ public final class ZoneEngine {
             return st;
         }
         if (p.compositeMode && z.k == K_SESS) {
-            boolean rc = o >= z.recolorAt;
-            st.kind = rc ? z.recolorKind : z.partKind; st.comp = rc ? null : z.partOf;
+            int ri = lowerBound(z.rcAt, o + 1) - 1;                 // последняя синхронизация к сессии o
+            boolean rc = ri >= 0;
+            st.kind = rc ? z.rcKind[ri] : z.partKind; st.comp = rc ? (z.rcComp[ri].live ? z.rcComp[ri] : null) : z.partOf;
+            st.recolored = rc;
             if (!rc && z.partOf == null && p.sessRoleMode == 2) {     // мало информации — серая, пока не наберёт отторжений
                 int idx = z.ai + p.sessConfirm;
                 long f = idx < fullOrd.length ? fullOrd[idx] : Long.MAX_VALUE;
