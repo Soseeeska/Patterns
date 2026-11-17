@@ -126,6 +126,9 @@ public final class ZoneEngine {
         public boolean drawOneColor = true;       // зона рисуется одной полосой: цвет и границы — на последнюю сессию, где она видна
                                                   // (иначе — по участкам, как менялась по сессиям)
         public boolean layoutDropYounger = true;  // раскладка: младшая зона, налезающая на уложенную, не рисуется (а не обрезается впритык)
+        public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
+                                                  // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
+                                                  // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
         public double sessBodyShare = 0.5;
         public int sessConfirm = 5;               // режим 2: зона рождается серой, через столько полных дней — цвет по отторжениям за них        // подгонка узла по телам: скопление не ниже этой доли максимума тел
@@ -791,7 +794,67 @@ public final class ZoneEngine {
             if (p.compositeMode && p.noOverlap) out = layout(out, p);
             res.visible.add(out);
         }
+        if (p.compositeMode && p.chartNoOverlap) chartLayout(res, p);
         return res;
+    }
+
+    /** Раскладка в ценах графика: зона рисуется одной полосой в ценах контракта сессии появления (ZonePlan), поэтому
+     *  зоны разных контрактов, не пересекающиеся в склеенных ценах, на графике могут лечь друг на друга. Зоны по
+     *  порядку появления (старшая — главная; в один день — ядро, остальные, серые): младшая, которая в общие с уже
+     *  уложенной сессии стоит к ней ближе sessMinGapPts (или налезает), сужается до самого широкого свободного куска
+     *  (отступ sessMinGapPts), а уже minPiecePts — не рисуется. */
+    static void chartLayout(Result res, Params p) {
+        int n = res.visible.size();
+        Map<Zone, List<Shown>> rows = new HashMap<>();
+        Map<Zone, java.util.BitSet> when = new HashMap<>();
+        Map<Zone, Shown> lastOf = new HashMap<>();
+        List<Zone> order = new ArrayList<>();
+        for (int i = 0; i < n; i++)
+            for (Shown v : res.visible.get(i)) {
+                if (!rows.containsKey(v.z)) { order.add(v.z); rows.put(v.z, new ArrayList<>()); when.put(v.z, new java.util.BitSet(n)); }
+                rows.get(v.z).add(v); when.get(v.z).set(i); lastOf.put(v.z, v);
+            }
+        order.sort((x, y) -> {
+            int c = x.av.compareTo(y.av);
+            if (c != 0) return c;
+            int rx = rank(lastOf.get(x).st.kind), ry = rank(lastOf.get(y).st.kind);
+            return rx != ry ? rx - ry : Double.compare(x.blo, y.blo);
+        });
+        double g = p.sessMinGapPts, eps = 1e-9;
+        List<double[]> placed = new ArrayList<>();              // {lo, hi} в ценах графика
+        List<java.util.BitSet> placedWhen = new ArrayList<>();
+        Set<Shown> drop = new HashSet<>();
+        for (Zone z : order) {
+            double sh = rollShift(res, z.av.atStartOfDay(p.tz).toInstant().toEpochMilli());
+            Shown last = lastOf.get(z);
+            double lo = last.lo - sh, hi = last.hi - sh;            // полоса, которую рисует ZonePlan (drawOneColor)
+            java.util.BitSet w = when.get(z);
+            List<double[]> pieces = new ArrayList<>(); pieces.add(new double[]{lo, hi});
+            for (int k = 0; k < placed.size(); k++) {
+                double[] u = placed.get(k);
+                if (!placedWhen.get(k).intersects(w)) continue;
+                if (Math.max(u[0], lo) - Math.min(u[1], hi) >= g - eps) continue;   // не ближе зазора — не мешает
+                double ulo = u[0] - g, uhi = u[1] + g;
+                List<double[]> next = new ArrayList<>();
+                for (double[] q : pieces) {
+                    if (uhi <= q[0] || ulo >= q[1]) { next.add(q); continue; }
+                    if (ulo > q[0]) next.add(new double[]{q[0], ulo});
+                    if (uhi < q[1]) next.add(new double[]{uhi, q[1]});
+                }
+                pieces = next;
+            }
+            double bLo = 0, bHi = -1;
+            for (double[] q : pieces) if (q[1] - q[0] > bHi - bLo) { bLo = q[0]; bHi = q[1]; }
+            bLo = Math.ceil(bLo / p.tick - eps) * p.tick; bHi = Math.floor(bHi / p.tick + eps) * p.tick;   // на тики внутрь
+            if (bHi - bLo < p.minPiecePts - eps) { drop.addAll(rows.get(z)); continue; }
+            for (Shown v : rows.get(z)) {
+                v.lo = Math.max(v.lo, bLo + sh); v.hi = Math.min(v.hi, bHi + sh);
+                if (v.hi - v.lo < p.minPiecePts - eps) drop.add(v);
+            }
+            placed.add(new double[]{bLo, bHi}); placedWhen.add(w);
+        }
+        if (drop.isEmpty()) return;
+        for (List<Shown> l : res.visible) l.removeIf(drop::contains);
     }
 
     /** Раскладка без пересечений: ядра, затем остальные зоны (старшие первыми), затем серые; зона,
