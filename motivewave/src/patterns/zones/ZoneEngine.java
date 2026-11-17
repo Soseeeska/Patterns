@@ -147,6 +147,10 @@ public final class ZoneEngine {
                                                   // сверху) меньше compRejRatio : 1; не тестировалась (меньше compRejMin) — цвет остаётся
         public double compRejRatio = 2.0;
         public int compRejMin = 2;
+        public boolean primaryByCore = true;      // первичный композит (price discovery): ≥ primaryShare его диапазона за пределами всех прежних цен
+                                                  // (выше прежнего максимума или ниже минимума) — его зоны только по положению к ядру (у ядра синяя,
+                                                  // выше красная, ниже зелёная), правила серых на них не действуют; минорные — серые
+        public double primaryShare = 0.3;
         public boolean invertGrey = true;         // стык «зелёные над красными»: зелёная стоит сразу над красной (без серых / синих между)
                                                   // ближе invertGapPts — обе серые (роли разных композитов противоречат друг другу)
         public double invertGapPts = 3;           // ... щель стыка не больше, п. (цены графика)
@@ -310,6 +314,7 @@ public final class ZoneEngine {
         public boolean oneSquare;                            // сессионная зона не шире oneSquareMaxPts на графике (oneSquareGrey): серая
         public boolean inverted;                             // сведена в серую на стыке «зелёные над красными» (invertGrey)
         public boolean wavering;                             // серая: колеблется в своём композите (compRejGrey)
+        public boolean primaryColor;                         // цвет по ядру первичного композита (primaryByCore)
         public boolean nearCore;                             // синяя как ближайшая к ядру, которое не задевает ни одна зона (coreNearestBlue)
         long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии на её месте сильный узел: продолжена обычной (или вытеснена)
         long[] rcAt = new long[0]; Kind[] rcKind = new Kind[0]; Comp[] rcComp = new Comp[0];   // все синхронизации: с сессии, роль, композит
@@ -332,6 +337,7 @@ public final class ZoneEngine {
         public Comp parent;                                  // уточнение внутри более раннего баланса
         public Comp extendsOf;                               // продолжение этого композита после ложного выхода
         public boolean live;                                 // снимок формирующегося композита
+        public boolean primary;                              // первичный: в зоне price discovery (primaryByCore)
         public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
         public double coreLo, coreHi;                        // ядро тела (строки не ниже partCoreShare максимума)
         List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
@@ -838,12 +844,49 @@ public final class ZoneEngine {
             res.visible.add(out);
         }
         // ---------- после раскладки по сессиям, по порядку: одна зона на ценовом уровне графика → колеблющиеся в композите
-        //            серые → узкие серые → стык «зелёные над красными» серый (каждый шаг видит цвета после предыдущего)
+        //            серые → узкие серые → стык «зелёные над красными» серый → зоны первичного композита — по его ядру
+        //            (каждый шаг видит цвета после предыдущего)
         if (p.compositeMode && p.chartNoOverlap) chartLayout(res, p);
         if (p.compositeMode && p.compRejGrey) compRejToGrey(res, p);
         if (p.compositeMode && p.oneSquareGrey) narrowToGrey(res, p);
         if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
+        if (p.compositeMode && p.sessionZones && p.primaryByCore) primaryByCore(res, p);
         return res;
+    }
+
+    /** Первичный композит (primaryByCore) — сложился в зоне price discovery: ≥ primaryShare его диапазона за пределами всех
+     *  прежних цен (бары до его первого дня, цены графика). Зоны, которые он красит (синхронизированы с ним или его снимками
+     *  к этой сессии, либо родились в нём), — только по положению к его ядру: задевает ядро (или ближайшая к ядру) — синяя,
+     *  выше середины ядра — красная, ниже — зелёная; правила серых (узкие, колеблющиеся, стык) на них не действуют, минорные
+     *  остаются серыми. Вторичный композит (цена там уже была) — по общим правилам. */
+    static void primaryByCore(Result res, Params p) {
+        Map<LocalDate, Boolean> prim = new HashMap<>();
+        List<Comp> all = new ArrayList<>(res.comps); all.addAll(res.liveComps);
+        all.sort((x, y) -> x.start.compareTo(y.start));
+        int bi = 0; double hi = -Double.MAX_VALUE, lo = Double.MAX_VALUE;   // экстремумы баров до первого дня композита
+        for (Comp c : all) {
+            long t0 = c.start.atStartOfDay(p.tz).toInstant().toEpochMilli();
+            while (bi < res.bars.size() && res.bars.get(bi).t < t0) { Bar b = res.bars.get(bi++); hi = Math.max(hi, b.h); lo = Math.min(lo, b.l); }
+            if (!prim.containsKey(c.start)) {
+                double w = Math.max(c.hi - c.lo, p.tick);
+                double out = Math.max(0, c.hi - Math.max(c.lo, hi)) + Math.max(0, Math.min(c.hi, lo) - c.lo);
+                prim.put(c.start, hi > -Double.MAX_VALUE && out / w >= p.primaryShare - 1e-9);
+            }
+            c.primary = prim.get(c.start);
+        }
+        for (int i = 0; i < res.visible.size(); i++) {
+            long o = res.sessions.get(i).ord;
+            for (Shown v : res.visible.get(i)) {
+                Zone z = v.z;
+                if (z.k != K_SESS || (z.minor && o < z.minorEnd)) continue;
+                Comp cp = z.partOf;
+                if (z.rcAt.length > 0) { int ri = lowerBound(z.rcAt, o + 1) - 1; if (ri >= 0) cp = z.rcComp[ri]; }
+                if (cp == null || !cp.primary) continue;
+                v.st.kind = z.nearCore || (z.hi >= cp.core.lo && z.lo <= cp.core.hi) ? Kind.CORE
+                        : (z.lo + z.hi) / 2 > (cp.core.lo + cp.core.hi) / 2 ? Kind.HVN_R : Kind.HVN_S;
+                z.primaryColor = true;
+            }
+        }
     }
 
     /** coreNearestBlue: для каждого баланса — его зоны (синхронизированы с ним или его снимками, либо родились в нём); если ни

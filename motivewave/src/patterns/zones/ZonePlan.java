@@ -99,6 +99,7 @@ public final class ZonePlan {
         if (z.minor) b.append(v.st.kind == Kind.GREY ? "\nминорная: слабый узел сессии (ниже 25% главного или < 3 TPO), серая"
                 : "\nбыла минорной (слабый узел), продолжена сильным узлом — обычная зона");
         else if (z.inverted && v.st.kind == Kind.GREY) b.append("\nсведена в серую: стык «зелёные над красными» (роли разных композитов)");
+        else if (z.primaryColor && v.st.kind != Kind.GREY) b.append("\nпервичный композит (price discovery): цвет по положению к его ядру");
         else if (z.nearCore && v.st.kind == Kind.CORE) b.append("\nсиняя: ближайшая к ядру композита (ядро не задевает ни одна его зона)");
         else if (z.oneSquare && v.st.kind == Kind.GREY) b.append("\nузкая (не шире " + fmt(p.oneSquareMaxPts) + " п.) — всегда серая");
         else if (z.wavering && v.st.kind == Kind.GREY) b.append("\nколеблется в своём композите: перевес отторжений за цвет меньше " + fmt(p.compRejRatio) + ":1 — серая");

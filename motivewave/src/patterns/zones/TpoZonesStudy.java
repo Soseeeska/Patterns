@@ -56,7 +56,7 @@ import patterns.zones.ZoneEngine.Result;
 public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек
-    static final String S_MAX = "sessMax", MINOR = "sessMinor", CORE_TOUCH = "sessCoreTouch", CORE_NEAR = "coreNearestBlue", REFINE = "sessRefine", VA_PREV = "compVaPrevDay", RESYNC = "sessResyncLater", ROLL_BRK = "compRollBreak", ONE_COLOR = "drawOneColor", EXT_DAYS = "drawExtendDays", LIVE = "liveComposite", ROLL = "rollAdjust", ROLL_RAW = "rollRaw", ROLL_GAP = "rollMinGap", FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", COMP_OUT = "compOutsideDays", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", CHART_NO_OV = "chartNoOverlap", GRID = "gridPts", GRID_OFF = "gridOffset", GRID_GREY = "gridNarrowGrey", GRID_BLUE = "gridNarrowKeepBlue", ONE_SQ = "oneSquareGrey", ONE_SQ_MAX = "oneSquareMax", CR = "compRejGrey", CR_RATIO = "compRejRatio", CR_MIN = "compRejMin", INV = "invertGrey", INV_GAP = "invertGap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
+    static final String S_MAX = "sessMax", MINOR = "sessMinor", CORE_TOUCH = "sessCoreTouch", CORE_NEAR = "coreNearestBlue", PRIM = "primaryByCore", PRIM_SHARE = "primaryShare", REFINE = "sessRefine", VA_PREV = "compVaPrevDay", RESYNC = "sessResyncLater", ROLL_BRK = "compRollBreak", ONE_COLOR = "drawOneColor", EXT_DAYS = "drawExtendDays", LIVE = "liveComposite", ROLL = "rollAdjust", ROLL_RAW = "rollRaw", ROLL_GAP = "rollMinGap", FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", COMP_OUT = "compOutsideDays", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", CHART_NO_OV = "chartNoOverlap", GRID = "gridPts", GRID_OFF = "gridOffset", GRID_GREY = "gridNarrowGrey", GRID_BLUE = "gridNarrowKeepBlue", ONE_SQ = "oneSquareGrey", ONE_SQ_MAX = "oneSquareMax", CR = "compRejGrey", CR_RATIO = "compRejRatio", CR_MIN = "compRejMin", INV = "invertGrey", INV_GAP = "invertGap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
             RTH_END = "rthEnd", ETH_START = "ethStart", TICK = "tick", VA_PCT = "vaPct", HVN_SHARE = "hvnShare",
             HVN_MIN = "hvnMin", HVN_MAX = "hvnMax", GHVN_MIN = "greyHvnMin", GHVN_MAX = "greyHvnMax",
             MERGE_OV = "mergeOv", MERGE_W = "mergeW", COMP_DAYS = "compDays", GREY_HIST = "greyHist",
@@ -125,6 +125,8 @@ public class TpoZonesStudy extends Study {
         g = tab.addGroup("Цвет и серые");
         g.addRow(new BooleanDescriptor(CORE_TOUCH, "Синяя — только зона, задевающая ядро композита (выкл. — всё ядро тела)", true));
         g.addRow(new BooleanDescriptor(CORE_NEAR, "Ядро не задевает ни одна зона композита — синей становится ближайшая к ядру", true));
+        g.addRow(new BooleanDescriptor(PRIM, "Первичный композит (price discovery): его зоны — только по положению к ядру, без серых правил", true));
+        g.addRow(new DoubleDescriptor(PRIM_SHARE, "... первичный — за прежними ценами не меньше доли его диапазона", 0.3, 0.05, 1, 0.05));
         g.addRow(new BooleanDescriptor(GRID_GREY, "Скопление тел уже одного квадрата TPO — зона в один квадрат, серая", true));
         g.addRow(new BooleanDescriptor(ONE_SQ, "Узкая зона — всегда серая", true));
         g.addRow(new DoubleDescriptor(ONE_SQ_MAX, "... узкая — не шире, п.", 2.0, 0.25, 10, 0.25));
@@ -346,6 +348,8 @@ public class TpoZonesStudy extends Study {
         p.sessRefine = st.getBoolean(REFINE, true);
         p.sessCoreTouch = st.getBoolean(CORE_TOUCH, true);
         p.coreNearestBlue = st.getBoolean(CORE_NEAR, true);
+        p.primaryByCore = st.getBoolean(PRIM, true);
+        p.primaryShare = st.getDouble(PRIM_SHARE, 0.3);
         p.sessMinor = st.getBoolean(MINOR, true);
         p.sessMinorPromote = st.getBoolean(MINOR_PROMOTE, true);
         p.sessPeakShare = st.getDouble(S_SHARE, 0.25);
