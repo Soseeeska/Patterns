@@ -129,8 +129,6 @@ public final class ZoneEngine {
         public boolean chartNoOverlap = true;     // на графике на одном ценовом уровне одна зона: раскладка в ценах графика (зона — в контракте
                                                   // сессии появления), старшая главная; младшая, налезающая на неё (ближе sessMinGapPts), сужается
                                                   // до самого широкого свободного куска (≥ minPiecePts), иначе не рисуется (в т. ч. через ролл)
-        public double chartSnapPts = 1;           // ... щель между соседними зонами до стольких п. (включительно) закрывается: младшая дотягивает край до старшей
-                                                  // (стоят впритык; 0 — выкл.)
         public int sessRoleMode = 0;              // роль вне композита: 0 — отторжения, затем закрытие сессии; 1 — только закрытие
         public double sessBodyShare = 0.5;
         public int sessConfirm = 5;               // режим 2: зона рождается серой, через столько полных дней — цвет по отторжениям за них        // подгонка узла по телам: скопление не ниже этой доли максимума тел
@@ -849,21 +847,6 @@ public final class ZoneEngine {
             for (double[] q : pieces) if (q[1] - q[0] > bHi - bLo) { bLo = q[0]; bHi = q[1]; }
             bLo = Math.ceil(bLo / p.tick - eps) * p.tick; bHi = Math.floor(bHi / p.tick + eps) * p.tick;   // на тики внутрь
             if (bHi - bLo < p.minPiecePts - eps) { drop.addAll(rows.get(z)); continue; }
-            if (p.chartSnapPts > 0) {                               // щель до chartSnapPts — закрыть: край младшей к ближайшей соседней
-                double below = -Double.MAX_VALUE, above = Double.MAX_VALUE;
-                for (int k = 0; k < placed.size(); k++) {
-                    if (!placedWhen.get(k).intersects(w)) continue;
-                    double[] u = placed.get(k);
-                    if (u[1] <= bLo + eps) below = Math.max(below, u[1]);
-                    if (u[0] >= bHi - eps) above = Math.min(above, u[0]);
-                }
-                double nLo = bLo - below <= p.chartSnapPts + eps ? below : bLo;
-                double nHi = above - bHi <= p.chartSnapPts + eps ? above : bHi;
-                if (nLo < bLo || nHi > bHi) {                      // рост только в щель до ближайшей: ни на что не налезает
-                    bLo = nLo; bHi = nHi;
-                    for (Shown v : rows.get(z)) { v.lo = Math.min(v.lo, bLo + sh); v.hi = Math.max(v.hi, bHi + sh); }
-                }
-            }
             for (Shown v : rows.get(z)) {
                 v.lo = Math.max(v.lo, bLo + sh); v.hi = Math.min(v.hi, bHi + sh);
                 if (v.hi - v.lo < p.minPiecePts - eps) drop.add(v);

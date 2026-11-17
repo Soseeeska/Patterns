@@ -93,7 +93,7 @@ public final class ZonePlan {
     static String tip(Zone z, Shown v, LocalDate on, Params p) {
         StringBuilder b = new StringBuilder();
         b.append(v.st.kind.title).append("  ").append(fmt(v.lo)).append(" – ").append(fmt(v.hi));
-        if (v.lo != z.blo || v.hi != z.bhi) b.append(v.hi - v.lo < z.bhi - z.blo ? " (обрезана соседними, полностью " : " (край дотянут до соседней, своя ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi)).append(')');
+        if (v.lo != z.blo || v.hi != z.bhi) b.append(" (обрезана соседними, полностью ").append(fmt(z.blo)).append(" – ").append(fmt(z.bhi)).append(')');
         if ("node".equals(z.src)) b.append("\nузел ядра композита");
         if (z.minor) b.append("\nминорная: слабый узел сессии (ниже 50% главного или < 3 TPO), всегда серая");
         else if ("sess".equals(z.src)) b.append(!v.st.recolored ? "\nсессионная зона (узел TPO, подогнан по телам)"

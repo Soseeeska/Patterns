@@ -49,7 +49,6 @@ public class Preview {
         p.sessRefine = !"false".equals(System.getProperty("refine", "true"));     // -Drefine=true — уточнение зон внутри мнимой
         p.sessMinor = Boolean.getBoolean("minor");       // -Dminor=true — минорные серые зоны   // -Dlive=true — формирующийся композит задаёт роли   // бары из export_bars уже склеены; -Droll=true — сырые бары (--raw), как в MotiveWave
         p.chartNoOverlap = !"false".equals(System.getProperty("chartNoOverlap", "true"));   // -DchartNoOverlap=false — как до раскладки в ценах графика
-        p.chartSnapPts = Double.parseDouble(System.getProperty("snap", "1"));   // -Dsnap=0 — щели между зонами не закрывать
         if (a.length > 3) p.alignSessions = Integer.parseInt(a[3]);
         if (a.length > 5) p.compositeMode = a[5].equals("comp");
         if (a.length > 5 && a[5].equals("sess")) { p.compositeMode = true; p.sessionZones = true; }
