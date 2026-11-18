@@ -8,6 +8,7 @@ MotiveWave; бары тестов — сырые RTH 30m того же ряда.
   * сторона — по close предыдущего бара (для периода A — по open дня): выше зоны → зона поддержка, ниже → сопротивление;
     цена внутри зоны — тест не начинается;
   * касание — бар дотянулся до зоны (± tol);
+  * прокол — насколько цена зашла за дальний край зоны за время теста (до решения), п.;
   * удержание / пробой — как в этапе 6 (`tpo/intraday.py`): пробой — два close подряд за дальним краем, удержание —
     раньше пробоя бар целиком на исходной стороне; до конца RTH не решилось — `none`;
   * сделка от зоны: вход по ближнему краю на баре касания, стоп за дальним краем + stop_pts, цель 2R
@@ -97,6 +98,9 @@ def first_tests(day, g: pd.DataFrame, zones: pd.DataFrame, tick: float, tol_tick
             if away and j > t:
                 outcome, end = "hold", j
                 break
+        # прокол: насколько цена зашла за дальний край за время теста (до решения), п.
+        seg_t = slice(t, end + 1)
+        pierce = max(0.0, (lo - L[seg_t].min()) if above else (H[seg_t].max() - hi))
         # сделка от зоны
         risk = (hi - lo) + stop_pts
         entry = hi if above else lo
@@ -131,7 +135,7 @@ def first_tests(day, g: pd.DataFrame, zones: pd.DataFrame, tick: float, tol_tick
         a_close = C[0]
         r = {"date": day.date, "zi": zi, "lo": lo, "hi": hi, "width": hi - lo, "t": t,
              "role": "поддержка" if above else "сопротивление", "outcome": outcome, "false_break": fb,
-             "r": res_r, "win": win, "mfe": max(mfe, 0.0),
+             "r": res_r, "win": win, "mfe": max(mfe, 0.0), "pierce": pierce,
              "period": PERIOD_GROUP[t],
              "open_loc": open_loc(O0, day),
              "a_accept": "—" if t == 0 else ("принят" if day.y_val <= a_close <= day.y_vah else "отвергнут"),

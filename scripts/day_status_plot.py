@@ -188,9 +188,10 @@ def plot_moment(D, letter, real, split, bars, days, snaps, npocs, tick):
     pad = (hi - lo) * 0.08
     ylo, yhi = lo - pad, hi + pad
     xr = X0 + 13 + 9
-    z = snaps[(snaps.day == D) & (snaps.kind == "CORE") & (snaps.hi >= ylo) & (snaps.lo <= yhi)]
-    for zz in z.itertuples():
-        ax.add_patch(Rectangle((-0.5, zz.lo), xr + 0.5, zz.hi - zz.lo, color="#00158B", alpha=0.18, lw=0, zorder=0))
+    z = snaps[(snaps.day == D) & (snaps.hi >= ylo) & (snaps.lo <= yhi)]
+    for zz in z.itertuples():                              # все зоны 1.8 на сегодня, цвета индикатора, серые бледно
+        c, a = ZC.get(zz.kind, ("#808080", 0.10))
+        ax.add_patch(Rectangle((-0.5, zz.lo), xr + 0.5, zz.hi - zz.lo, color=c, alpha=min(a + 0.05, 0.3), lw=0, zorder=0))
     candles(ax, gy, 0)
     candles(ax, gk, X0)
     ax.axvline(X0 + k + 0.5, color="#999", lw=1, ls=":")
