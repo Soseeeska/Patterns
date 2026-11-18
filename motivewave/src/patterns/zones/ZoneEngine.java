@@ -151,6 +151,14 @@ public final class ZoneEngine {
                                                   // (выше прежнего максимума или ниже минимума) — его зоны только по положению к ядру (у ядра синяя,
                                                   // выше красная, ниже зелёная), правила серых на них не действуют; минорные — серые
         public double primaryShare = 0.3;
+        public boolean compSync = true;           // синхронизация композита и сессионных зон в нём: в каждом узле профиля композита истинная —
+                                                  // одна зона (самое проторгованное по профилю композита место, при равенстве — старшая; синяя у
+                                                  // ядра забирает свой узел), остальные в узле и зоны в провалах между узлами — минорные (серые)
+        public double syncDip = 0.15;             // ... узлы профиля композита: тело режется по провалам ≥ этой доли меньшей вершины
+        public double syncDrop = 0.25;            // ... узел — строки не ниже вершины на эту долю её высоты
+        public boolean syncVaEdges = true;        // ... плюс у краёв VA композита — по одной главной зоне снаружи VA: поддержка — ближайшая к VAL
+                                                  // снизу, сопротивление — ближайшая к VAH сверху (цена торгуется от них, баланс — над / под ними)
+        public double syncVaTolPts = 1.0;         // ... «снаружи» — зона заходит внутрь VA не больше чем на столько п.
         public boolean invertGrey = true;         // стык «зелёные над красными»: зелёная стоит сразу над красной (без серых / синих между)
                                                   // ближе invertGapPts — обе серые (роли разных композитов противоречат друг другу)
         public double invertGapPts = 3;           // ... щель стыка не больше, п. (цены графика)
@@ -314,6 +322,8 @@ public final class ZoneEngine {
         public boolean oneSquare;                            // сессионная зона не шире oneSquareMaxPts на графике (oneSquareGrey): серая
         public boolean inverted;                             // сведена в серую на стыке «зелёные над красными» (invertGrey)
         public boolean wavering;                             // серая: колеблется в своём композите (compRejGrey)
+        public boolean syncMinor;                            // минорная по синхронизации с композитом (compSync)
+        public int vaMajor;                                  // 1 — главная поддержка у VAL композита, 2 — главное сопротивление у VAH
         public boolean primaryColor;                         // цвет по ядру первичного композита (primaryByCore)
         public boolean nearCore;                             // синяя как ближайшая к ядру, которое не задевает ни одна зона (coreNearestBlue)
         long minorEnd = Long.MAX_VALUE;                      // ... с этой сессии на её месте сильный узел: продолжена обычной (или вытеснена)
@@ -338,6 +348,8 @@ public final class ZoneEngine {
         public Comp extendsOf;                               // продолжение этого композита после ложного выхода
         public boolean live;                                 // снимок формирующегося композита
         public boolean primary;                              // первичный: в зоне price discovery (primaryByCore)
+        public Profile prof; public int pocT;                // профиль композита и POC (тики) — для синхронизации с сессионными зонами
+        List<int[]> cnodes;                                  // узлы профиля композита {lo, hi, вершина TPO} (тики), лениво
         public double bodyLo, bodyHi;                        // тело профиля (без хвостов)
         public double coreLo, coreHi;                        // ядро тела (строки не ниже partCoreShare максимума)
         List<int[]> segs = List.of();                        // разметка тела: {lo, hi, 0 ядро / 1 поддержка / 2 сопротивление}, тики
@@ -844,14 +856,100 @@ public final class ZoneEngine {
             res.visible.add(out);
         }
         // ---------- после раскладки по сессиям, по порядку: одна зона на ценовом уровне графика → колеблющиеся в композите
-        //            серые → узкие серые → стык «зелёные над красными» серый → зоны первичного композита — по его ядру
-        //            (каждый шаг видит цвета после предыдущего)
+        //            серые → узкие серые → стык «зелёные над красными» серый → зоны первичного композита — по его ядру →
+        //            синхронизация с профилем композита: истинные / минорные, главные у краёв VA (каждый шаг видит цвета
+        //            после предыдущего)
         if (p.compositeMode && p.chartNoOverlap) chartLayout(res, p);
         if (p.compositeMode && p.compRejGrey) compRejToGrey(res, p);
         if (p.compositeMode && p.oneSquareGrey) narrowToGrey(res, p);
         if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
         if (p.compositeMode && p.sessionZones && p.primaryByCore) primaryByCore(res, p);
+        if (p.compositeMode && p.sessionZones && p.compSync) compSync(res, p);
         return res;
+    }
+
+    /** Узлы профиля композита: тело (строки ≥ bodyShare максимума вокруг POC, сглаж. 1 п.) режется по провалам ≥ syncDip
+     *  меньшей вершины; узел — строки куска не ниже вершины на syncDrop её высоты. {lo, hi, вершина TPO} в тиках. */
+    static List<int[]> compNodes(Comp c, Params p) {
+        if (c.cnodes != null) return c.cnodes;
+        Profile pf = c.prof; int[] cnt = pf.counts; int n = cnt.length, onePt = (int) Math.round(1.0 / p.tick), half = onePt / 2;
+        double[] sm = new double[n];
+        for (int i = 0; i < n; i++) {
+            double sum = 0; int k = 0;
+            for (int j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { sum += cnt[j]; k++; }
+            sm[i] = sum / k;
+        }
+        double mx = 0; for (double v : sm) mx = Math.max(mx, v);
+        int pi = c.pocT - pf.low, a = pi, b = pi;
+        while (a > 0 && sm[a - 1] >= p.bodyShare * mx) a--;
+        while (b < n - 1 && sm[b + 1] >= p.bodyShare * mx) b++;
+        List<int[]> pcs = new ArrayList<>();
+        splitRel(sm, a, b, p.syncDip, 1.0, pcs);
+        List<int[]> out = new ArrayList<>();
+        for (int[] q : pcs) {
+            int m = q[0]; for (int i = q[0]; i <= q[1]; i++) if (sm[i] > sm[m]) m = i;
+            int lo = m, hi = m;
+            while (lo > q[0] && sm[lo - 1] >= sm[m] * (1 - p.syncDrop)) lo--;
+            while (hi < q[1] && sm[hi + 1] >= sm[m] * (1 - p.syncDrop)) hi++;
+            out.add(new int[]{pf.low + lo, pf.low + hi, (int) Math.round(sm[m])});
+        }
+        c.cnodes = out;
+        return out;
+    }
+
+    /** Синхронизация композита и сессионных зон (compSync), по последней сессии — на всю длину зоны (без разрывов). Зона
+     *  относится к композиту, который задаёт ей цвет к последней сессии. В каждом узле профиля композита истинная — одна зона:
+     *  синяя у ядра (если есть), иначе с наибольшим TPO композита на своих строках (при равенстве — старшая); остальные в узле
+     *  и зоны в провалах между узлами — минорные, серые. syncVaEdges: у краёв VA композита — по одной главной зоне снаружи VA
+     *  (заходит внутрь не больше syncVaTolPts): поддержка под ядром — ближайшая к VAL, сопротивление над ядром — ближайшая к
+     *  VAH; они зелёная и красная, даже если были минорными или серыми. */
+    static void compSync(Result res, Params p) {
+        int n = res.visible.size(); if (n == 0) return;
+        long o = res.sessions.get(n - 1).ord;
+        Map<String, Shown> best = new HashMap<>(); Map<String, Integer> bestT = new HashMap<>(); Set<String> coreNode = new HashSet<>();
+        List<Object[]> cand = new ArrayList<>();
+        Map<LocalDate, Comp> comps = new HashMap<>(); Map<LocalDate, List<Shown>> mine = new HashMap<>();
+        for (Shown v : res.visible.get(n - 1)) {
+            Zone z = v.z;
+            if (z.k != K_SESS) continue;
+            Comp cp = z.partOf;
+            if (z.rcAt.length > 0) { int ri = lowerBound(z.rcAt, o + 1) - 1; if (ri >= 0) cp = z.rcComp[ri]; }
+            if (cp == null || cp.prof == null) continue;
+            comps.putIfAbsent(cp.start, cp); mine.computeIfAbsent(cp.start, x -> new ArrayList<>()).add(v);
+            if (v.st.kind == Kind.GREY) continue;                      // серая остаётся серой
+            int lo = ticks(z.lo, p.tick), hi = ticks(z.hi, p.tick), mid = (lo + hi) / 2;
+            int node = -1; List<int[]> nds = compNodes(cp, p);
+            for (int k = 0; k < nds.size(); k++) if (mid >= nds.get(k)[0] && mid <= nds.get(k)[1]) node = k;
+            String key = cp.start + "#" + node;
+            if (v.st.kind == Kind.CORE) { coreNode.add(key); continue; }   // синяя — всегда истинная, её узел — её
+            if (node < 0) { z.syncMinor = true; continue; }
+            int tpo = 0;
+            for (int t = lo; t <= hi; t++) if (t >= cp.prof.low && t <= cp.prof.high()) tpo = Math.max(tpo, cp.prof.counts[t - cp.prof.low]);
+            Shown b0 = best.get(key);
+            if (b0 == null || tpo > bestT.get(key) || (tpo == bestT.get(key) && z.av.isBefore(b0.z.av))) { best.put(key, v); bestT.put(key, tpo); }
+            cand.add(new Object[]{v, key});
+        }
+        for (Object[] q : cand) { Shown v = (Shown) q[0]; String key = (String) q[1]; if (coreNode.contains(key) || best.get(key) != v) v.z.syncMinor = true; }
+        if (p.syncVaEdges) for (var e : mine.entrySet()) {
+            Comp cp = comps.get(e.getKey());
+            int[] va = valueArea(cp.prof, p.valueAreaPct);
+            double val = va[1] * p.tick, vah = va[2] * p.tick + p.tick, cmid = (cp.core.lo + cp.core.hi) / 2, tol = p.syncVaTolPts + 1e-9;
+            Shown sup = null, rs = null; double ds = Double.MAX_VALUE, dr = Double.MAX_VALUE;
+            for (Shown v : e.getValue()) {
+                Zone z = v.z;
+                if (v.st.kind == Kind.CORE && !z.syncMinor) continue;
+                double mid = (z.lo + z.hi) / 2;
+                if (mid < cmid && z.hi <= val + tol && val - z.hi < ds) { ds = Math.max(0, val - z.hi); sup = v; }
+                if (mid > cmid && z.lo >= vah - tol && z.lo - vah < dr) { dr = Math.max(0, z.lo - vah); rs = v; }
+            }
+            if (sup != null) { sup.z.syncMinor = false; sup.z.vaMajor = 1; }
+            if (rs != null) { rs.z.syncMinor = false; rs.z.vaMajor = 2; }
+        }
+        for (List<Shown> l : res.visible) for (Shown v : l) {
+            if (v.z.vaMajor == 1) v.st.kind = Kind.HVN_S;
+            else if (v.z.vaMajor == 2) v.st.kind = Kind.HVN_R;
+            else if (v.z.syncMinor) v.st.kind = Kind.GREY;
+        }
     }
 
     /** Первичный композит (primaryByCore) — сложился в зоне price discovery: ≥ primaryShare его диапазона за пределами всех
@@ -1179,7 +1277,7 @@ public final class ZoneEngine {
         int[] va = valueArea(cp, p.valueAreaPct);
         if (n >= p.compositeMinDays) {
             Comp c = new Comp();
-            made = c;
+            made = c; c.prof = cp; c.pocT = va[0];
             c.lo = cp.low * p.tick; c.hi = cp.high() * p.tick; c.av = endDay; c.days = n;
             c.start = cand.get(0).date; c.end = cand.get(n - 1).date;
             Zone core = new Zone();

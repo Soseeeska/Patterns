@@ -9,7 +9,7 @@ public class NodesView {
     try (BufferedReader r = new BufferedReader(new FileReader(a[0]))) { for (String s; (s = r.readLine()) != null; ) { String[] f = s.split(","); bars.add(new Bar(Long.parseLong(f[0]), Double.parseDouble(f[1]), Double.parseDouble(f[2]), Double.parseDouble(f[3]), Double.parseDouble(f[4]))); } }
     long end = LocalDate.parse(a[2]).plusDays(1).atTime(16, 0).atZone(ZoneId.of("America/Chicago")).toInstant().toEpochMilli();
     bars.removeIf(b -> b.t >= end);
-    System.setProperty("compSync", "true"); System.setProperty("syncVa", "true");
+    
     Params p = new Params(); p.compositeMode = true; p.zoneMaxWidthPts = 10;
     Result res = ZoneEngine.run(bars, p);
     Comp c = null; for (Comp x : res.comps) if (x.start.toString().equals(a[3])) c = x;
