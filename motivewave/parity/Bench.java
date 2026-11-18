@@ -33,6 +33,7 @@ public class Bench {
                 String[] f = s.split(",");
                 bars.add(new Bar(Long.parseLong(f[0]), Double.parseDouble(f[1]), Double.parseDouble(f[2]), Double.parseDouble(f[3]), Double.parseDouble(f[4])));
             }
+        Bench.cutHistory(bars);                          // -Dfrom / -Dto: история с даты / данные по дату
         }
         List<String[]> man = new ArrayList<>();
         try (BufferedReader r = new BufferedReader(new FileReader(a[1]))) { for (String s; (s = r.readLine()) != null; ) man.add(s.split(",")); }
@@ -90,6 +91,15 @@ public class Bench {
         double lastClose = res.sessions.get(res.sessions.size() - 1).open;
         int near = 0; for (Shown v : last) if (Math.abs((v.lo + v.hi) / 2 - lastClose) <= 150) near++;
         System.out.printf(Locale.ROOT, "   последняя сессия: зон %d, в ± 150 п. от цены %d (%.1f на 100 п.; у ручных ≈ 8)%n", last.size(), near, near / 3.0);
+    }
+
+    /** -Dfrom=YYYY-MM-DD — история с этой даты (MotiveWave грузит 1500 календарных дней назад от сегодня),
+     *  -Dto=YYYY-MM-DD — данные по эту дату включительно (до 16:00 CT). */
+    static void cutHistory(List<Bar> bars) {
+        java.time.ZoneId tz = java.time.ZoneId.of("America/Chicago");
+        String from = System.getProperty("from"), to = System.getProperty("to");
+        if (from != null) { long t = LocalDate.parse(from).atStartOfDay(tz).toInstant().toEpochMilli(); bars.removeIf(b -> b.t < t); }
+        if (to != null) { long t = LocalDate.parse(to).plusDays(1).atTime(16, 0).atZone(tz).toInstant().toEpochMilli(); bars.removeIf(b -> b.t >= t); }
     }
 
     /** поле=значение → ZoneEngine.Params (boolean / int / double). */

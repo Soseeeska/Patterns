@@ -27,6 +27,7 @@ public class Dump {
                 bars.add(new Bar(Long.parseLong(f[0]), Double.parseDouble(f[1]), Double.parseDouble(f[2]),
                         Double.parseDouble(f[3]), Double.parseDouble(f[4])));
             }
+        Bench.cutHistory(bars);                          // -Dfrom / -Dto: история с даты / данные по дату
         }
         Params p = new Params();
         p.compositeMode = true; p.zoneMaxWidthPts = 10;   // как в индикаторе

@@ -5,8 +5,7 @@ import patterns.zones.ZoneEngine.*;
 /** Композиты, как их строит движок, поверх 30m-баров: java CompView bars.csv out.png from to [дата данных] */
 public class CompView {
   public static void main(String[] a) throws Exception {
-    List<Bar> bars = new ArrayList<>();
-    try (BufferedReader r = new BufferedReader(new FileReader(a[0]))) { for (String s; (s = r.readLine()) != null; ) { String[] f = s.split(","); bars.add(new Bar(Long.parseLong(f[0]), Double.parseDouble(f[1]), Double.parseDouble(f[2]), Double.parseDouble(f[3]), Double.parseDouble(f[4]))); } }
+    List<Bar> bars = Check.read(a[0]);                // -Dfrom / -Dto — как в Check
     ZoneId tz = ZoneId.of("America/Chicago");
     LocalDate from = LocalDate.parse(a[2]), to = LocalDate.parse(a[3]);
     long end = to.plusDays(1).atTime(16, 0).atZone(tz).toInstant().toEpochMilli();

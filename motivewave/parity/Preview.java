@@ -44,6 +44,7 @@ public class Preview {
                 bars.add(new Bar(Long.parseLong(f[0]), Double.parseDouble(f[1]), Double.parseDouble(f[2]),
                         Double.parseDouble(f[3]), Double.parseDouble(f[4])));
             }
+        Bench.cutHistory(bars);                          // -Dfrom / -Dto: история с даты / данные по дату
         }
         if (a.length > 6) {                            // последний день картинки: как выглядело вживую на эту дату
             long end = java.time.LocalDate.parse(a[6]).plusDays(1).atTime(16, 0).atZone(java.time.ZoneId.of("America/Chicago")).toInstant().toEpochMilli();
