@@ -124,7 +124,7 @@ public final class ZoneEngine {
                                                   // графика; после подгонки по телам край — к ближайшей границе, пополам — квадрат целиком
                                                   // (принт в приоритете); 0 — выкл.
         public double gridOffsetPts = 0;          // ... сдвиг сетки квадратов от целых, п.
-        public boolean gridNarrowGrey = true;     // скопление тел уже одного квадрата (gridPts; без сетки — 1 п.) — зона в один квадрат,
+        public boolean gridNarrowGrey = false;     // скопление тел уже одного квадрата (gridPts; без сетки — 1 п.) — зона в один квадрат,
                                                   // всегда серая
         public boolean sessMinor = true;          // минорные (серые) зоны: слабый узел сессии (вершина < sessPeakShare главного или
                                                   // < sessMinPeak TPO) — серая зона там, где нет других
@@ -140,7 +140,7 @@ public final class ZoneEngine {
 
         // ---- серые и цвет (1.8)
         public boolean gridNarrowKeepBlue = true; // узкие (gridNarrowGrey, oneSquareGrey) — кроме синей: зона у ядра композита остаётся синей
-        public boolean oneSquareGrey = true;      // узкая зона на графике (не шире oneSquareMaxPts; в т. ч. суженная раскладкой) — всегда серая
+        public boolean oneSquareGrey = false;      // узкая зона на графике (не шире oneSquareMaxPts; в т. ч. суженная раскладкой) — всегда серая
         public double oneSquareMaxPts = 2.0;      // ... узкая — не шире стольких п.
         public boolean compRejGrey = true;        // красная / зелёная, колеблющаяся в своём композите, — серая: в днях композита, задавшего ей
                                                   // цвет (с её появления), ≥ compRejMin отторжений и перевес за цвет (красная — снизу, зелёная —

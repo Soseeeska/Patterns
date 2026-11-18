@@ -132,8 +132,8 @@ public class TpoZonesStudy extends Study {
         g.addRow(new DoubleDescriptor(CS_DROP, "... узел — строки не ниже вершины на долю её высоты", 0.25, 0.05, 0.6, 0.05));
         g.addRow(new BooleanDescriptor(CS_VA, "... у краёв VA композита — главная поддержка у VAL и главное сопротивление у VAH, снаружи VA", true));
         g.addRow(new DoubleDescriptor(CS_TOL, "... «снаружи VA» — заходит внутрь не больше, п.", 1.0, 0, 10, 0.25));
-        g.addRow(new BooleanDescriptor(GRID_GREY, "Скопление тел уже одного квадрата TPO — зона в один квадрат, серая", true));
-        g.addRow(new BooleanDescriptor(ONE_SQ, "Узкая зона — всегда серая", true));
+        g.addRow(new BooleanDescriptor(GRID_GREY, "Скопление тел уже одного квадрата TPO — зона в один квадрат, серая", false));
+        g.addRow(new BooleanDescriptor(ONE_SQ, "Узкая зона — всегда серая", false));
         g.addRow(new DoubleDescriptor(ONE_SQ_MAX, "... узкая — не шире, п.", 2.0, 0.25, 10, 0.25));
         g.addRow(new BooleanDescriptor(GRID_BLUE, "Узкие серые — кроме синих: узкая зона у ядра композита остаётся синей", true));
         g.addRow(new BooleanDescriptor(CR, "Красная / зелёная, колеблющаяся в своём композите, — серая", true));
@@ -372,9 +372,9 @@ public class TpoZonesStudy extends Study {
         p.noOverlap = st.getBoolean(NO_OVERLAP, true);
         p.gridPts = st.getDouble(GRID, 1.0);
         p.gridOffsetPts = st.getDouble(GRID_OFF, 0);
-        p.gridNarrowGrey = st.getBoolean(GRID_GREY, true);
+        p.gridNarrowGrey = st.getBoolean(GRID_GREY, false);
         p.gridNarrowKeepBlue = st.getBoolean(GRID_BLUE, true);
-        p.oneSquareGrey = st.getBoolean(ONE_SQ, true);
+        p.oneSquareGrey = st.getBoolean(ONE_SQ, false);
         p.oneSquareMaxPts = st.getDouble(ONE_SQ_MAX, 2.0);
         p.compRejGrey = st.getBoolean(CR, true);
         p.compRejRatio = st.getDouble(CR_RATIO, 2.0);
