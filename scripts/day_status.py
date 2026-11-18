@@ -167,24 +167,30 @@ def open_zone(real, plac, split):
         print(f"  {c:8s} " + " | ".join(cells))
 
 
-def card(real, date, split):
+def status_probs(real, date, split):
+    """Вероятности целей после каждого периода дня (модели учатся на днях до split): строки дня + p_<цель>."""
     date = pd.Timestamp(date)
-    d = real[real.date == date].sort_values("k")
-    if d.empty:
-        print("нет дня", date)
-        return
-    probs = {}
+    d = real[real.date == date].sort_values("k").copy()
     for tg, (name, dist, pxc) in TARGETS.items():
+        if d.empty:
+            break
         cols = LOCAL + ([dist] if dist else [])
         clf, cols_, dd, X, tr = fit(real, tg, cols, split)
         x = X_of(d, cols).reindex(columns=cols_, fill_value=0.0)
-        probs[tg] = clf.predict_proba(x)[:, 1]
+        d["p_" + tg] = clf.predict_proba(x)[:, 1]
+    return d
+
+
+def card(real, date, split):
+    d = status_probs(real, date, split)
+    if d.empty:
+        print("нет дня", date)
+        return
+    date = pd.Timestamp(date)
     print(f"\nСтатус {date:%d.%m.%Y} (модель учится на днях до {split:%Y-%m-%d}); [✓] — цель потом взята, [ ] — нет, · — уже взята")
-    for i, (_, r) in enumerate(d.iterrows()):
-        head = (f"\nпосле {r.moment}: цена {'в VA' if r.px_vs_yva == 'в VA' else r.px_vs_yva} вчера, "
-                f"{'выше' if r.px_vs_dpoc == 'выше' else 'ниже'} POC дня, форма {r.pshape}, кто обновляет: {r.control:+d}, "
-                f"последний период — {r.last}; зона под ценой: {r.zone_px}")
-        print(head)
+    for _, r in d.iterrows():
+        print(f"\nпосле {r.moment}: цена {r.px_vs_yva} вчера, {'выше' if r.px_vs_dpoc == 'выше' else 'ниже'} POC дня, "
+              f"форма {r.pshape}, кто обновляет: {r.control:+d}, последний период — {r['last']}; зона под ценой: {r.zone_px}")
         parts = []
         for tg, (name, dist, pxc) in TARGETS.items():
             v = r[tg]
@@ -192,7 +198,7 @@ def card(real, date, split):
                 parts.append(f"{name} ·")
                 continue
             lvl = f" {r[pxc]:.2f}" if pxc and not pd.isna(r[pxc]) else ""
-            parts.append(f"{name}{lvl} {probs[tg][i]:.0%} [{'✓' if v == 1 else ' '}]")
+            parts.append(f"{name}{lvl} {r['p_' + tg]:.0%} [{'✓' if v == 1 else ' '}]")
         print("   " + " | ".join(parts))
 
 

@@ -11,6 +11,6 @@ def test_naked_pocs_untouched_and_contract():
         "low": [95.0, 108.0, 99.0, 195.0, 201.0], "high": [105.0, 115.0, 125.0, 210.0, 209.0],
     })
     n = naked_pocs(d)
-    assert list(n[pd.Timestamp("2024-06-12")]) == [100.0, 110.0]   # оба ещё не задеты к открытию 12-го
+    assert list(n[pd.Timestamp("2024-06-12")]) == [100.0]          # 110 — вчерашний POC, отдельная цель
     assert list(n[pd.Timestamp("2024-06-13")]) == []               # 12-й задел 100 и 110; ролл 13-го — новый контракт
-    assert list(n[pd.Timestamp("2024-06-14")]) == [200.0]          # только POC нового контракта
+    assert list(n[pd.Timestamp("2024-06-14")]) == []               # 200 — вчерашний; старый контракт не берётся

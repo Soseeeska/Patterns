@@ -4,8 +4,8 @@
 периода k включительно, open, вчерашнему RTH-профилю и зонам 1.8 к открытию дня (ZoneSnap). Цели — уровни, ещё не
 взятые к концу k: достигнуты ли до конца RTH. Цены — графика (сырые RTH 30m, как в MotiveWave).
 
-nPOC (голый POC) — POC прошлого RTH-дня того же контракта (после последнего ролла), который ни один следующий RTH-день
-не задел (low ≤ POC ≤ high), до вчерашнего дня включительно; ищется в 20 последних днях.
+nPOC (голый POC) — POC RTH-дня того же контракта (после последнего ролла) не позже позавчерашнего, который ни один
+следующий RTH-день не задел (low ≤ POC ≤ high); ищется в 20 последних днях. Вчерашний POC — отдельная цель.
 """
 from __future__ import annotations
 
@@ -29,9 +29,7 @@ def naked_pocs(days: pd.DataFrame, lookback: int = 20) -> dict:
             contract_start = i
         lo = max(contract_start, i - lookback)
         res = []
-        for j in range(lo, i - 1 + 1):
-            if j >= i:
-                break
+        for j in range(lo, i - 1):                   # вчерашний POC — отдельная цель, в nPOC не входит
             p = d.poc[j]
             later = d.iloc[j + 1:i]
             if not ((later.low <= p) & (later.high >= p)).any():
