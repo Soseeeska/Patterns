@@ -25,7 +25,10 @@ import patterns.zones.ZoneEngine.Zone;
  *  (без неё движок не знает, что D — следующий торговый день, и зоны вчерашней сессии не появляются).
  *  Пишет CSV: день × видимая зона (границы на графике, вид, почему серая, правящий композит, отторжения).
  *  java -cp <classes> patterns.zones.ZoneSnap bars_raw.csv out.csv с_даты по_дату [поле=значение ...]
- *  -Dhist=1500 — глубина истории, календарных дней (как MotiveWave). */
+ *  -Dhist=1500 — глубина истории, календарных дней (как MotiveWave).
+ *  Рядом пишет comps_*.csv (по имени out: snap_ → comps_): балансы, известные к открытию дня — закрытые композиты (без
+ *  уточнений) и снимок формирующегося, с VA / POC / ядром и сдвигом роллов после композита (цена в контракте дня =
+ *  цена композита + shift). И rolls_*.csv — роллы, найденные движком к последнему дню: момент (epoch ms) и гэп (новый − старый). */
 public class ZoneSnap {
     public static void main(String[] a) throws Exception {
         List<Bar> bars = Check.read(a[0]);
@@ -42,7 +45,12 @@ public class ZoneSnap {
             int m = lt.getHour() * 60 + lt.getMinute();
             if (m >= p.rthStartMin && m < p.rthEndMin) rthFirst.putIfAbsent(lt.toLocalDate(), i);
         }
-        try (PrintWriter w = new PrintWriter(new OutputStreamWriter(new FileOutputStream(a[1]), "UTF-8"))) {
+        String cf = a[1].contains("snap_") ? a[1].replace("snap_", "comps_") : a[1] + ".comps.csv";
+        String rf = a[1].contains("snap_") ? a[1].replace("snap_", "rolls_") : a[1] + ".rolls.csv";
+        Result last = null;
+        try (PrintWriter w = new PrintWriter(new OutputStreamWriter(new FileOutputStream(a[1]), "UTF-8"));
+             PrintWriter wc = new PrintWriter(new OutputStreamWriter(new FileOutputStream(cf), "UTF-8"))) {
+            wc.println("day,type,start,end,av,days,lo,hi,val,vah,poc,core_lo,core_hi,primary,shift");
             w.println("day,lo,hi,kind,av,born,src,zlo,zhi,minor,sync_minor,va_major,inverted,wavering,primary_color,near_core,"
                     + "age,rej,nl,ns,conf,comp_start,comp_end,comp_lo,comp_hi,core_lo,core_hi,comp_live,comp_primary,grey_cause,"
                     + "prev_vah,prev_val,prev_poc");
@@ -56,6 +64,7 @@ public class ZoneSnap {
                 cut.add(new Bar(bars.get(i0).t, c, c, c, c));
                 Result res = ZoneEngine.run(cut, p);
                 if (res.sessions.isEmpty()) continue;
+                last = res;
                 int n = res.sessions.size();
                 Session s = res.sessions.get(n - 1);
                 if (!s.date.equals(d)) { System.err.println("пропуск " + d + ": последняя сессия " + s.date); continue; }
@@ -74,9 +83,26 @@ public class ZoneSnap {
                             s.prevVah == null ? "" : f(s.prevVah), s.prevVal == null ? "" : f(s.prevVal),
                             s.prevPoc == null ? "" : f(s.prevPoc)));
                 }
-                w.flush();
+                for (Comp k : res.comps) comp(wc, d, "closed", k, res, p);
+                for (Comp k : res.liveComps) if (k.av != null && k.av.equals(d)) comp(wc, d, "live", k, res, p);
+                w.flush(); wc.flush();
             }
         }
+        if (last != null)
+            try (PrintWriter w = new PrintWriter(new OutputStreamWriter(new FileOutputStream(rf), "UTF-8"))) {
+                w.println("roll_ms,gap");
+                for (int k = 0; k < last.rollMs.length; k++) w.println(last.rollMs[k] + "," + f(last.rollGap[k]));
+            }
+    }
+
+    static void comp(PrintWriter w, LocalDate d, String type, Comp c, Result res, Params p) {
+        int[] va = ZoneEngine.valueArea(c.prof, p.valueAreaPct);
+        long endMs = c.end.atTime(16, 0).atZone(p.tz).toInstant().toEpochMilli();
+        double sh = 0;
+        for (int k = 0; k < res.rollMs.length; k++) if (res.rollMs[k] > endMs) sh += res.rollGap[k];
+        w.println(String.join(",", d.toString(), type, String.valueOf(c.start), String.valueOf(c.end), String.valueOf(c.av),
+                String.valueOf(c.days), f(c.lo), f(c.hi), f(va[1] * p.tick), f(va[2] * p.tick), f(va[0] * p.tick),
+                f(c.core.lo), f(c.core.hi), b(c.primary), f(sh)));
     }
 
     static String f(double v) { return String.format(Locale.ROOT, "%.2f", v); }
