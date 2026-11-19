@@ -451,6 +451,10 @@ public final class ZoneEngine {
         if (full.size() < 3) { res.note = "мало RTH-дней в истории"; return res; }
         Map<LocalDate, LocalDate> nextTradeDay = new HashMap<>();
         for (int i = 0; i + 1 < all.size(); i++) nextTradeDay.put(all.get(i).date, all.get(i + 1).date);
+        // данные кончаются в сессии без RTH-баров (индикатор пересчитывает на первом баре Globex, 17:00): следующий
+        // торговый день последнего RTH-дня — эта сессия, иначе его зоны появятся только со следующим пересчётом
+        LocalDate curSess = sessOf[bars.size() - 1], lastRth = all.get(all.size() - 1).date;
+        if (curSess.isAfter(lastRth)) nextTradeDay.put(lastRth, curSess);
 
         // ---------- композиты close_in_range
         List<Zone> ob = new ArrayList<>(), greyComp = new ArrayList<>();
