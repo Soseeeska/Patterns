@@ -6,8 +6,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -151,6 +153,19 @@ public final class ZoneEngine {
         public boolean tailRole = true;
         // ---- серые шире greyMaxPts (по виду на последнюю сессию) не рисуются (1.8.3); 0 — выкл.
         public double greyMaxPts = 5;
+        // ---- пробный патч 1.8.4
+        //      · зона не шире minZonePts (по виду на последнюю сессию) не рисуется, кроме синей; 0 — выкл.;
+        //      · узкие (≤ oneSquareMaxPts = 2 п.) — серые: oneSquareGrey включён (синие и экстремумы остаются);
+        //      · узел шире предела (sessMaxPts × волатильность) режется не по центру, а до окна с максимумом тел (densestCrop);
+        //      · стопка — зоны подряд по цене со щелью ≤ stackGapPts: от низа до верха не выше stackMaxPts; остаются (синие первыми)
+        //        самые проторгованные (средний TPO на строку в RTH-днях с рождения самой ранней зоны стопки), прочие не рисуются; 0 — выкл.;
+        //      · ядро по новому композиту (coreByNewer): новый композит, сложившийся на ценах старого баланса, перекрашивает
+        //        все зоны в своём теле, в т. ч. прежнюю синюю (у его ядра синяя, выше красные, ниже зелёные); уточнений
+        //        (subOverlap) и склейки ядер нет — у каждого композита своё ядро.
+        public double minZonePts = 1;
+        public boolean densestCrop = true;
+        public double stackMaxPts = 10, stackGapPts = 1;
+        public boolean coreByNewer = true;
         public double sessMinGapPts = 0.5;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public double gridPts = 1.0;              // квадрат TPO на графике, п. (tickInterval 4): края зоны — на границах квадратов, в ценах
                                                   // графика; после подгонки по телам край — к ближайшей границе, пополам — квадрат целиком
@@ -172,7 +187,7 @@ public final class ZoneEngine {
 
         // ---- серые и цвет (1.8)
         public boolean gridNarrowKeepBlue = true; // узкие (gridNarrowGrey, oneSquareGrey) — кроме синей: зона у ядра композита остаётся синей
-        public boolean oneSquareGrey = false;      // узкая зона на графике (не шире oneSquareMaxPts; в т. ч. суженная раскладкой) — всегда серая
+        public boolean oneSquareGrey = true;       // узкая зона на графике (не шире oneSquareMaxPts; в т. ч. суженная раскладкой) — всегда серая
         public double oneSquareMaxPts = 2.0;      // ... узкая — не шире стольких п.
         public boolean compRejGrey = true;        // красная / зелёная, колеблющаяся в своём композите, — серая: в днях композита, задавшего ей
                                                   // цвет (с её появления), ≥ compRejMin отторжений и перевес за цвет (красная — снизу, зелёная —
@@ -431,6 +446,7 @@ public final class ZoneEngine {
         public final List<Comp> comps = new ArrayList<>();           // балансы (закрытые композиты, ядро признано)
         public final List<Comp> notBalance = new ArrayList<>();      // композиты, где дни не сошлись (без ядра)
         public final List<Comp> subComps = new ArrayList<>();        // уточнения внутри более раннего баланса
+        public int thinDropped, stackDropped, stacksCut;             // пробный патч 1.8.4: сколько убрано узких / из стопок, стопок урезано
         public final List<Comp> liveComps = new ArrayList<>();       // снимки формирующихся композитов (балансы, не уточнения)
         public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
         public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
@@ -577,7 +593,7 @@ public final class ZoneEngine {
         if (p.compositeMode) {
             // композит, чей диапазон почти целиком внутри более раннего баланса, — уточнение: своего баланса
             // не даёт, его ядро — серая зона, ценой в этом диапазоне управляет родитель
-            if (p.subOverlap > 0) {
+            if (p.subOverlap > 0 && !p.coreByNewer) {
                 List<Comp> parents = new ArrayList<>();
                 for (Comp c : res.comps) {
                     double w = c.hi - c.lo;
@@ -621,7 +637,7 @@ public final class ZoneEngine {
                     boolean near = p.joinGapPts >= 0 && Math.max(e.lo, c.core.lo) - Math.min(e.hi, c.core.hi) <= p.joinGapPts + 1e-9;
                     if ((ov >= p.mergeOverlapMin || near) && ov > bestOv) { best = e; bestOv = ov; }
                 }
-                if (best != null) { cc.get(best).add(c.av.toEpochDay()); c.core = best; }
+                if (best != null) { cc.get(best).add(c.av.toEpochDay()); if (!p.coreByNewer) c.core = best; }
                 else { cores.add(c.core); cc.put(c.core, new ArrayList<>()); }
             }
             for (Zone e : cores) e.coreConf = cc.get(e).stream().mapToLong(Long::longValue).toArray();
@@ -737,7 +753,7 @@ public final class ZoneEngine {
                     List<Long> at = new ArrayList<>(); List<Kind> kd = new ArrayList<>(); List<Comp> cc = new ArrayList<>();
                     for (Comp c : bal) {
                         if (!c.av.isAfter(av) || c.bodyLo > mid || mid > c.bodyHi) continue;
-                        if (!p.sessResyncLater) {
+                        if (!p.sessResyncLater && !p.coreByNewer) {
                             if (grp == null) grp = c.start;
                             if (!c.start.equals(grp)) continue;
                         }
@@ -748,7 +764,7 @@ public final class ZoneEngine {
                         if (p.sessResyncLater && kd.isEmpty() && z.partKind == Kind.CORE && gov != null
                                 && !c.start.equals(gov.start)) break;
                         at.add(c.av.toEpochDay()); kd.add(roleOf(c, z, p)); cc.add(c);
-                        if (!c.live && !p.sessResyncLater) break;
+                        if (!c.live && !p.sessResyncLater && !p.coreByNewer) break;
                     }
                     if (!at.isEmpty()) {
                         z.rcAt = at.stream().mapToLong(Long::longValue).toArray(); z.rcKind = kd.toArray(new Kind[0]); z.rcComp = cc.toArray(new Comp[0]);
@@ -927,6 +943,8 @@ public final class ZoneEngine {
         if (p.compositeMode && p.sessionZones && p.primaryByCore) primaryByCore(res, p);
         if (p.compositeMode && p.sessionZones && p.compSync) compSync(res, p);
         if (p.compositeMode && p.greyMaxPts > 0) dropWideGrey(res, p);
+        if (p.compositeMode && p.minZonePts > 0) dropThin(res, p);
+        if (p.compositeMode && p.stackMaxPts > 0) stackBudget(res, p, all);
         return res;
     }
 
@@ -940,6 +958,84 @@ public final class ZoneEngine {
         for (Shown v : last.values()) if (v.st.kind == Kind.GREY && v.hi - v.lo > p.greyMaxPts + 1e-9) drop.add(v.z);
         if (drop.isEmpty()) return;
         for (List<Shown> l : res.visible) l.removeIf(v -> drop.contains(v.z));
+    }
+
+    /** Окно шириной w внутри [a, b] с максимумом тел (occ); при равенстве — ближе к середине. Начало окна. */
+    static int densest(int[] occ, int a, int b, int w) {
+        int best = (a + b) / 2 - w / 2; long bs = -1; double mid = (a + b) / 2.0, bo = Double.MAX_VALUE;
+        for (int s = a; s + w <= b; s++) {
+            long sum = 0; for (int t = s; t <= s + w && t < occ.length; t++) sum += occ[t];
+            double off = Math.abs(s + w / 2.0 - mid);
+            if (sum > bs || (sum == bs && off < bo)) { bs = sum; best = s; bo = off; }
+        }
+        return best;
+    }
+
+    /** Узкие (не шире minZonePts по виду на последнюю сессию) не рисуются, кроме синих: зона убирается целиком. */
+    static void dropThin(Result res, Params p) {
+        Map<Zone, Shown> last = new HashMap<>();
+        for (List<Shown> l : res.visible) for (Shown v : l) last.put(v.z, v);
+        Set<Zone> drop = new HashSet<>();
+        for (Shown v : last.values()) if (v.st.kind != Kind.CORE && v.hi - v.lo <= p.minZonePts + 1e-9) drop.add(v.z);
+        res.thinDropped = drop.size();
+        if (!drop.isEmpty()) for (List<Shown> l : res.visible) l.removeIf(v -> drop.contains(v.z));
+    }
+
+    /** Стопки по виду на последнюю сессию: зоны подряд по цене со щелью ≤ stackGapPts; стопка выше stackMaxPts (от низа до
+     *  верха, со щелями) — первыми берутся синие, затем остальные, каждые по проторгованности (средний TPO на строку в RTH-днях
+     *  с рождения самой ранней зоны стопки), пока ни одна стопка из оставленных не выше stackMaxPts; остальные не рисуются
+     *  (целиком). */
+    static void stackBudget(Result res, Params p, List<Day> days) {
+        Map<Zone, Shown> last = new LinkedHashMap<>();
+        for (List<Shown> l : res.visible) for (Shown v : l) last.put(v.z, v);
+        List<Shown> vs = new ArrayList<>(last.values());
+        vs.sort(Comparator.comparingDouble(v -> v.lo));
+        Set<Zone> drop = new HashSet<>();
+        List<List<Shown>> runs = new ArrayList<>(); List<Shown> cur = new ArrayList<>(); double top = -1e18;
+        for (Shown v : vs) {
+            if (!cur.isEmpty() && v.lo - top > p.stackGapPts + 1e-9) { runs.add(cur); cur = new ArrayList<>(); }
+            cur.add(v); top = cur.size() == 1 ? v.hi : Math.max(top, v.hi);
+        }
+        if (!cur.isEmpty()) runs.add(cur);
+        for (List<Shown> r : runs) {
+            double lo0 = Double.MAX_VALUE, hi0 = -Double.MAX_VALUE;
+            for (Shown v : r) { lo0 = Math.min(lo0, v.lo); hi0 = Math.max(hi0, v.hi); }
+            if (hi0 - lo0 <= p.stackMaxPts + 1e-9) continue;
+            res.stacksCut++;
+            LocalDate from = null;
+            for (Shown v : r) if (from == null || v.z.av.isBefore(from)) from = v.z.av;
+            Map<Shown, Double> dens = new HashMap<>();
+            for (Shown v : r) {
+                int t0 = ticks(v.lo, p.tick), t1 = ticks(v.hi, p.tick); double tot = 0;
+                for (Day d : days) {
+                    if (d.date.isBefore(from)) continue;
+                    int[] c = d.profile.counts;
+                    for (int t = Math.max(t0, d.profile.low); t <= Math.min(t1, d.profile.low + c.length - 1); t++) tot += c[t - d.profile.low];
+                }
+                dens.put(v, tot / (t1 - t0 + 1));
+            }
+            List<Shown> order = new ArrayList<>(r);
+            order.sort((x, y) -> x.st.kind == Kind.CORE ^ y.st.kind == Kind.CORE ? (x.st.kind == Kind.CORE ? -1 : 1)
+                    : Double.compare(dens.get(y), dens.get(x)));
+            List<Shown> kept = new ArrayList<>();
+            for (Shown v : order) {
+                kept.add(v);
+                if (kept.size() > 1 && maxSpan(kept, p.stackGapPts) > p.stackMaxPts + 1e-9) { kept.remove(v); drop.add(v.z); }
+            }
+        }
+        res.stackDropped = drop.size();
+        if (!drop.isEmpty()) for (List<Shown> l : res.visible) l.removeIf(v -> drop.contains(v.z));
+    }
+
+    /** Самая широкая стопка (зоны подряд со щелью ≤ gap) среди данных: размах от низа до верха, п. */
+    static double maxSpan(List<Shown> zs, double gap) {
+        List<Shown> v = new ArrayList<>(zs); v.sort(Comparator.comparingDouble(x -> x.lo));
+        double best = 0, lo = 0, hi = -Double.MAX_VALUE;
+        for (Shown x : v) {
+            if (x.lo - hi > gap + 1e-9) lo = x.lo;
+            hi = Math.max(hi, x.hi); best = Math.max(best, hi - lo);
+        }
+        return best;
     }
 
     /** Зона экстремума у края баланса: поддержка не выше VAL, сопротивление не ниже VAH (± extEdgeTolPts) последнего
@@ -1704,14 +1800,14 @@ public final class ZoneEngine {
                     int zl = x0 - onePt, zh = x1 - onePt;
                     int nw = zh - zl < sq ? 1 : 0;                   // скопление тел уже одного квадрата
                     if (zh - zl < onePt) { int mid = (zl + zh) / 2; zl = mid - onePt / 2; zh = zl + onePt; }
-                    if (zh - zl > maxW) { int mid = (zl + zh) / 2; zl = mid - maxW / 2; zh = zl + maxW; }
+                    if (zh - zl > maxW) { int s0 = p.densestCrop ? densest(occ, zl + onePt, zh + onePt, maxW) - onePt : (zl + zh) / 2 - maxW / 2; zl = s0; zh = zl + maxW; }
                     out.add(new int[]{pf.low + zl, pf.low + zh, q[0], weak, nw}); added++;
                 }
                 if (added > 0) continue;                           // тел нет — как раньше, узел целиком
             }
             int nw = hi - lo < sq ? 1 : 0;
             if (hi - lo < onePt) { int mid = (lo + hi) / 2; lo = mid - onePt / 2; hi = lo + onePt; }
-            if (hi - lo > maxW) { int mid = (lo + hi) / 2; lo = mid - maxW / 2; hi = lo + maxW; }
+            if (hi - lo > maxW) { int s0 = p.densestCrop ? densest(occ, lo + onePt, hi + onePt, maxW) - onePt : (lo + hi) / 2 - maxW / 2; lo = s0; hi = lo + maxW; }
             out.add(new int[]{pf.low + lo, pf.low + hi, q[0], weak, nw});
         }
         out.sort((x, y) -> Integer.compare(x[3], y[3]));       // основные узлы первыми — место у них, минорные потом

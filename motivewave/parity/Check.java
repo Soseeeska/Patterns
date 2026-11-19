@@ -60,6 +60,7 @@ public class Check {
         int ex = 0, exS = 0, exNear = 0;
         for (Shown v : last) if (v.z.ext) { ex++; if (v.st.kind == Kind.HVN_S) exS++; if (Math.abs((v.lo + v.hi) / 2 - open) <= 150) exNear++; }
         System.out.printf("из них зон экстремумов: %d (зелёных %d, красных %d), в ± 150 п. от open %d%n", ex, exS, ex - exS, exNear);
+        System.out.printf("не рисуются: узких (≤ %.0f п.) %d; стопок выше %.0f п. урезано %d, зон из них убрано %d%n", p.minZonePts, res.thinDropped, p.stackMaxPts, res.stacksCut, res.stackDropped);
     }
 
     /** Последнее правило, которое сделало зону серой (правила идут по порядку, см. README «Серые»). */

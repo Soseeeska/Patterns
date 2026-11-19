@@ -33,17 +33,17 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 
 /**
- * TPO Zones 1.8.3 — плотная карта зон ES прямо на графике MotiveWave: обёртка SDK (настройки и фигуры).
+ * TPO Zones 1.8.4 — плотная карта зон ES прямо на графике MotiveWave: обёртка SDK (настройки и фигуры).
  * Все пороги алгоритма зашиты в коде — значения по умолчанию ZoneEngine.Params (там же их описание); в настройках
  * индикатора только вид: цвета, заливка, что показывать, бары профиля. В jar классы лежат в пакете своей версии
- * (build.sh: patterns.zones → patterns.zones.v1_8_3): jar разных версий в расширениях MotiveWave не подменяют друг друга;
+ * (build.sh: patterns.zones → patterns.zones.v1_8_4): jar разных версий в расширениях MotiveWave не подменяют друг друга;
  * версия и сборка — в строке info индикатора. Расчёт — ZoneEngine, что рисовать — ZonePlan (оба без SDK); по 30m-барам
  * инструмента, на любом таймфрейме графика. Принцип действия — motivewave/README.md.
  */
 @StudyHeader(
     namespace = "com.patterns",
-    id = "TPO_ZONES_1_8_3",
-    name = "TPO Zones 1.8.3",
+    id = "TPO_ZONES_1_8_4",
+    name = "TPO Zones 1.8.4",
     label = "TPO Zones",
     desc = "Плотная карта зон по RTH TPO-профилям: зоны проторговки и экстремумов на краях балансов, по телам свечей и квадратам TPO, цвет по композиту",
     menu = "Patterns",
@@ -53,7 +53,7 @@ import patterns.zones.ZoneEngine.Result;
     supportsBarUpdates = false)
 public class TpoZonesStudy extends Study {
     /** Версия и сборка: build.sh подставляет в BUILD дату и коммит; в исходниках — "dev" (сборка не через build.sh). */
-    static final String VERSION = "1.8.3";
+    static final String VERSION = "1.8.4";
     static final String BUILD = "dev";
 
     /** История, календарных дней (как грузит MotiveWave; на неё настроены пороги). */
@@ -125,6 +125,7 @@ public class TpoZonesStudy extends Study {
             draw(res, p);
             info("TPO Zones " + VERSION + " (сборка " + BUILD + "): RTH-дней " + res.rthDays + " (полных " + res.fullDays + "), зон " + res.zones.size()
                     + ", из них зон экстремумов " + res.zones.stream().filter(z -> z.ext).count()
+                    + ", не рисуется: узких (≤ 1 п.) " + res.thinDropped + ", лишних в стопках " + res.stackDropped
                     + (res.rawPrices ? ", роллов найдено " + res.rollMs.length + " (цены графика)" : ", роллов склеено " + res.rollMs.length)
                     + ", сессий на графике " + res.sessions.size() + (res.note.isEmpty() ? "" : " — " + res.note));
         } catch (Exception e) {
