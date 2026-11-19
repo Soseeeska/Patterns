@@ -73,16 +73,6 @@ public final class ZonePlan {
                 i = j + 1;
             }
         }
-        // зоны экстремумов (1.8.2): от сессии появления до бара пробоя (второй close за зоной), поверх остальных
-        for (Zone z : res.extremes) {
-            if (z.av.isAfter(ss.get(n - 1).date) || z.extEndMs <= t0[0]) continue;
-            int i0 = 0;
-            while (i0 < n && ss.get(i0).date.isBefore(z.av)) i0++;
-            long a = i0 < n ? t0[i0] : t0[n - 1];
-            long b = z.extEndMs == Long.MAX_VALUE || z.extEndMs > t1[n - 1] ? zoneEnd : z.extEndMs;
-            if (b <= a) continue;
-            plan.rects.add(new Rect(z, z.extRes ? Kind.EXT_R : Kind.EXT_S, a, b, extTip(z), z.lo, z.hi));
-        }
         for (int i = 0; i < n; i++) {
             Session s = ss.get(i);
             if (s.prevPoc == null) continue;
@@ -121,6 +111,9 @@ public final class ZonePlan {
         else if ("sess".equals(z.src)) b.append(!v.st.recolored ? "\nсессионная зона (узел TPO, подогнан по телам)"
                 : v.st.comp != null && v.st.comp.live ? "\nсессионная зона, роль по формирующемуся композиту (снимок по " + v.st.comp.end + ")"
                 : "\nсессионная зона, перекрашена композитом");
+        if ("ext".equals(z.src)) b.append("\nзона экстремума: ").append(z.extRes ? "хай" : "лой").append(" сессии ").append(z.extSrc).append(" ")
+                .append(fmt(z.extPrice)).append(", цена ушла на ").append(z.info).append(" п.; края по телам, тени снаружи");
+        for (String nt : z.extNotes) b.append("\n").append(nt);
         if ("part".equals(z.src)) b.append("\nразметка композита (подтверждений — совпавшими кусками поздних композитов)");
         b.append("\nпоявилась ").append(z.av).append(", возраст ").append(v.st.age).append(" дн. (на ").append(on).append(')');
         b.append("\nотторжений ").append(v.st.rej).append(" (лонг ").append(v.st.nl).append(" / шорт ").append(v.st.ns);
@@ -136,18 +129,6 @@ public final class ZonePlan {
         if (v.st.promoted) b.append("\nбыла серой, переведена по отторжениям за подгонку");
         if (p.alignSessions > 0 && (z.blo != z.lo || z.bhi != z.hi))
             b.append("\nподгонка по ").append(p.alignSessions).append(" сесс.: была ").append(fmt(z.lo)).append(" – ").append(fmt(z.hi));
-        return b.toString();
-    }
-
-    static String extTip(Zone z) {
-        StringBuilder b = new StringBuilder();
-        b.append(z.extRes ? Kind.EXT_R.title : Kind.EXT_S.title).append("  ").append(fmt(z.lo)).append(" – ").append(fmt(z.hi));
-        b.append(z.extRes ? "\nхай" : "\nлой").append(" сессии ").append(z.extSrc).append(": ").append(fmt(z.extPrice))
-                .append("; цена ушла от него на ").append(z.info).append(" п. — зона с ").append(z.av);
-        b.append("\nкрая: ").append(z.extRes ? "медиана хаёв и верхних краёв тел" : "медиана лоёв и нижних краёв тел")
-                .append(" свечей у экстремума");
-        if (z.extConf > 0) b.append("\nподтверждений (повторный экстремум рядом): ").append(z.extConf);
-        b.append(z.extEnd == null ? "\nживёт до пробоя двумя close подряд" : "\nпробита (два close подряд) в сессию " + z.extEnd);
         return b.toString();
     }
 

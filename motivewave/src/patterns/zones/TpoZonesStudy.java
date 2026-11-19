@@ -33,19 +33,19 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 
 /**
- * TPO Zones 1.8.2 — плотная карта зон ES прямо на графике MotiveWave: обёртка SDK (настройки и фигуры).
+ * TPO Zones 1.8.3 — плотная карта зон ES прямо на графике MotiveWave: обёртка SDK (настройки и фигуры).
  * Все пороги алгоритма зашиты в коде — значения по умолчанию ZoneEngine.Params (там же их описание); в настройках
  * индикатора только вид: цвета, заливка, что показывать, бары профиля. В jar классы лежат в пакете своей версии
- * (build.sh: patterns.zones → patterns.zones.v1_8_2): jar разных версий в расширениях MotiveWave не подменяют друг друга;
+ * (build.sh: patterns.zones → patterns.zones.v1_8_3): jar разных версий в расширениях MotiveWave не подменяют друг друга;
  * версия и сборка — в строке info индикатора. Расчёт — ZoneEngine, что рисовать — ZonePlan (оба без SDK); по 30m-барам
  * инструмента, на любом таймфрейме графика. Принцип действия — motivewave/README.md.
  */
 @StudyHeader(
     namespace = "com.patterns",
-    id = "TPO_ZONES_1_8_2",
-    name = "TPO Zones 1.8.2",
+    id = "TPO_ZONES_1_8_3",
+    name = "TPO Zones 1.8.3",
     label = "TPO Zones",
-    desc = "Плотная карта зон по RTH TPO-профилям: зоны проторговки по телам свечей и квадратам TPO, цвет по композиту, зоны экстремумов на краях балансов",
+    desc = "Плотная карта зон по RTH TPO-профилям: зоны проторговки и экстремумов на краях балансов, по телам свечей и квадратам TPO, цвет по композиту",
     menu = "Patterns",
     overlay = true,
     studyOverlay = false,
@@ -53,7 +53,7 @@ import patterns.zones.ZoneEngine.Result;
     supportsBarUpdates = false)
 public class TpoZonesStudy extends Study {
     /** Версия и сборка: build.sh подставляет в BUILD дату и коммит; в исходниках — "dev" (сборка не через build.sh). */
-    static final String VERSION = "1.8.2";
+    static final String VERSION = "1.8.3";
     static final String BUILD = "dev";
 
     /** История, календарных дней (как грузит MotiveWave; на неё настроены пороги). */
@@ -61,21 +61,19 @@ public class TpoZonesStudy extends Study {
 
     // ---- ключи настроек (только вид)
     static final String BAR30 = "bar30", SHOW_GREY = "showGrey", SHOW_EXT = "showExt", PREV = "prev",
-            PREV_VA = "prevVaColor", PREV_POC = "prevPocColor", OP_MAIN = "opMain", OP_GREY = "opGrey", OP_EXT = "opExt";
+            PREV_VA = "prevVaColor", PREV_POC = "prevPocColor", OP_MAIN = "opMain", OP_GREY = "opGrey";
     /** Виды зон, которые рисует индикатор, — подпись и цвет по умолчанию (прежние режимы 1.1–1.6 в настройки не выводятся). */
-    static final Kind[] SHOWN = {Kind.CORE, Kind.HVN_R, Kind.HVN_S, Kind.GREY, Kind.EXT_R, Kind.EXT_S};
+    static final Kind[] SHOWN = {Kind.CORE, Kind.HVN_R, Kind.HVN_S, Kind.GREY};
     static final Map<Kind, String> COLOR = new EnumMap<>(Kind.class), LABEL = new EnumMap<>(Kind.class);
     static final Map<Kind, Color> DEF_COLOR = new EnumMap<>(Kind.class);
     static {
         for (Kind k : Kind.values()) COLOR.put(k, "color_" + k.name());
         LABEL.put(Kind.CORE, "Синяя — проторговка композита"); LABEL.put(Kind.HVN_R, "Красная — сопротивление");
         LABEL.put(Kind.HVN_S, "Зелёная — поддержка"); LABEL.put(Kind.GREY, "Серая — минорная");
-        LABEL.put(Kind.EXT_R, "Сопротивление экстремума"); LABEL.put(Kind.EXT_S, "Поддержка экстремума");
         DEF_COLOR.put(Kind.HVN_S, new Color(0x006400)); DEF_COLOR.put(Kind.HVN_R, new Color(0x8B0000));
         DEF_COLOR.put(Kind.HVN_RANGE, new Color(0x6250d6)); DEF_COLOR.put(Kind.HVN_NEW, new Color(0x7d858c));
         DEF_COLOR.put(Kind.OLD_BALANCE, new Color(0x00158B)); DEF_COLOR.put(Kind.GREY, new Color(0x7d858c));
         DEF_COLOR.put(Kind.CORE, new Color(0x00158B));
-        DEF_COLOR.put(Kind.EXT_S, new Color(0x2e9d3a)); DEF_COLOR.put(Kind.EXT_R, new Color(0xd32f2f));
     }
 
     private LocalDate computedFor;   // сессия последнего бара на момент расчёта
@@ -93,7 +91,6 @@ public class TpoZonesStudy extends Study {
         g = tab.addGroup("Заливка, %");
         g.addRow(new IntegerDescriptor(OP_MAIN, "Зоны", 30, 0, 100, 1));
         g.addRow(new IntegerDescriptor(OP_GREY, "Серые", 30, 0, 100, 1));
-        g.addRow(new IntegerDescriptor(OP_EXT, "Зоны экстремумов", 45, 0, 100, 1));
         g = tab.addGroup("Вчерашний профиль");
         g.addRow(new ColorDescriptor(PREV_VA, "VAH / VAL", new Color(0x8a9097)));
         g.addRow(new ColorDescriptor(PREV_POC, "POC", new Color(0xe2662c)));
@@ -127,7 +124,7 @@ public class TpoZonesStudy extends Study {
             computedFor = res.sessions.get(res.sessions.size() - 1).date;
             draw(res, p);
             info("TPO Zones " + VERSION + " (сборка " + BUILD + "): RTH-дней " + res.rthDays + " (полных " + res.fullDays + "), зон " + res.zones.size()
-                    + ", зон экстремумов " + res.extremes.size()
+                    + ", из них зон экстремумов " + res.zones.stream().filter(z -> z.ext).count()
                     + (res.rawPrices ? ", роллов найдено " + res.rollMs.length + " (цены графика)" : ", роллов склеено " + res.rollMs.length)
                     + ", сессий на графике " + res.sessions.size() + (res.note.isEmpty() ? "" : " — " + res.note));
         } catch (Exception e) {
@@ -178,27 +175,24 @@ public class TpoZonesStudy extends Study {
     private void draw(Result res, Params p) {
         Settings st = getSettings();
         ZonePlan plan = ZonePlan.of(res, p);
-        Map<Kind, Color> fill = new EnumMap<>(Kind.class), line = new EnumMap<>(Kind.class);
+        Map<Kind, Color> fill = new EnumMap<>(Kind.class);
         for (Kind k : Kind.values()) {
             Color c = st.getColor(COLOR.get(k));
             if (c == null) c = DEF_COLOR.get(k);
-            boolean ext = k == Kind.EXT_S || k == Kind.EXT_R;
-            int op = ext ? st.getInteger(OP_EXT, 45) : k == Kind.GREY ? st.getInteger(OP_GREY, 30) : st.getInteger(OP_MAIN, 30);
-            fill.put(k, alpha(c, op));
-            line.put(k, ext ? alpha(c.brighter(), 90) : new Color(0, 0, 0, 0));   // обводка — только у зон экстремумов
+            fill.put(k, alpha(c, k == Kind.GREY ? st.getInteger(OP_GREY, 30) : st.getInteger(OP_MAIN, 30)));
         }
-        List<Figure> figs = new ArrayList<>(), top = new ArrayList<>();
+        Color none = new Color(0, 0, 0, 0);
+        List<Figure> figs = new ArrayList<>();
         for (ZonePlan.Rect r : plan.rects) {
             // куски разметки стоят вплотную: верх на 1 тик ниже, чтобы соседние полосы читались отдельно
             double hi = r.z.k == ZoneEngine.K_PART && r.hi - r.lo > 2 * p.tick ? r.hi - p.tick : r.hi;
             Box b = new Box(r.t0, hi, r.t1, r.lo);
             b.setFillColor(fill.get(r.kind));
-            b.setLineColor(line.get(r.kind));
+            b.setLineColor(none);
             b.setUnderlay(true);
             b.setPopupMessage(r.tip);
-            (r.z.k == ZoneEngine.K_EXT ? top : figs).add(b);                      // зоны экстремумов — поверх
+            figs.add(b);
         }
-        figs.addAll(top);
         if (st.getBoolean(PREV, true)) {
             Color va = st.getColor(PREV_VA), poc = st.getColor(PREV_POC);
             if (va == null) va = new Color(0x8a9097);

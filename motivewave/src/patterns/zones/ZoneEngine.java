@@ -37,13 +37,12 @@ import java.util.TreeMap;
 public final class ZoneEngine {
 
     // ------------------------------------------------------------------ виды зон
-    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_PART = 3, K_SESS = 4, K_GREY = 5, K_EXT = 6;
+    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_PART = 3, K_SESS = 4, K_GREY = 5;
 
     public enum Kind {
         HVN_S("HVN · поддержка"), HVN_R("HVN · сопротивление"), HVN_RANGE("HVN · проторговка"),
         HVN_NEW("HVN · без истории"), OLD_BALANCE("Старый баланс (VA композита)"),
-        GREY("Серая (мало истории / узкая)"), CORE("Проторговка композита"),
-        EXT_S("Поддержка экстремума"), EXT_R("Сопротивление экстремума");
+        GREY("Серая (мало истории / узкая)"), CORE("Проторговка композита");
         public final String title;
         Kind(String t) { title = t; }
     }
@@ -125,18 +124,33 @@ public final class ZoneEngine {
         //      (gridPts) и зазоры не масштабируются — это квадраты графика.
         public boolean volScale = true;
         public double volRefPts = 54.5;           // медиана RTH-дня 2024–2026 (период, на котором настраивались пороги)
-        // ---- зоны экстремумов (1.8.2): поддержка на лое / сопротивление на хае Globex-сессии, где цену отбросили.
-        //      Свечи у экстремума (полоса extBandShare диапазона сессии, 1.5 … extBandMaxPts п.): верх зоны — медиана их хаёв,
-        //      низ — медиана верхних краёв тел (у лоя — зеркально); ширина extMinPts … extMaxPts. Зона появляется со
-        //      следующей сессии после того, как цена ушла от экстремума на max(extAwayPts, extAwayAdr × средний диапазон
-        //      20 прошлых сессий) раньше, чем два close подряд за зоной; живёт до таких двух close. Только у краёв баланса:
-        //      поддержка — не выше VAL своего баланса (+ extEdgeTolPts), сопротивление — не ниже VAH; вне балансов — всегда.
-        //      Близкая (ближе extJoinGapPts) к живой зоне экстремума той же стороны — её подтверждение.
+        // ---- зоны экстремумов (1.8.3): поддержка на лое / сопротивление на хае Globex-сессии, где цену отбросили, — обычные
+        //      сессионные зоны (красная / зелёная, вправо до края, одна полоса), только из другого источника:
+        //      · экстремум подтверждён: цена ушла от него на max(extAwayPts, extAwayAdr × средний диапазон 20 прошлых сессий)
+        //        раньше, чем два close подряд за зоной; зона — со следующей сессии;
+        //      · края по телам, тени снаружи: внутри мнимой зоны у экстремума (extBandShare диапазона сессии, 1.5 … extBandMaxPts п.)
+        //        скопление тел; если там одни тени — ближайшая к экстремуму стопка краёв тел (≥ 2 в пределах 1 п., не дальше
+        //        порога «ушли»), одиночное тело — не край; затем подгонка (extFit) по квадратам TPO;
+        //      · только у краёв баланса (extEdgeOnly): поддержка не выше VAL своего баланса (+ extEdgeTolPts), сопротивление не
+        //        ниже VAH; вне балансов — всегда;
+        //      · обычные зоны в приоритете: экстремум встаёт только на свободное место (после всех обычных зон, в раскладке
+        //        последним); рядом с зоной (ближе sessMinGapPts) — её подтверждение (зона не меняется, заметка в подсказке);
+        //      · под вершиной в price discovery (extArea: выше всех прежних цен, откат ≤ 2 порогов «ушли») — подтверждение вершины;
+        //      · вне серых правил, синей не бывает; цвет — композит по ядру / хвост баланса / сторона экстремума.
         public boolean extremes = true;
-        public double extBandShare = 0.15, extBandMaxPts = 5, extMinPts = 1, extMaxPts = 4;
-        public double extAwayPts = 8, extAwayAdr = 0.25, extJoinGapPts = 1;
+        public double extBandShare = 0.15, extBandMaxPts = 5;
+        public double extAwayPts = 8, extAwayAdr = 0.25;
         public boolean extEdgeOnly = true;
         public double extEdgeTolPts = 1;
+        public boolean extArea = true;
+        public boolean extFit = true;             // подгонка краёв по свечам сессии экстремума: + тело под краем, тень наружу; + край тела
+        public double extFitMinPts = 2;           // в зоне; − 2 × тело прошило край. Ширина ≥ extFitMinPts, ≤ max(его, 1.5 × исходной)
+        public double extFitSearchPts = 2;        // и лимита зоны; край — в ± extFitSearchPts от исходного
+        // ---- хвост баланса (1.8.3): зона в диапазоне баланса, но вне его тела — над телом красная, под телом зелёная (иначе — по
+        //      сессии рождения: у вершины над балансом выходили «поддержки»)
+        public boolean tailRole = true;
+        // ---- серые шире greyMaxPts (по виду на последнюю сессию) не рисуются (1.8.3); 0 — выкл.
+        public double greyMaxPts = 5;
         public double sessMinGapPts = 0.5;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public double gridPts = 1.0;              // квадрат TPO на графике, п. (tickInterval 4): края зоны — на границах квадратов, в ценах
                                                   // графика; после подгонки по телам край — к ближайшей границе, пополам — квадрат целиком
@@ -366,12 +380,14 @@ public final class ZoneEngine {
         long[] coreConf = new long[0];                       // ядро: дни подтверждений другими композитами
         long[] govAv = new long[0]; Comp[] gov = new Comp[0]; // композиты, в диапазон которых попадает зона
         public long avOrd() { return av.toEpochDay(); }
-        // зона экстремума (k == K_EXT)
+        // зона экстремума (src = "ext")
+        public boolean ext;                                  // сессионная зона из экстремума: вне серых правил, синей не бывает
         public boolean extRes;                               // сопротивление на хае (иначе поддержка на лое)
-        public LocalDate extSrc, extEnd;                     // сессия экстремума; сессия пробоя (null — не пробита)
+        public LocalDate extSrc;                             // сессия экстремума
         public double extPrice;                              // сам хай / лой сессии
-        public long extEndMs = Long.MAX_VALUE;               // конец бара пробоя (второй close за зоной)
-        public int extConf;                                  // подтверждений: повторный экстремум рядом
+        public final List<String> extNotes = new ArrayList<>();   // подтверждения экстремумами (подсказка)
+        double extAway, extPrior; int extBar;                // порог «ушли»; прежний максимум / минимум цен; бар экстремума
+        int extA, extE; double extCap;                       // бары сессии экстремума [extA, extE); лимит ширины, п.
     }
 
     /** Композит ≥ compositeMinDays: диапазон и его ядро (зона проторговки). */
@@ -416,7 +432,6 @@ public final class ZoneEngine {
         public final List<Comp> notBalance = new ArrayList<>();      // композиты, где дни не сошлись (без ядра)
         public final List<Comp> subComps = new ArrayList<>();        // уточнения внутри более раннего баланса
         public final List<Comp> liveComps = new ArrayList<>();       // снимки формирующихся композитов (балансы, не уточнения)
-        public final List<Zone> extremes = new ArrayList<>();        // зоны экстремумов (1.8.2), со своим сроком жизни
         public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
         public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
         public boolean rawPrices;                                    // rollRaw: цены не сдвигались (rollShift = 0, расчёт в ценах графика)
@@ -664,7 +679,10 @@ public final class ZoneEngine {
             Map<Zone, int[]> sibling = new HashMap<>();                 // зона → {день, мнимая зона} (уточнение)
             int onePt = (int) Math.round(1.0 / tick), maxW = (int) Math.round(p.sessMaxPts / tick);
             double mwk = p.minWickTicks * tick;
-            for (Day d : full) {
+            List<Zone> extC = p.extremes ? extremeCandidates(bars, sessOf, days, res, p) : new ArrayList<>();
+            for (int di = 0; di <= full.size(); di++) {
+                if (di == full.size()) { for (Zone x : extC) placeExtreme(x, ses, cf, bal, res, p, days); break; }   // после обычных
+                Day d = full.get(di);
                 LocalDate av = nextTradeDay.get(d.date);
                 if (av == null) continue;
                 double gsh = rollShift(res, av.atStartOfDay(p.tz).toInstant().toEpochMilli());   // цены графика = цены расчёта − сдвиг
@@ -707,7 +725,11 @@ public final class ZoneEngine {
                     double mid = (z.lo + z.hi) / 2;
                     Comp gov = null;
                     for (Comp c : bal) if (!c.av.isAfter(av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
-                    z.partKind = gov != null ? roleOf(gov, z, p) : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
+                    Comp tail = null;
+                    if (gov == null && p.tailRole)
+                        for (Comp c : res.comps) if (!c.av.isAfter(av) && c.lo <= mid && mid <= c.hi && c.bodyHi > c.bodyLo) tail = c;
+                    z.partKind = gov != null ? roleOf(gov, z, p) : tail != null ? (mid > tail.bodyHi ? Kind.HVN_R : Kind.HVN_S)
+                            : roleByDay(d, z.lo, z.hi, mwk, p.sessRoleMode);
                     if (gov != null) z.partOf = gov;
                     // синхронизация с композитом: один композит (первый, накрывший зону после рождения, или формирующийся, в
                     // котором она родилась); пока он формируется — каждый снимок, после закрытия — заморожено
@@ -904,81 +926,20 @@ public final class ZoneEngine {
         if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
         if (p.compositeMode && p.sessionZones && p.primaryByCore) primaryByCore(res, p);
         if (p.compositeMode && p.sessionZones && p.compSync) compSync(res, p);
-        if (p.compositeMode && p.extremes) extremeZones(bars, sessAll, res, p);
+        if (p.compositeMode && p.greyMaxPts > 0) dropWideGrey(res, p);
         return res;
     }
 
-    // ------------------------------------------------------------------ зоны экстремумов (1.8.2)
-    /** Поддержка на лое и сопротивление на хае каждой Globex-сессии, где цену отбросили (см. Params, «зоны экстремумов»).
-     *  Без заглядывания вперёд: зона видна с сессии после подтверждения (ушли от экстремума) и до пробоя двумя close. */
-    static void extremeZones(List<Bar> bars, List<Session> ss, Result res, Params p) {
-        int n = bars.size();
-        if (n == 0 || ss.isEmpty()) return;
-        int[] sessIdx = new int[n];
-        for (int i = 0; i < ss.size(); i++) for (int j = ss.get(i).firstBar; j <= ss.get(i).lastBar; j++) sessIdx[j] = i;
-        double[] rng = new double[ss.size()];
-        for (int i = 0; i < ss.size(); i++) {
-            double h = -Double.MAX_VALUE, l = Double.MAX_VALUE;
-            for (int j = ss.get(i).firstBar; j <= ss.get(i).lastBar; j++) { h = Math.max(h, bars.get(j).h); l = Math.min(l, bars.get(j).l); }
-            rng[i] = h - l;
-        }
-        List<Zone> cand = new ArrayList<>();
-        for (int i = 0; i < ss.size(); i++) {
-            int a = ss.get(i).firstBar, e = ss.get(i).lastBar + 1;
-            double r = rng[i];
-            if (r <= 0) continue;
-            double band = Math.min(p.extBandMaxPts, Math.max(1.5, p.extBandShare * r));
-            double adr = r;
-            if (i >= 5) { double s = 0; int k0 = Math.max(0, i - 20); for (int k = k0; k < i; k++) s += rng[k]; adr = s / (i - k0); }
-            double away = Math.max(p.extAwayPts, p.extAwayAdr * adr);
-            for (boolean res_ : new boolean[]{true, false}) {
-                double ext = res_ ? -Double.MAX_VALUE : Double.MAX_VALUE; int at = a;
-                for (int j = a; j < e; j++) {
-                    Bar b = bars.get(j);
-                    if (res_ ? b.h > ext : b.l < ext) { ext = res_ ? b.h : b.l; at = j; }
-                }
-                List<Double> tips = new ArrayList<>(), bodies = new ArrayList<>();
-                for (int j = a; j < e; j++) {
-                    Bar b = bars.get(j);
-                    if (res_ ? b.h >= ext - band : b.l <= ext + band) {
-                        tips.add(res_ ? b.h : b.l); bodies.add(res_ ? Math.max(b.o, b.c) : Math.min(b.o, b.c));
-                    }
-                }
-                double tip = snapTick(median(tips), p.tick), body = snapTick(median(bodies), p.tick);
-                double lo, hi;
-                if (res_) { hi = tip; lo = Math.max(Math.min(body, hi - p.extMinPts), hi - p.extMaxPts); }
-                else { lo = tip; hi = Math.min(Math.max(body, lo + p.extMinPts), lo + p.extMaxPts); }
-                int j0 = at + 1;
-                if (j0 >= n) continue;
-                int brk = n;                                   // второй подряд close за зоной
-                for (int j = j0; j + 1 < n; j++) {
-                    boolean b1 = res_ ? bars.get(j).c > hi : bars.get(j).c < lo, b2 = res_ ? bars.get(j + 1).c > hi : bars.get(j + 1).c < lo;
-                    if (b1 && b2) { brk = j + 1; break; }
-                }
-                int conf = -1;                                 // ушли от экстремума раньше пробоя
-                for (int j = j0; j < brk; j++) if (res_ ? bars.get(j).l <= ext - away : bars.get(j).h >= ext + away) { conf = j; break; }
-                if (conf < 0) continue;
-                int si = sessIdx[conf] + 1;
-                if (si >= ss.size()) continue;
-                LocalDate av = ss.get(si).date;
-                LocalDate end = brk < n ? ss.get(sessIdx[brk]).date : null;
-                if (end != null && !end.isAfter(av)) continue;
-                Zone z = new Zone();
-                z.k = K_EXT; z.src = "ext"; z.av = av; z.lo = z.blo = lo; z.hi = z.bhi = hi;
-                z.extRes = res_; z.extSrc = ss.get(i).date; z.extPrice = ext; z.extEnd = end;
-                z.extEndMs = brk < n ? bars.get(brk).t + p.periodMinutes * 60_000L : Long.MAX_VALUE;
-                z.info = String.format(java.util.Locale.ROOT, "%.2f", away);
-                if (!p.extEdgeOnly || atBalanceEdge(z, res, p)) cand.add(z);
-            }
-        }
-        cand.sort((x, y) -> x.av.compareTo(y.av));
-        for (Zone z : cand) {                                   // повторный экстремум рядом — подтверждение живой зоны
-            Zone dup = null;
-            for (Zone k : res.extremes)
-                if (k.extRes == z.extRes && !k.av.isAfter(z.av) && (k.extEnd == null || k.extEnd.isAfter(z.av))
-                        && Math.min(k.hi, z.hi) - Math.max(k.lo, z.lo) > -p.extJoinGapPts) { dup = k; break; }
-            if (dup != null) dup.extConf++; else res.extremes.add(z);
-        }
+    // ------------------------------------------------------------------ зоны экстремумов (1.8.3)
+    /** Серые шире greyMaxPts не рисуются: решение по виду и ширине зоны на последнюю сессию, где она видна (как её рисует
+     *  ZonePlan одной полосой), — зона убирается целиком, без обрывков. */
+    static void dropWideGrey(Result res, Params p) {
+        Map<Zone, Shown> last = new HashMap<>();
+        for (List<Shown> l : res.visible) for (Shown v : l) last.put(v.z, v);
+        Set<Zone> drop = new HashSet<>();
+        for (Shown v : last.values()) if (v.st.kind == Kind.GREY && v.hi - v.lo > p.greyMaxPts + 1e-9) drop.add(v.z);
+        if (drop.isEmpty()) return;
+        for (List<Shown> l : res.visible) l.removeIf(v -> drop.contains(v.z));
     }
 
     /** Зона экстремума у края баланса: поддержка не выше VAL, сопротивление не ниже VAH (± extEdgeTolPts) последнего
@@ -993,13 +954,192 @@ public final class ZoneEngine {
         return z.extRes ? z.lo >= va[2] * p.tick - p.extEdgeTolPts : z.hi <= va[1] * p.tick + p.extEdgeTolPts;
     }
 
-    static double median(List<Double> v) {
-        List<Double> s = new ArrayList<>(v); s.sort(null);
-        int m = s.size();
-        return m == 0 ? Double.NaN : m % 2 == 1 ? s.get(m / 2) : (s.get(m / 2 - 1) + s.get(m / 2)) / 2;
+    /** Кандидаты зон экстремумов: экстремум Globex-сессии, подтверждённый уходом цены (как в extremeZones), с краями
+     *  по телам свечей внутри мнимой зоны у экстремума (верхние extBandShare диапазона сессии, 1.5 … extBandMaxPts п.): профиль тел,
+     *  обрезанных мнимой зоной, — строки не ниже половины максимума вокруг самой плотной ближе к экстремуму; тени — снаружи.
+     *  Ширина ≤ sessMaxPts × масштаб волатильности. Только у краёв балансов (extEdgeOnly). По порядку появления. */
+    static List<Zone> extremeCandidates(List<Bar> bars, LocalDate[] sessOf, TreeMap<LocalDate, Day> days, Result res, Params p) {
+        List<int[]> ss = new ArrayList<>();                    // {first, last} баров сессии
+        for (int i = 0; i < bars.size(); i++) {
+            if (ss.isEmpty() || !sessOf[i].equals(sessOf[ss.get(ss.size() - 1)[0]])) ss.add(new int[]{i, i}); else ss.get(ss.size() - 1)[1] = i;
+        }
+        int n = bars.size(); double tick = p.tick;
+        int[] sessIdx = new int[n];
+        double[] rng = new double[ss.size()], priorHi = new double[ss.size()], priorLo = new double[ss.size()];
+        double runHi = -Double.MAX_VALUE, runLo = Double.MAX_VALUE;
+        for (int i = 0; i < ss.size(); i++) {
+            priorHi[i] = runHi; priorLo[i] = runLo;
+            double h = -Double.MAX_VALUE, l = Double.MAX_VALUE;
+            for (int j = ss.get(i)[0]; j <= ss.get(i)[1]; j++) { sessIdx[j] = i; h = Math.max(h, bars.get(j).h); l = Math.min(l, bars.get(j).l); }
+            rng[i] = h - l; runHi = Math.max(runHi, h); runLo = Math.min(runLo, l);
+        }
+        List<Zone> out = new ArrayList<>();
+        for (int i = 0; i < ss.size(); i++) {
+            int a = ss.get(i)[0], e = ss.get(i)[1] + 1;
+            double r = rng[i];
+            if (r <= 0) continue;
+            double band = Math.min(p.extBandMaxPts, Math.max(1.5, p.extBandShare * r));
+            double adr = r;
+            if (i >= 5) { double s = 0; int k0 = Math.max(0, i - 20); for (int k = k0; k < i; k++) s += rng[k]; adr = s / (i - k0); }
+            double away = Math.max(p.extAwayPts, p.extAwayAdr * adr);
+            LocalDate sd = sessOf[a];
+            Day day = days.get(sd);
+            double scale = day != null ? vs(p, List.of(day)) : 1.0;
+            int cap = Math.max(1, (int) Math.round(p.sessMaxPts * scale / tick));
+            for (boolean up : new boolean[]{true, false}) {
+                double ext = up ? -Double.MAX_VALUE : Double.MAX_VALUE; int at = a;
+                for (int j = a; j < e; j++) { Bar b = bars.get(j); if (up ? b.h > ext : b.l < ext) { ext = up ? b.h : b.l; at = j; } }
+                int eT = ticks(ext, tick), bT = (int) Math.round(band / tick);
+                int r0 = up ? eT - bT : eT, r1 = up ? eT : eT + bT;      // мнимая зона, тики
+                int[] cnt = new int[r1 - r0 + 1];
+                for (int j = a; j < e; j++) {
+                    Bar b = bars.get(j);
+                    int lo = ticks(Math.min(b.o, b.c), tick), hi = ticks(Math.max(b.o, b.c), tick);
+                    for (int t = Math.max(lo, r0); t <= Math.min(hi, r1); t++) cnt[t - r0]++;
+                }
+                int mx = 0; for (int c : cnt) mx = Math.max(mx, c);
+                int zl, zh;
+                if (mx == 0) {                                         // у экстремума одни тени: зона — на ближайшей к нему стопке
+                    List<Double> eg = new ArrayList<>();               // краёв тел (≥ 2 в пределах 1 п.), не дальше порога «ушли»
+                    for (int j = a; j < e; j++) { Bar b = bars.get(j); eg.add(up ? Math.max(b.o, b.c) : Math.min(b.o, b.c)); }
+                    eg.sort(up ? java.util.Comparator.reverseOrder() : java.util.Comparator.naturalOrder());
+                    int one = (int) Math.round(1.0 / tick), found = -1;
+                    for (int k = 0; k + 1 < eg.size() && found < 0; k++) {
+                        if (Math.abs(eg.get(k) - ext) > away) break;
+                        if (Math.abs(eg.get(k + 1) - eg.get(k)) <= 1.0 + 1e-9) found = k;
+                    }
+                    if (found < 0) continue;                           // одиночное тело — не край
+                    int et = ticks(eg.get(found), tick);
+                    zl = up ? et - one : et; zh = up ? et : et + one;
+                } else {
+                    int pk = -1;                                       // самая плотная строка, ближе к экстремуму
+                    for (int k = 0; k < cnt.length; k++) if (cnt[k] == mx && (pk < 0 || (up ? k > pk : k < pk))) pk = k;
+                    int k0 = pk, k1 = pk;
+                    while (k0 > 0 && cnt[k0 - 1] * 2 >= mx) k0--;
+                    while (k1 < cnt.length - 1 && cnt[k1 + 1] * 2 >= mx) k1++;
+                    zl = r0 + k0; zh = r0 + k1;
+                    if (zh - zl > cap) { if (up) zl = zh - cap; else zh = zl + cap; }
+                }
+                double lo = zl * tick, hi = zh * tick;
+                int j0 = at + 1;
+                if (j0 >= n) continue;
+                int brk = n;
+                for (int j = j0; j + 1 < n; j++) {
+                    boolean b1 = up ? bars.get(j).c > hi : bars.get(j).c < lo, b2 = up ? bars.get(j + 1).c > hi : bars.get(j + 1).c < lo;
+                    if (b1 && b2) { brk = j + 1; break; }
+                }
+                int conf = -1;
+                for (int j = j0; j < brk; j++) if (up ? bars.get(j).l <= ext - away : bars.get(j).h >= ext + away) { conf = j; break; }
+                if (conf < 0) continue;
+                int si = sessIdx[conf] + 1;
+                if (si >= ss.size()) continue;
+                Zone z = new Zone();
+                z.k = K_SESS; z.src = "ext"; z.ext = true; z.av = sessOf[ss.get(si)[0]]; z.born = sd;
+                z.lo = lo; z.hi = hi; z.extRes = up; z.extSrc = sd; z.extPrice = ext;
+                z.extAway = away; z.extPrior = up ? priorHi[i] : priorLo[i]; z.extBar = at;
+                z.extA = a; z.extE = e; z.extCap = cap * tick;
+                z.info = String.format(Locale.ROOT, "%.2f", away);
+                if (!p.extEdgeOnly || atBalanceEdge(z, res, p)) out.add(z);
+            }
+        }
+        out.sort((x, y) -> x.av.compareTo(y.av));
+        return out;
     }
 
-    static double snapTick(double v, double tick) { return Math.rint(v / tick) * tick; }
+    /** Кандидат-экстремум → сессионная зона по общим правилам: края по квадратам TPO; рядом (ближе sessMinGapPts) с существующей
+     *  зоной — её подтверждение (зона не двигается и не перекрашивается, в подсказке — заметка); под вершиной в price discovery —
+     *  подтверждение вершины (extArea); иначе новая зона: роль — композит (тело) / хвост баланса / сторона экстремума. */
+    static void placeExtreme(Zone x, List<Zone> ses, Map<Zone, List<Long>> cf, List<Comp> bal, Result res, Params p, TreeMap<LocalDate, Day> days) {
+        double tick = p.tick;
+        if (p.gridPts > 0) {
+            double gsh = rollShift(res, x.av.atStartOfDay(p.tz).toInstant().toEpochMilli());
+            double[] g = snapGrid(x.lo - gsh, x.hi - gsh, p);
+            x.lo = Math.rint((g[0] + gsh) / tick) * tick; x.hi = Math.rint((g[1] + gsh) / tick) * tick;
+            if (p.extFit) fitExtreme(x, res.bars, p, gsh);
+        }
+        long avd = x.av.toEpochDay();
+        String note = String.format(Locale.ROOT, "подтверждена экстремумом: %s сессии %s %.2f", x.extRes ? "хай" : "лой", x.extSrc, x.extPrice);
+        for (Zone e : ses) {                                    // обычные зоны — любого возраста (их раскладка не меняется), экстремумы — раньше
+            if (e.ext && e.av.isAfter(x.av)) continue;
+            if (e.minor && e.minorEnd <= avd && !p.sessMinorPromote) continue;
+            double gap = Math.max(e.lo, x.lo) - Math.min(e.hi, x.hi);
+            if (gap < p.sessMinGapPts - 1e-9) { cf.get(e).add(avd); e.extNotes.add(note); return; }
+        }
+        if (p.extArea)
+            for (Zone k : ses) {
+                if (!k.ext || k.extRes != x.extRes || k.av.isAfter(x.av)) continue;
+                boolean disc = x.extRes ? k.extPrice > k.extPrior && x.extPrice <= k.extPrice && x.extPrice > k.extPrior
+                                        : k.extPrice < k.extPrior && x.extPrice >= k.extPrice && x.extPrice < k.extPrior;
+                if (!disc || x.extBar <= k.extBar) continue;
+                double depth = 0;
+                for (int j = k.extBar + 1; j < x.extBar; j++) depth = Math.max(depth, x.extRes ? k.lo - res.bars.get(j).l : res.bars.get(j).h - k.hi);
+                if (depth <= 2 * Math.max(k.extAway, x.extAway)) { cf.get(k).add(avd); k.extNotes.add(note); k.extBar = x.extBar; return; }
+            }
+        double mid = (x.lo + x.hi) / 2;
+        Comp gov = null, tail = null;
+        for (Comp c : bal) if (!c.av.isAfter(x.av) && c.bodyLo <= mid && mid <= c.bodyHi) gov = c;
+        if (gov == null && p.tailRole)
+            for (Comp c : res.comps) if (!c.av.isAfter(x.av) && c.lo <= mid && mid <= c.hi && c.bodyHi > c.bodyLo) tail = c;
+        Kind side = x.extRes ? Kind.HVN_R : Kind.HVN_S;            // экстремум не бывает синим: на ядре — по своей стороне
+        x.partKind = gov != null ? roleOf(gov, x, p) : tail != null ? (mid > tail.bodyHi ? Kind.HVN_R : Kind.HVN_S) : side;
+        if (x.partKind == Kind.CORE) x.partKind = side;
+        if (gov != null) x.partOf = gov;
+        LocalDate grp = gov != null && gov.live ? gov.start : null;
+        List<Long> at = new ArrayList<>(); List<Kind> kd = new ArrayList<>(); List<Comp> cc = new ArrayList<>();
+        for (Comp c : bal) {
+            if (!c.av.isAfter(x.av) || c.bodyLo > mid || mid > c.bodyHi) continue;
+            if (grp == null) grp = c.start;
+            if (!c.start.equals(grp)) continue;
+            Kind rk = roleOf(c, x, p);
+            at.add(c.av.toEpochDay()); kd.add(rk == Kind.CORE ? side : rk); cc.add(c);
+            if (!c.live) break;
+        }
+        if (!at.isEmpty()) {
+            x.rcAt = at.stream().mapToLong(Long::longValue).toArray(); x.rcKind = kd.toArray(new Kind[0]); x.rcComp = cc.toArray(new Comp[0]);
+            x.recolorAt = x.rcAt[0]; x.recolorKind = x.rcKind[0];
+        }
+        ses.add(x); cf.put(x, new ArrayList<>());
+    }
+
+    /** Подгонка краёв зоны-экстремума (extFit) по свечам его сессии, края — на квадратах TPO (цены графика). Сопротивление:
+     *  + тело ниже верхнего края, а тень выходит выше; + верхушка тела в зоне; − 2 × тело выше верхнего края (прошило).
+     *  Поддержка — зеркально. Ширина extFitMinPts … max(extFitMinPts, 1.5 × исходной), не шире лимита зоны; край — в ±
+     *  extFitSearchPts от исходного и не за экстремумом. Лучший счёт; при равенстве — ближе к исходным краям, потом уже. */
+    static void fitExtreme(Zone x, List<Bar> bars, Params p, double gsh) {
+        double sq = p.gridPts, tick = p.tick;
+        double lo0 = x.lo - gsh, hi0 = x.hi - gsh, w0 = hi0 - lo0, ext = x.extPrice - gsh;
+        double minW = p.extFitMinPts, maxW = Math.min(Math.max(minW, 1.5 * w0), Math.max(minW, x.extCap));
+        int steps = (int) Math.round(p.extFitSearchPts / sq);
+        double bestS = -1e9, bestD = 1e9, bestW = 1e9, bl = lo0, bh = hi0;
+        for (int i = -steps; i <= steps; i++) for (int j = -steps; j <= steps; j++) {
+            double lo = lo0 + i * sq, hi = hi0 + j * sq, w = hi - lo;
+            if (w < minW - 1e-9 || w > maxW + 1e-9) continue;
+            if (x.extRes ? hi > Math.ceil(ext / sq) * sq + 1e-9 : lo < Math.floor(ext / sq) * sq - 1e-9) continue;
+            double sc = 0;
+            for (int k = x.extA; k < x.extE; k++) {
+                Bar b = bars.get(k);
+                double bt = Math.max(b.o, b.c) - gsh, bb = Math.min(b.o, b.c) - gsh, h = b.h - gsh, l = b.l - gsh;
+                if (x.extRes) {
+                    if (h < lo) continue;
+                    if (bt <= hi && h > hi) sc += 1;
+                    if (bt >= lo && bt <= hi) sc += 1;
+                    if (bt > hi) sc -= 2;
+                } else {
+                    if (l > hi) continue;
+                    if (bb >= lo && l < lo) sc += 1;
+                    if (bb >= lo && bb <= hi) sc += 1;
+                    if (bb < lo) sc -= 2;
+                }
+            }
+            double d = Math.abs(lo - lo0) + Math.abs(hi - hi0);
+            if (sc > bestS + 1e-9 || (Math.abs(sc - bestS) < 1e-9 && (d < bestD - 1e-9 || (Math.abs(d - bestD) < 1e-9 && w < bestW)))) {
+                bestS = sc; bestD = d; bestW = w; bl = lo; bh = hi;
+            }
+        }
+        x.lo = Math.rint((bl + gsh) / tick) * tick; x.hi = Math.rint((bh + gsh) / tick) * tick;
+    }
+
+
 
     /** Узлы профиля композита: тело (строки ≥ bodyShare максимума вокруг POC, сглаж. 1 п.) режется по провалам ≥ syncDip
      *  меньшей вершины; узел — строки куска не ниже вершины на syncDrop её высоты. {lo, hi, вершина TPO} в тиках. */
@@ -1044,7 +1184,7 @@ public final class ZoneEngine {
         Map<LocalDate, Comp> comps = new HashMap<>(); Map<LocalDate, List<Shown>> mine = new HashMap<>();
         for (Shown v : res.visible.get(n - 1)) {
             Zone z = v.z;
-            if (z.k != K_SESS) continue;
+            if (z.k != K_SESS || z.ext) continue;
             Comp cp = z.partOf;
             if (z.rcAt.length > 0) { int ri = lowerBound(z.rcAt, o + 1) - 1; if (ri >= 0) cp = z.rcComp[ri]; }
             if (cp == null || cp.prof == null) continue;
@@ -1109,7 +1249,7 @@ public final class ZoneEngine {
             long o = res.sessions.get(i).ord;
             for (Shown v : res.visible.get(i)) {
                 Zone z = v.z;
-                if (z.k != K_SESS || (z.minor && o < z.minorEnd)) continue;
+                if (z.k != K_SESS || z.ext || (z.minor && o < z.minorEnd)) continue;
                 Comp cp = z.partOf;
                 if (z.rcAt.length > 0) { int ri = lowerBound(z.rcAt, o + 1) - 1; if (ri >= 0) cp = z.rcComp[ri]; }
                 if (cp == null || !cp.primary) continue;
@@ -1128,6 +1268,7 @@ public final class ZoneEngine {
         for (Comp c : balances) {
             Zone best = null; double bestGap = Double.MAX_VALUE; boolean touch = false;
             for (Zone e : ses) {
+                if (e.ext) continue;                                // экстремум синим не становится и ядро не занимает
                 boolean mine = e.partOf != null && e.partOf.start.equals(c.start);
                 for (Comp rc : e.rcComp) if (rc.start.equals(c.start)) mine = true;
                 if (!mine) continue;
@@ -1147,7 +1288,7 @@ public final class ZoneEngine {
      *  (gridNarrowKeepBlue). */
     static void narrowToGrey(Result res, Params p) {
         for (List<Shown> l : res.visible) for (Shown v : l) {
-            if (v.z.k != K_SESS || v.hi - v.lo > p.oneSquareMaxPts + 1e-9 || v.st.kind == Kind.GREY) continue;
+            if (v.z.k != K_SESS || v.z.ext || v.hi - v.lo > p.oneSquareMaxPts + 1e-9 || v.st.kind == Kind.GREY) continue;
             if (p.gridNarrowKeepBlue && v.st.kind == Kind.CORE) continue;
             v.st.kind = Kind.GREY; v.z.oneSquare = true;
         }
@@ -1159,7 +1300,7 @@ public final class ZoneEngine {
         for (int i = 0; i < res.visible.size(); i++) {
             long o = res.sessions.get(i).ord;
             for (Shown v : res.visible.get(i)) {
-                if (v.st.kind != Kind.HVN_R && v.st.kind != Kind.HVN_S) continue;
+                if (v.st.kind != Kind.HVN_R && v.st.kind != Kind.HVN_S || v.z.ext) continue;
                 Zone z = v.z; Comp cp = z.partOf;
                 if (z.rcAt.length > 0) { int ri = lowerBound(z.rcAt, o + 1) - 1; if (ri >= 0) cp = z.rcComp[ri]; }
                 if (cp == null) continue;                                   // без композита — цвет дня рождения
@@ -1180,6 +1321,7 @@ public final class ZoneEngine {
     static void invertedToGrey(Result res, Params p) {
         for (List<Shown> l0 : res.visible) {
             List<Shown> l = new ArrayList<>(l0);
+            l.removeIf(v -> v.z.ext);                                // экстремумы — не соседи: обычные зоны их не видят
             Map<Shown, Double> sh = new HashMap<>();
             for (Shown v : l) sh.put(v, rollShift(res, v.z.av.atStartOfDay(p.tz).toInstant().toEpochMilli()));
             l.sort((x, y) -> Double.compare(x.lo - sh.get(x), y.lo - sh.get(y)));
@@ -1190,7 +1332,7 @@ public final class ZoneEngine {
                 if ((b.lo - sh.get(b)) - (a.hi - sh.get(a)) > p.invertGapPts + 1e-9) continue;
                 hit.add(a); hit.add(b);
             }
-            for (Shown v : hit) { v.st.kind = Kind.GREY; v.z.inverted = true; }
+            for (Shown v : hit) if (!v.z.ext) { v.st.kind = Kind.GREY; v.z.inverted = true; }
         }
     }
 
@@ -1223,6 +1365,7 @@ public final class ZoneEngine {
                 rows.get(v.z).add(v); when.get(v.z).set(i); lastOf.put(v.z, v);
             }
         order.sort((x, y) -> {
+            if (x.ext != y.ext) return x.ext ? 1 : -1;               // зоны-экстремумы — после обычных: обычные не трогают
             int c = x.av.compareTo(y.av);
             if (c != 0) return c;
             int rx = rank(lastOf.get(x).st.kind), ry = rank(lastOf.get(y).st.kind);
@@ -1271,6 +1414,7 @@ public final class ZoneEngine {
     static List<Shown> layout(List<Shown> in, Params p) {
         List<Shown> order = new ArrayList<>(in);
         order.sort((x, y) -> {
+            if (x.z.ext != y.z.ext) return x.z.ext ? 1 : -1;     // зоны-экстремумы — после обычных: обычные не трогают
             int rx = rank(x.st.kind), ry = rank(y.st.kind);
             if (rx != ry) return rx - ry;
             int c = x.z.av.compareTo(y.z.av);

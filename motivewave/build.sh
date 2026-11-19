@@ -14,7 +14,7 @@
 # Байткод — Java 21, его загружает и MotiveWave 7, и более ранние версии на Java 21.
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=1.8.2
+VERSION=1.8.3
 PKG="patterns.zones.v${VERSION//./_}"
 STAMP="$(date +%F) $(git rev-parse --short HEAD 2>/dev/null || echo nogit)$(git diff --quiet HEAD -- . 2>/dev/null || echo -dirty)"
 SDK="${MW_SDK:-lib/mwave_sdk.jar}"

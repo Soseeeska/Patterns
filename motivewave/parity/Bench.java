@@ -67,14 +67,6 @@ public class Bench {
                     double iou = inter > 0 ? inter / uni : 0;
                     if (iou > best) { best = iou; bs = s; }
                 }
-            for (int i = i0; i < Math.min(ord.length, i0 + Integer.getInteger("win", 10)); i++)   // зоны экстремумов (1.8.2)
-                for (ZoneEngine.Zone z : res.extremes) {
-                    long so = res.sessions.get(i).ord;
-                    if (z.avOrd() > so || (z.extEnd != null && z.extEnd.toEpochDay() <= so)) continue;
-                    double inter = Math.min(hi, z.hi) - Math.max(lo, z.lo), uni = Math.max(hi, z.hi) - Math.min(lo, z.lo);
-                    double iou = inter > 0 ? inter / uni : 0;
-                    if (iou > best) { best = iou; bs = new Shown(z, extState(z)); bs.lo = z.lo; bs.hi = z.hi; }
-                }
             ious.add(best); sumIou += best;
             if (best >= 0.3) conf.merge(mz[0] + " → " + bs.st.kind.name(), 1, Integer::sum);
             if (best >= 0.3) { m3++; sumEdge += (Math.abs(bs.lo - lo) + Math.abs(bs.hi - hi)) / 2; if (agree(mz[0], bs.st.kind)) colorOk++; }
@@ -103,13 +95,6 @@ public class Bench {
 
     /** -Dfrom=YYYY-MM-DD — история с этой даты (MotiveWave грузит 1500 календарных дней назад от сегодня),
      *  -Dto=YYYY-MM-DD — данные по эту дату включительно (до 16:00 CT). */
-    /** Состояние для сравнения цвета: зона экстремума — поддержка (зелёная) или сопротивление (красная). */
-    static ZoneEngine.State extState(ZoneEngine.Zone z) {
-        ZoneEngine.State st = new ZoneEngine.State();
-        st.kind = z.extRes ? ZoneEngine.Kind.EXT_R : ZoneEngine.Kind.EXT_S;
-        return st;
-    }
-
     static void cutHistory(List<Bar> bars) {
         java.time.ZoneId tz = java.time.ZoneId.of("America/Chicago");
         String from = System.getProperty("from"), to = System.getProperty("to");
@@ -127,8 +112,8 @@ public class Bench {
 
     static boolean agree(String c, Kind k) {
         switch (c) {
-            case "зелёная": return k == Kind.HVN_S || k == Kind.EXT_S;
-            case "красная": return k == Kind.HVN_R || k == Kind.EXT_R;
+            case "зелёная": return k == Kind.HVN_S;
+            case "красная": return k == Kind.HVN_R;
             case "синяя": return k == Kind.CORE || k == Kind.HVN_RANGE || k == Kind.OLD_BALANCE;
             case "серая": return k == Kind.GREY || k == Kind.HVN_NEW;
             default: return false;
