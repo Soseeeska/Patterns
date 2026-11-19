@@ -74,7 +74,11 @@ public final class ZoneEngine {
 
         // ---- композиты
         public boolean compositeMode = false;     // класс зоны по положению в композите (индикатор: true), иначе — по отторжениям (1.1)
-        public int compositeMinDays = 3;
+        public int compositeMinDays = 4;          // 1.8.4: от 4 дней (было 3)
+        public int smearMaxTpo = 5;               // 1.8.4: «размазня» — полный RTH-день, у которого в самой широкой строке (квадрат 1 п.)
+                                                  // не больше стольких TPO (тренд, жирной части нет): в композит не входит; 0 — выкл.
+        public int smearMode = 1;                 // ... 1 — такой день закрывает композит (выход, ложного выхода через него нет) и
+                                                  // нового не начинает; 2 — пропускается, композит идёт дальше, как будто дня нет
         public boolean compositeShortDays = true; // короткие дни (ранние закрытия) входят в профиль композита, как в TPO платформы
         public double compVaOverlap = 0.5;        // VA дня и VA композита пересекаются на ≥ эту долю меньшей из двух (0 — не проверять)
         public boolean compJoinBoth = true;       // склейка: close в диапазоне И пересечение VA (иначе — ИЛИ); так же доклейка после
@@ -352,6 +356,7 @@ public final class ZoneEngine {
         final List<double[]> sbars = new ArrayList<>();  // все 30m-свечи сессии (ETH + RTH): {o, h, l, c}
         Profile profile; int poc, val, vah;              // тики
         int hvnTpo, bandLo, bandHi;                      // per_day (только полные дни)
+        int maxSq;                                       // самая широкая строка профиля в квадратах 1 п., TPO
         double adr = Double.NaN;                         // средний диапазон 20 прошлых полных дней (без этого дня)
     }
 
@@ -446,7 +451,7 @@ public final class ZoneEngine {
         public final List<Comp> comps = new ArrayList<>();           // балансы (закрытые композиты, ядро признано)
         public final List<Comp> notBalance = new ArrayList<>();      // композиты, где дни не сошлись (без ядра)
         public final List<Comp> subComps = new ArrayList<>();        // уточнения внутри более раннего баланса
-        public int thinDropped, stackDropped, stacksCut;             // пробный патч 1.8.4: сколько убрано узких / из стопок, стопок урезано
+        public int thinDropped, stackDropped, stacksCut, smearDays;             // пробный патч 1.8.4: сколько убрано узких / из стопок, стопок урезано
         public final List<Comp> liveComps = new ArrayList<>();       // снимки формирующихся композитов (балансы, не уточнения)
         public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
         public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
@@ -500,6 +505,10 @@ public final class ZoneEngine {
             int[] lows = new int[d.n], highs = new int[d.n];
             for (int i = 0; i < d.n; i++) { lows[i] = d.periods.get(i)[1]; highs[i] = d.periods.get(i)[2]; }
             d.profile = buildProfile(lows, highs);
+            Map<Integer, Integer> sq = new HashMap<>();
+            for (int i = 0; i < d.n; i++)
+                for (int q = (int) Math.floor(lows[i] * tick); q <= (int) Math.floor(highs[i] * tick - 1e-9); q++) sq.merge(q, 1, Integer::sum);
+            for (int v : sq.values()) d.maxSq = Math.max(d.maxSq, v);
             int[] va = valueArea(d.profile, p.valueAreaPct);
             d.poc = va[0]; d.val = va[1]; d.vah = va[2];
             if (!d.shortDay) {
@@ -531,6 +540,15 @@ public final class ZoneEngine {
             int extCount = 0, lastExt = 0;                  // сколько раз текущий / закрытый композит продолжался
             // режим «по композиту»: короткие дни (ранние закрытия) тоже входят в композит, как в TPO платформы
             for (Day d : p.compositeMode && p.compositeShortDays ? all : full) {
+                if (p.compositeMode && p.smearMaxTpo > 0 && !d.shortDay && d.maxSq <= p.smearMaxTpo) {   // размазня
+                    res.smearDays++;
+                    if (p.smearMode == 2 || cand.isEmpty()) continue;
+                    Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
+                    if (made != null) made.extendsOf = extOf;
+                    lastCand = null; lastCp = null; lastComp = made; extOf = null; lastExt = 0; extCount = 0;
+                    cand = new ArrayList<>(); cp = null;
+                    continue;
+                }
                 if (cand.isEmpty()) { cand.add(d); cp = d.profile; continue; }
                 if (p.compositeMode && p.compRollBreak && rollBetween(res, p, cand.get(cand.size() - 1).date, d.date)) {
                     // ролл между последним днём кандидата и этим днём: кандидат закрывается, этот день открывает новый
