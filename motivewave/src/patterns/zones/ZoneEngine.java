@@ -77,6 +77,16 @@ public final class ZoneEngine {
         public int compositeMinDays = 4;          // 1.8.4: от 4 дней (было 3)
         public int smearMaxTpo = 5;               // 1.8.4: «размазня» — полный RTH-день, у которого в самой широкой строке (квадрат 1 п.)
                                                   // не больше стольких TPO (тренд, жирной части нет): в композит не входит; 0 — выкл.
+        // ---- композит по стоимости (1.8.4, compValue): день входит, если его стоимость в стоимости композита — POC дня внутри
+        //      VA композита или VA дня на ≥ compValueShare своей ширины внутри VA композита; день шире compDayMaxAdr средних
+        //      диапазонов и «размазня» не входят; композит не шире compMaxAdr средних диапазонов; один день мимо (вылет) —
+        //      пропускается, композит идёт дальше, если следующий день вернулся; два подряд — композит закрыт (с вылета).
+        public boolean compValue = false;
+        public double compValueShare = 0.5;
+        public double compDayMaxAdr = 1.5;
+        public int compExcursion = 1;
+        public double compMaxAdr = 0;             // 1.8.4: композит не шире стольких средних дневных диапазонов (20 прошлых полных
+                                                  // RTH-дней): день, с которым High–Low композита вышел бы шире, — выход; 0 — выкл.
         public int smearMode = 1;                 // ... 1 — такой день закрывает композит (выход, ложного выхода через него нет) и
                                                   // нового не начинает; 2 — пропускается, композит идёт дальше, как будто дня нет
         public boolean compositeShortDays = true; // короткие дни (ранние закрытия) входят в профиль композита, как в TPO платформы
@@ -415,6 +425,7 @@ public final class ZoneEngine {
         public double lo, hi; public LocalDate start, end, av; public int days; public Zone core;
         public Comp parent;                                  // уточнение внутри более раннего баланса
         public Comp extendsOf;                               // продолжение этого композита после ложного выхода
+        public final List<LocalDate> dates = new ArrayList<>();   // дни профиля композита (без вылетов)
         public boolean live;                                 // снимок формирующегося композита
         public boolean primary;                              // первичный: в зоне price discovery (primaryByCore)
         public Profile prof; public int pocT;                // профиль композита и POC (тики) — для синхронизации с сессионными зонами
@@ -539,7 +550,8 @@ public final class ZoneEngine {
             List<Day> lastCand = null; Profile lastCp = null; Comp lastComp = null, extOf = null;
             int extCount = 0, lastExt = 0;                  // сколько раз текущий / закрытый композит продолжался
             // режим «по композиту»: короткие дни (ранние закрытия) тоже входят в композит, как в TPO платформы
-            for (Day d : p.compositeMode && p.compositeShortDays ? all : full) {
+            if (p.compValue) valueComposites(p.compositeShortDays ? all : full, res, p, ob, greyComp, nextTradeDay);
+            for (Day d : p.compValue ? List.<Day>of() : p.compositeMode && p.compositeShortDays ? all : full) {
                 if (p.compositeMode && p.smearMaxTpo > 0 && !d.shortDay && d.maxSq <= p.smearMaxTpo) {   // размазня
                     res.smearDays++;
                     if (p.smearMode == 2 || cand.isEmpty()) continue;
@@ -565,7 +577,8 @@ public final class ZoneEngine {
                 if (cand.size() >= p.compositeMinDays) lastCand = null;
                 if (p.compositeMode && p.compFalseBreak && lastCand != null && c >= lastCp.low && c <= lastCp.high()
                         && (!p.compJoinBoth || vaJoins(d, lastCp, p) || vaPrev(d, lastCand, p) || insideDay(d, lastCp, p))
-                        && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts * vs(p, lastCand) && extCount < p.compFalseBreakMax) {
+                        && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts * vs(p, lastCand) && extCount < p.compFalseBreakMax
+                        && !tooWide(cand.stream().map(x -> x.profile).reduce(lastCp, ZoneEngine::merge), d, p)) {
                     // ложный выход: композит закрылся, новый ещё не набрал дней, а цена закрылась обратно в его
                     // диапазоне — дни после выхода доклеиваются к нему, композит продолжается
                     extCount = lastExt;
@@ -581,6 +594,7 @@ public final class ZoneEngine {
                 boolean va = vaJoins(d, cp, p) || vaPrev(d, cand, p);
                 if (p.compositeMode && !or) join = join && va;                  // close в диапазоне И наслоение VA
                 else if (!join && p.compositeMode && p.compVaOverlap > 0) join = va;   // ... ИЛИ
+                if (join && tooWide(cp, d, p)) join = false;
                 if (join) { cand.add(d); cp = merge(cp, d.profile); live(cand, cp, nextTradeDay.get(d.date), p, live); continue; }
                 Comp made = closeComposite(cand, cp, d.date, p, ob, greyComp, res.comps, res.notBalance);
                 if (made != null) made.extendsOf = extOf;
@@ -1619,6 +1633,56 @@ public final class ZoneEngine {
 
     // ------------------------------------------------------------------ композиты
     /** compVaPrevDay: VA дня пересекается с VA последнего полного дня кандидата на ≥ compVaOverlap меньшей из двух. */
+    /** Композиты по стоимости (compValue): см. Params. */
+    static void valueComposites(List<Day> days, Result res, Params p, List<Zone> ob, List<Zone> greyComp,
+                                Map<LocalDate, LocalDate> nextTradeDay) {
+        List<Day> cand = new ArrayList<>(); Profile cp = null; List<Day> miss = new ArrayList<>();
+        for (Day d : days) {
+            if (!cand.isEmpty() && p.compRollBreak && rollBetween(res, p, cand.get(cand.size() - 1).date, d.date)) {
+                closeComposite(cand, cp, miss.isEmpty() ? d.date : miss.get(0).date, p, ob, greyComp, res.comps, res.notBalance);
+                cand = new ArrayList<>(); cp = null; miss.clear();
+            }
+            boolean smear = p.smearMaxTpo > 0 && !d.shortDay && d.maxSq <= p.smearMaxTpo;
+            boolean wide = p.compDayMaxAdr > 0 && !Double.isNaN(d.adr) && d.high - d.low > p.compDayMaxAdr * d.adr + 1e-9;
+            if (smear || wide) res.smearDays++;
+            boolean eligible = !smear && !wide;
+            if (cand.isEmpty()) { if (eligible) { cand.add(d); cp = d.profile; } continue; }
+            if (eligible && valueIn(d, cp, p) && !tooWide(cp, d, p)) {
+                miss.clear(); cand.add(d); cp = merge(cp, d.profile);
+                live(cand, cp, nextTradeDay.get(d.date), p, res.liveComps);
+                continue;
+            }
+            miss.add(d);
+            if (miss.size() <= p.compExcursion) continue;
+            closeComposite(cand, cp, miss.get(0).date, p, ob, greyComp, res.comps, res.notBalance);
+            // новый кандидат — с последнего подходящего дня из пропущенных (и дальше по ним)
+            cand = new ArrayList<>(); cp = null;
+            for (Day x : miss) {
+                boolean ok = !(p.smearMaxTpo > 0 && !x.shortDay && x.maxSq <= p.smearMaxTpo)
+                        && !(p.compDayMaxAdr > 0 && !Double.isNaN(x.adr) && x.high - x.low > p.compDayMaxAdr * x.adr + 1e-9);
+                if (!ok) { cand = new ArrayList<>(); cp = null; continue; }
+                if (cand.isEmpty() || !(valueIn(x, cp, p) && !tooWide(cp, x, p))) { cand = new ArrayList<>(); cand.add(x); cp = x.profile; }
+                else { cand.add(x); cp = merge(cp, x.profile); }
+            }
+            miss.clear();
+        }
+    }
+
+    /** Стоимость дня в стоимости композита: POC дня внутри VA композита или VA дня на ≥ compValueShare внутри. */
+    static boolean valueIn(Day d, Profile cp, Params p) {
+        int[] cva = valueArea(cp, p.valueAreaPct);
+        if (d.poc >= cva[1] && d.poc <= cva[2]) return true;
+        int inter = Math.min(d.vah, cva[2]) - Math.max(d.val, cva[1]) + 1;
+        return inter > 0 && inter / (double) (d.vah - d.val + 1) >= p.compValueShare - 1e-9;
+    }
+
+    /** Композит с этим днём шире compMaxAdr средних дневных диапазонов. */
+    static boolean tooWide(Profile cp, Day d, Params p) {
+        if (p.compMaxAdr <= 0 || Double.isNaN(d.adr)) return false;
+        double w = (Math.max(cp.high(), ticks(d.high, p.tick)) - Math.min(cp.low, ticks(d.low, p.tick))) * p.tick;
+        return w > p.compMaxAdr * d.adr + 1e-9;
+    }
+
     static boolean vaPrev(Day d, List<Day> cand, Params p) {
         if (!p.compVaPrevDay || p.compVaOverlap <= 0 || cand == null) return false;
         Day y = null;
@@ -1671,6 +1735,7 @@ public final class ZoneEngine {
             made = c; c.prof = cp; c.pocT = va[0];
             c.lo = cp.low * p.tick; c.hi = cp.high() * p.tick; c.av = endDay; c.days = n;
             c.start = cand.get(0).date; c.end = cand.get(n - 1).date;
+            for (Day x : cand) c.dates.add(x.date);
             Zone core = new Zone();
             core.k = K_CORE; core.av = endDay; core.src = "core";
             core.info = coreInfo(cand, cp, va[0], p.tick);

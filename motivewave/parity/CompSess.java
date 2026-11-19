@@ -79,12 +79,13 @@ public class CompSess {
     // сессии
     Font lf = new Font("Monospaced", Font.BOLD, (int) Math.max(8, Math.min(13, rh * 0.95)));
     for (int i = 0; i < ds.size(); i++) {
-      boolean in = i >= i0 && i <= i1;
+      boolean in = i >= i0 && i <= i1 && c.dates.contains(ds.get(i));
+      boolean exc = i >= i0 && i <= i1 && !in;
       int cx = L + i * colW + 22;
       g.setColor(new Color(0x2a2e39)); g.setStroke(new BasicStroke(1f)); g.drawLine(L + i * colW, T - 30, L + i * colW, H - B);
       LocalDate d = ds.get(i);
       g.setFont(new Font("SansSerif", Font.BOLD, 13)); g.setColor(in ? new Color(0xd1d4dc) : new Color(0x5d606b));
-      g.drawString(String.format("%02d.%02d", d.getDayOfMonth(), d.getMonthValue()) + (days.get(d).size() < p.fullDayPeriods ? " корот." : "") + (in ? "" : i == 0 ? " до" : " после"), L + i * colW + 6, T - 14);
+      g.drawString(String.format("%02d.%02d", d.getDayOfMonth(), d.getMonthValue()) + (days.get(d).size() < p.fullDayPeriods ? " корот." : "") + (in ? "" : exc ? " вылет" : i == 0 ? " до" : " после"), L + i * colW + 6, T - 14);
       Map<Integer, List<Integer>> m = prof.get(i);
       // VA и POC дня
       int tot = 0; for (List<Integer> v : m.values()) tot += v.size();
@@ -115,12 +116,12 @@ public class CompSess {
     // заголовок
     g.setFont(new Font("SansSerif", Font.BOLD, 16)); g.setColor(new Color(0xd1d4dc));
     long nd = days.subMap(c.start, true, c.end, true).size();
-    g.drawString(String.format(Locale.ROOT, "Композит %s – %s: %d сессий%s%s; диапазон %.2f–%.2f (%.0f п.)", c.start, c.end, nd,
+    g.drawString(String.format(Locale.ROOT, "Композит %s – %s: %d сессий (в профиле %d)%s%s; диапазон %.2f–%.2f (%.0f п.)", c.start, c.end, nd, c.days,
         c.extendsOf != null ? ", продолжение после ложного выхода" : "", c.primary ? ", первичный (price discovery)" : "", c.lo, c.hi, c.hi - c.lo), L, 24);
     g.setFont(new Font("SansSerif", Font.PLAIN, 13)); g.setColor(new Color(0xb2b5be));
     g.drawString(String.format(Locale.ROOT, "ядро %.2f–%.2f (синяя полоса) · POC композита %.2f (оранжевая) · VA композита %.2f–%.2f (белый пунктир) · тело %.2f–%.2f (серый пунктир) · рамка — диапазон",
         c.core.lo, c.core.hi, c.pocT * p.tick, va[1] * p.tick, va[2] * p.tick, c.bodyLo, c.bodyHi), L, 46);
-    g.drawString("сессии RTH по отдельности, квадрат 1 п., буквы A–M — 30-минутки (A 08:30 CT); оранжевая строка — POC сессии, вертикальная черта — её VA 70%; бледные — день до и день после", L, 64);
+    g.drawString("сессии RTH по отдельности, квадрат 1 п., буквы A–M — 30-минутки (A 08:30 CT); оранжевая строка — POC сессии, вертикальная черта — её VA 70%; бледные — день до, день после и вылеты (не в профиле композита)", L, 64);
     ImageIO.write(img, "png", out);
     System.out.println(out + "  " + c.start + "–" + c.end + " " + nd + " д.");
   }
