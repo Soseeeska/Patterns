@@ -106,6 +106,7 @@ public class Preview {
         base.put(Kind.HVN_S, new Color(0x006400)); base.put(Kind.HVN_R, new Color(0x8B0000));
         base.put(Kind.HVN_RANGE, new Color(0x8f84ea)); base.put(Kind.HVN_NEW, new Color(0x8d959c));
         base.put(Kind.OLD_BALANCE, new Color(0x00158B)); base.put(Kind.CORE, new Color(0x00158B)); base.put(Kind.GREY, new Color(0x8d959c));
+        base.put(Kind.EXT_S, new Color(0x2e9d3a)); base.put(Kind.EXT_R, new Color(0xd32f2f));   // зоны экстремумов (1.8.2)
         BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -127,9 +128,12 @@ public class Preview {
             if (x1 < 0) continue;
             double y0 = ty.applyAsDouble(r.z.k == ZoneEngine.K_PART && r.hi - r.lo > 0.5 ? r.hi - 0.25 : r.hi), y1 = ty.applyAsDouble(r.lo);
             Color c = base.get(r.kind);
-            int op = 30;                                   // заливка по умолчанию в индикаторе, границ нет
+            boolean ext = r.kind == Kind.EXT_S || r.kind == Kind.EXT_R;
+            int op = ext ? 45 : 30;                        // заливка по умолчанию в индикаторе; у зон экстремумов — ещё обводка
             g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.round(op * 2.55f)));
-            g.fill(new java.awt.geom.Rectangle2D.Double(x0, y0, x1 - x0, Math.max(2, y1 - y0)));
+            var box = new java.awt.geom.Rectangle2D.Double(x0, y0, x1 - x0, Math.max(2, y1 - y0));
+            g.fill(box);
+            if (ext) { g.setColor(c.brighter()); g.setStroke(new BasicStroke(1.4f)); g.draw(box); g.setStroke(new BasicStroke(1f)); }
         }
         Color up = new Color(0xc9ced3), dn = new Color(0xc9ced3), upFill = new Color(0x15181c);
         for (int i = f0; i < n; i++) {
@@ -203,7 +207,7 @@ public class Preview {
             g.drawString(s.date.toString(), (int) x + 4, H - 12);
         }
         g.setColor(new Color(0xe7eaed)); g.setFont(new Font("SansSerif", Font.BOLD, 14));
-        g.drawString("TPO Zones 1.8 — ES 30m ETH+RTH, " + (p.compositeMode ? "класс по композиту" : "класс по отторжениям") + ", подгонка " + p.alignSessions + " сесс."
+        g.drawString("TPO Zones 1.8.2 — ES 30m ETH+RTH, " + (p.compositeMode ? "класс по композиту" : "класс по отторжениям") + ", подгонка " + p.alignSessions + " сесс."
                 + (top > 0 ? " · пунктир — топ-" + top + " зон по отторжениям за последние " + k + " сессий" : "")
                 + (System.getProperty("manual") != null ? " · заливка — алгоритм, пунктир — ручные зоны" : ""), 16, 24);
         ImageIO.write(img, "png", new File(a[1]));

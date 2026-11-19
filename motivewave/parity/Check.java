@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.time.LocalDate;
 
 import patterns.zones.ZoneEngine.Bar;
 import patterns.zones.ZoneEngine.Kind;
@@ -50,6 +51,7 @@ public class Check {
         for (int i = 0; i < plan.rects.size(); i++) for (int j = i + 1; j < plan.rects.size(); j++) {
             ZonePlan.Rect x = plan.rects.get(i), y = plan.rects.get(j);
             if (x.z == y.z || x.t1 <= y.t0 || y.t1 <= x.t0) continue;
+            if (x.z.k == ZoneEngine.K_EXT || y.z.k == ZoneEngine.K_EXT) continue;   // зоны экстремумов — слой поверх, им можно
             if (Math.min(x.hi, y.hi) - Math.max(x.lo, y.lo) > 1e-9) overl++;
         }
         Map<Zone, BitSet> vis = new LinkedHashMap<>();
@@ -57,6 +59,14 @@ public class Check {
         int gaps = 0, ends = 0;
         for (BitSet b : vis.values()) { int f = b.nextSetBit(0), l = b.length() - 1; if (b.cardinality() != l - f + 1) gaps++; if (l != n - 1) ends++; }
         System.out.printf("пересекающихся прямоугольников на графике %d; зон с разрывами %d; обрываются до правого края %d%n", overl, gaps, ends);
+        int ex = 0, exS = 0, exNear = 0;
+        LocalDate lastD = res.sessions.get(n - 1).date;
+        for (Zone z : res.extremes) if (!z.av.isAfter(lastD) && (z.extEnd == null || z.extEnd.isAfter(lastD))) {
+            ex++; if (!z.extRes) exS++;
+            if (Math.abs((z.lo + z.hi) / 2 - open) <= 150) exNear++;
+        }
+        System.out.printf("зоны экстремумов: всего за историю %d; живых в последнюю сессию %d (поддержек %d, сопротивлений %d), в ± 150 п. от open %d%n",
+                res.extremes.size(), ex, exS, ex - exS, exNear);
     }
 
     /** Последнее правило, которое сделало зону серой (правила идут по порядку, см. README «Серые»). */

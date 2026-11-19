@@ -37,12 +37,13 @@ import java.util.TreeMap;
 public final class ZoneEngine {
 
     // ------------------------------------------------------------------ виды зон
-    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_PART = 3, K_SESS = 4, K_GREY = 5;
+    public static final int K_OLD_BALANCE = 0, K_HVN = 1, K_CORE = 2, K_PART = 3, K_SESS = 4, K_GREY = 5, K_EXT = 6;
 
     public enum Kind {
         HVN_S("HVN · поддержка"), HVN_R("HVN · сопротивление"), HVN_RANGE("HVN · проторговка"),
         HVN_NEW("HVN · без истории"), OLD_BALANCE("Старый баланс (VA композита)"),
-        GREY("Серая (мало истории / узкая)"), CORE("Проторговка композита");
+        GREY("Серая (мало истории / узкая)"), CORE("Проторговка композита"),
+        EXT_S("Поддержка экстремума"), EXT_R("Сопротивление экстремума");
         public final String title;
         Kind(String t) { title = t; }
     }
@@ -119,6 +120,23 @@ public final class ZoneEngine {
         public double sessClusterDip = 0.15;      // ... скопления разделены провалом ≥ этой доли меньшей вершины (и ≥ 1.5 тела)
         public double sessSiblingGapPts = 1.0;    // ... зоны из одной мнимой могут стоять ближе sessMinGapPts — от стольких п.
         public double sessMaxPts = 4;             // зона не шире, п.
+        // ---- пороги в волатильности (1.8.2): ядро композита (zoneMaxWidthPts), ширина сессионной зоны (sessMaxPts) и предел
+        //      ложного выхода (compFalseBreakMaxPts) × средний диапазон 20 прошлых полных RTH-дней / volRefPts. Сетка TPO
+        //      (gridPts) и зазоры не масштабируются — это квадраты графика.
+        public boolean volScale = true;
+        public double volRefPts = 54.5;           // медиана RTH-дня 2024–2026 (период, на котором настраивались пороги)
+        // ---- зоны экстремумов (1.8.2): поддержка на лое / сопротивление на хае Globex-сессии, где цену отбросили.
+        //      Свечи у экстремума (полоса extBandShare диапазона сессии, 1.5 … extBandMaxPts п.): верх зоны — медиана их хаёв,
+        //      низ — медиана верхних краёв тел (у лоя — зеркально); ширина extMinPts … extMaxPts. Зона появляется со
+        //      следующей сессии после того, как цена ушла от экстремума на max(extAwayPts, extAwayAdr × средний диапазон
+        //      20 прошлых сессий) раньше, чем два close подряд за зоной; живёт до таких двух close. Только у краёв баланса:
+        //      поддержка — не выше VAL своего баланса (+ extEdgeTolPts), сопротивление — не ниже VAH; вне балансов — всегда.
+        //      Близкая (ближе extJoinGapPts) к живой зоне экстремума той же стороны — её подтверждение.
+        public boolean extremes = true;
+        public double extBandShare = 0.15, extBandMaxPts = 5, extMinPts = 1, extMaxPts = 4;
+        public double extAwayPts = 8, extAwayAdr = 0.25, extJoinGapPts = 1;
+        public boolean extEdgeOnly = true;
+        public double extEdgeTolPts = 1;
         public double sessMinGapPts = 0.5;        // узел ближе этого к существующей зоне (или пересекает её) — её подтверждение
         public double gridPts = 1.0;              // квадрат TPO на графике, п. (tickInterval 4): края зоны — на границах квадратов, в ценах
                                                   // графика; после подгонки по телам край — к ближайшей границе, пополам — квадрат целиком
@@ -305,6 +323,15 @@ public final class ZoneEngine {
         final List<double[]> sbars = new ArrayList<>();  // все 30m-свечи сессии (ETH + RTH): {o, h, l, c}
         Profile profile; int poc, val, vah;              // тики
         int hvnTpo, bandLo, bandHi;                      // per_day (только полные дни)
+        double adr = Double.NaN;                         // средний диапазон 20 прошлых полных дней (без этого дня)
+    }
+
+    /** Масштаб порогов в пунктах: средний диапазон дней / volRefPts (volScale выкл. или нет данных — 1). */
+    static double vs(Params p, List<Day> ds) {
+        if (!p.volScale) return 1.0;
+        double s = 0; int n = 0;
+        for (Day d : ds) if (!Double.isNaN(d.adr)) { s += d.adr; n++; }
+        return n == 0 ? 1.0 : (s / n) / p.volRefPts;
     }
 
     // ------------------------------------------------------------------ зона
@@ -339,6 +366,12 @@ public final class ZoneEngine {
         long[] coreConf = new long[0];                       // ядро: дни подтверждений другими композитами
         long[] govAv = new long[0]; Comp[] gov = new Comp[0]; // композиты, в диапазон которых попадает зона
         public long avOrd() { return av.toEpochDay(); }
+        // зона экстремума (k == K_EXT)
+        public boolean extRes;                               // сопротивление на хае (иначе поддержка на лое)
+        public LocalDate extSrc, extEnd;                     // сессия экстремума; сессия пробоя (null — не пробита)
+        public double extPrice;                              // сам хай / лой сессии
+        public long extEndMs = Long.MAX_VALUE;               // конец бара пробоя (второй close за зоной)
+        public int extConf;                                  // подтверждений: повторный экстремум рядом
     }
 
     /** Композит ≥ compositeMinDays: диапазон и его ядро (зона проторговки). */
@@ -371,7 +404,7 @@ public final class ZoneEngine {
     public static final class Shown {
         public final Zone z; public final State st;
         public double lo, hi;                               // границы на эту сессию (после обрезки пересечений)
-        Shown(Zone z, State st) { this.z = z; this.st = st; lo = z.blo; hi = z.bhi; }
+        public Shown(Zone z, State st) { this.z = z; this.st = st; lo = z.blo; hi = z.bhi; }
     }
 
     public static final class Result {
@@ -383,6 +416,7 @@ public final class ZoneEngine {
         public final List<Comp> notBalance = new ArrayList<>();      // композиты, где дни не сошлись (без ядра)
         public final List<Comp> subComps = new ArrayList<>();        // уточнения внутри более раннего баланса
         public final List<Comp> liveComps = new ArrayList<>();       // снимки формирующихся композитов (балансы, не уточнения)
+        public final List<Zone> extremes = new ArrayList<>();        // зоны экстремумов (1.8.2), со своим сроком жизни
         public long[] rollMs = new long[0];                          // роллы: начало первого бара нового контракта, epoch ms
         public double[] rollGap = new double[0];                     // ... и гэп (новый − старый), п.
         public boolean rawPrices;                                    // rollRaw: цены не сдвигались (rollShift = 0, расчёт в ценах графика)
@@ -448,6 +482,11 @@ public final class ZoneEngine {
             }
         }
         res.rthDays = all.size(); res.fullDays = full.size();
+        for (int i = 0; i < full.size(); i++) {           // средний диапазон 20 прошлых полных дней (пороги в волатильности)
+            int a0 = Math.max(0, i - 20); if (i - a0 < 5) continue;
+            double s = 0; for (int k = a0; k < i; k++) s += full.get(k).high - full.get(k).low;
+            full.get(i).adr = s / (i - a0);
+        }
         if (full.size() < 3) { res.note = "мало RTH-дней в истории"; return res; }
         Map<LocalDate, LocalDate> nextTradeDay = new HashMap<>();
         for (int i = 0; i + 1 < all.size(); i++) nextTradeDay.put(all.get(i).date, all.get(i + 1).date);
@@ -477,7 +516,7 @@ public final class ZoneEngine {
                 if (cand.size() >= p.compositeMinDays) lastCand = null;
                 if (p.compositeMode && p.compFalseBreak && lastCand != null && c >= lastCp.low && c <= lastCp.high()
                         && (!p.compJoinBoth || vaJoins(d, lastCp, p) || vaPrev(d, lastCand, p) || insideDay(d, lastCp, p))
-                        && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts && extCount < p.compFalseBreakMax) {
+                        && (lastCp.high() - lastCp.low) * tick <= p.compFalseBreakMaxPts * vs(p, lastCand) && extCount < p.compFalseBreakMax) {
                     // ложный выход: композит закрылся, новый ещё не набрал дней, а цена закрылась обратно в его
                     // диапазоне — дни после выхода доклеиваются к нему, композит продолжается
                     extCount = lastExt;
@@ -629,7 +668,7 @@ public final class ZoneEngine {
                 LocalDate av = nextTradeDay.get(d.date);
                 if (av == null) continue;
                 double gsh = rollShift(res, av.atStartOfDay(p.tz).toInstant().toEpochMilli());   // цены графика = цены расчёта − сдвиг
-                for (int[] nd : dayNodes(d, p, onePt, maxW)) {
+                for (int[] nd : dayNodes(d, p, onePt, (int) Math.round(maxW * vs(p, List.of(d))))) {
                     if (p.gridPts > 0) {                                // края — по квадратам профиля на графике
                         double glo = nd[0] * tick - gsh, ghi = nd[1] * tick - gsh;
                         if (nd[4] == 1) { double m = (glo + ghi) / 2; glo = m - 0.01; ghi = m + 0.01; }   // уже квадрата — один квадрат
@@ -865,8 +904,102 @@ public final class ZoneEngine {
         if (p.compositeMode && p.invertGrey) invertedToGrey(res, p);
         if (p.compositeMode && p.sessionZones && p.primaryByCore) primaryByCore(res, p);
         if (p.compositeMode && p.sessionZones && p.compSync) compSync(res, p);
+        if (p.compositeMode && p.extremes) extremeZones(bars, sessAll, res, p);
         return res;
     }
+
+    // ------------------------------------------------------------------ зоны экстремумов (1.8.2)
+    /** Поддержка на лое и сопротивление на хае каждой Globex-сессии, где цену отбросили (см. Params, «зоны экстремумов»).
+     *  Без заглядывания вперёд: зона видна с сессии после подтверждения (ушли от экстремума) и до пробоя двумя close. */
+    static void extremeZones(List<Bar> bars, List<Session> ss, Result res, Params p) {
+        int n = bars.size();
+        if (n == 0 || ss.isEmpty()) return;
+        int[] sessIdx = new int[n];
+        for (int i = 0; i < ss.size(); i++) for (int j = ss.get(i).firstBar; j <= ss.get(i).lastBar; j++) sessIdx[j] = i;
+        double[] rng = new double[ss.size()];
+        for (int i = 0; i < ss.size(); i++) {
+            double h = -Double.MAX_VALUE, l = Double.MAX_VALUE;
+            for (int j = ss.get(i).firstBar; j <= ss.get(i).lastBar; j++) { h = Math.max(h, bars.get(j).h); l = Math.min(l, bars.get(j).l); }
+            rng[i] = h - l;
+        }
+        List<Zone> cand = new ArrayList<>();
+        for (int i = 0; i < ss.size(); i++) {
+            int a = ss.get(i).firstBar, e = ss.get(i).lastBar + 1;
+            double r = rng[i];
+            if (r <= 0) continue;
+            double band = Math.min(p.extBandMaxPts, Math.max(1.5, p.extBandShare * r));
+            double adr = r;
+            if (i >= 5) { double s = 0; int k0 = Math.max(0, i - 20); for (int k = k0; k < i; k++) s += rng[k]; adr = s / (i - k0); }
+            double away = Math.max(p.extAwayPts, p.extAwayAdr * adr);
+            for (boolean res_ : new boolean[]{true, false}) {
+                double ext = res_ ? -Double.MAX_VALUE : Double.MAX_VALUE; int at = a;
+                for (int j = a; j < e; j++) {
+                    Bar b = bars.get(j);
+                    if (res_ ? b.h > ext : b.l < ext) { ext = res_ ? b.h : b.l; at = j; }
+                }
+                List<Double> tips = new ArrayList<>(), bodies = new ArrayList<>();
+                for (int j = a; j < e; j++) {
+                    Bar b = bars.get(j);
+                    if (res_ ? b.h >= ext - band : b.l <= ext + band) {
+                        tips.add(res_ ? b.h : b.l); bodies.add(res_ ? Math.max(b.o, b.c) : Math.min(b.o, b.c));
+                    }
+                }
+                double tip = snapTick(median(tips), p.tick), body = snapTick(median(bodies), p.tick);
+                double lo, hi;
+                if (res_) { hi = tip; lo = Math.max(Math.min(body, hi - p.extMinPts), hi - p.extMaxPts); }
+                else { lo = tip; hi = Math.min(Math.max(body, lo + p.extMinPts), lo + p.extMaxPts); }
+                int j0 = at + 1;
+                if (j0 >= n) continue;
+                int brk = n;                                   // второй подряд close за зоной
+                for (int j = j0; j + 1 < n; j++) {
+                    boolean b1 = res_ ? bars.get(j).c > hi : bars.get(j).c < lo, b2 = res_ ? bars.get(j + 1).c > hi : bars.get(j + 1).c < lo;
+                    if (b1 && b2) { brk = j + 1; break; }
+                }
+                int conf = -1;                                 // ушли от экстремума раньше пробоя
+                for (int j = j0; j < brk; j++) if (res_ ? bars.get(j).l <= ext - away : bars.get(j).h >= ext + away) { conf = j; break; }
+                if (conf < 0) continue;
+                int si = sessIdx[conf] + 1;
+                if (si >= ss.size()) continue;
+                LocalDate av = ss.get(si).date;
+                LocalDate end = brk < n ? ss.get(sessIdx[brk]).date : null;
+                if (end != null && !end.isAfter(av)) continue;
+                Zone z = new Zone();
+                z.k = K_EXT; z.src = "ext"; z.av = av; z.lo = z.blo = lo; z.hi = z.bhi = hi;
+                z.extRes = res_; z.extSrc = ss.get(i).date; z.extPrice = ext; z.extEnd = end;
+                z.extEndMs = brk < n ? bars.get(brk).t + p.periodMinutes * 60_000L : Long.MAX_VALUE;
+                z.info = String.format(java.util.Locale.ROOT, "%.2f", away);
+                if (!p.extEdgeOnly || atBalanceEdge(z, res, p)) cand.add(z);
+            }
+        }
+        cand.sort((x, y) -> x.av.compareTo(y.av));
+        for (Zone z : cand) {                                   // повторный экстремум рядом — подтверждение живой зоны
+            Zone dup = null;
+            for (Zone k : res.extremes)
+                if (k.extRes == z.extRes && !k.av.isAfter(z.av) && (k.extEnd == null || k.extEnd.isAfter(z.av))
+                        && Math.min(k.hi, z.hi) - Math.max(k.lo, z.lo) > -p.extJoinGapPts) { dup = k; break; }
+            if (dup != null) dup.extConf++; else res.extremes.add(z);
+        }
+    }
+
+    /** Зона экстремума у края баланса: поддержка не выше VAL, сопротивление не ниже VAH (± extEdgeTolPts) последнего
+     *  баланса, известного к её появлению (закрытый до этого дня или формирующийся на этот день), чей диапазон её накрывает. */
+    static boolean atBalanceEdge(Zone z, Result res, Params p) {
+        double mid = (z.lo + z.hi) / 2;
+        Comp best = null;
+        for (Comp c : res.comps) if (c.av.isBefore(z.av) && c.lo <= mid && mid <= c.hi && (best == null || c.end.isAfter(best.end))) best = c;
+        for (Comp c : res.liveComps) if (c.av != null && c.av.equals(z.av) && c.lo <= mid && mid <= c.hi && (best == null || c.end.isAfter(best.end))) best = c;
+        if (best == null || best.prof == null) return true;   // вне балансов — край сам по себе
+        int[] va = valueArea(best.prof, p.valueAreaPct);
+        return z.extRes ? z.lo >= va[2] * p.tick - p.extEdgeTolPts : z.hi <= va[1] * p.tick + p.extEdgeTolPts;
+    }
+
+    static double median(List<Double> v) {
+        List<Double> s = new ArrayList<>(v); s.sort(null);
+        int m = s.size();
+        return m == 0 ? Double.NaN : m % 2 == 1 ? s.get(m / 2) : (s.get(m / 2 - 1) + s.get(m / 2)) / 2;
+    }
+
+    static double snapTick(double v, double tick) { return Math.rint(v / tick) * tick; }
 
     /** Узлы профиля композита: тело (строки ≥ bodyShare максимума вокруг POC, сглаж. 1 п.) режется по провалам ≥ syncDip
      *  меньшей вершины; узел — строки куска не ниже вершины на syncDrop её высоты. {lo, hi, вершина TPO} в тиках. */
@@ -1285,7 +1418,7 @@ public final class ZoneEngine {
             core.info = coreInfo(cand, cp, va[0], p.tick);
             int[] band = p.coreByVa ? new int[]{va[1], va[2]} : hvnBand(cp, va[0], p.hvnShare);
             int poc = va[0];
-            int cap = (int) Math.round(p.zoneMaxWidthPts / p.tick);
+            int cap = (int) Math.round(p.zoneMaxWidthPts * vs(p, cand) / p.tick);
             if (p.coreFromSessions && !p.coreByVa) {
                 // ядро — от POC композита до обрыва TPO (и не ниже hvnShare максимума), не шире лимита;
                 // композит — баланс, если VA его дней задевают ядро
