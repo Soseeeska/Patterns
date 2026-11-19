@@ -82,8 +82,12 @@ public final class ZoneEngine {
         //      диапазонов и «размазня» не входят; композит не шире compMaxAdr средних диапазонов; до compExcursion дней мимо
         //      подряд (вылеты) пропускаются и в профиль не входят, композит идёт дальше, если цена вернулась; больше — закрыт
         //      (с первого вылета). Прежнее склеивание (close в диапазоне, внешний день, VA вчерашнего дня) — compValue = false.
-        //      Настроено по ручной разметке 7248–7884 (5 скоплений синих: все 5 находятся, лишний композит 1).
+        //      По умолчанию — скопления POC (compPocBandAdr, pocClusters): настроено по ручной разметке 7248–7884 и скринам
+        //      композитов пользователя (29.05–03.06, 23–26.06, 10–16.07, 23–31.07, 20–26.08): 8 композитов, все в 5 скоплениях
+        //      ручных синих, лишних нет.
         public boolean compValue = true;
+        public double compPocBandAdr = 0.5;       // > 0: день входит, если POC всех дней композита с ним укладываются в полосу не шире
+                                                  // стольких средних диапазонов (вместо проверки по VA); 0 — по VA (compValueShare)
         public double compValueShare = 0.5;
         public double compDayMaxAdr = 2;
         public int compExcursion = 2;
@@ -1638,6 +1642,7 @@ public final class ZoneEngine {
     /** Композиты по стоимости (compValue): см. Params. */
     static void valueComposites(List<Day> days, Result res, Params p, List<Zone> ob, List<Zone> greyComp,
                                 Map<LocalDate, LocalDate> nextTradeDay) {
+        if (p.compPocBandAdr > 0) { pocClusters(days, res, p, ob, greyComp, nextTradeDay); return; }
         List<Day> cand = new ArrayList<>(); Profile cp = null; List<Day> miss = new ArrayList<>();
         for (Day d : days) {
             if (!cand.isEmpty() && p.compRollBreak && rollBetween(res, p, cand.get(cand.size() - 1).date, d.date)) {
@@ -1649,7 +1654,7 @@ public final class ZoneEngine {
             if (smear || wide) res.smearDays++;
             boolean eligible = !smear && !wide;
             if (cand.isEmpty()) { if (eligible) { cand.add(d); cp = d.profile; } continue; }
-            if (eligible && valueIn(d, cp, p) && !tooWide(cp, d, p)) {
+            if (eligible && joins(d, cand, cp, p) && !tooWide(cp, d, p)) {
                 miss.clear(); cand.add(d); cp = merge(cp, d.profile);
                 live(cand, cp, nextTradeDay.get(d.date), p, res.liveComps);
                 continue;
@@ -1663,11 +1668,76 @@ public final class ZoneEngine {
                 boolean ok = !(p.smearMaxTpo > 0 && !x.shortDay && x.maxSq <= p.smearMaxTpo)
                         && !(p.compDayMaxAdr > 0 && !Double.isNaN(x.adr) && x.high - x.low > p.compDayMaxAdr * x.adr + 1e-9);
                 if (!ok) { cand = new ArrayList<>(); cp = null; continue; }
-                if (cand.isEmpty() || !(valueIn(x, cp, p) && !tooWide(cp, x, p))) { cand = new ArrayList<>(); cand.add(x); cp = x.profile; }
+                if (cand.isEmpty() || !(joins(x, cand, cp, p) && !tooWide(cp, x, p))) { cand = new ArrayList<>(); cand.add(x); cp = x.profile; }
                 else { cand.add(x); cp = merge(cp, x.profile); }
             }
             miss.clear();
         }
+    }
+
+    /** Скопления POC (compPocBandAdr > 0): каждый день открывает своё скопление и входит во все открытые, где POC всех
+     *  дней остаются в полосе ≤ compPocBandAdr × средний диапазон; «размазня» и дни шире compDayMaxAdr не входят никуда.
+     *  Скопление закрывается, когда больше compExcursion дней подряд в него не вошли (или ролл); закрытое из
+     *  ≥ compositeMinDays дней — композит, если в другом открытом скоплении нет всех его дней и больше, и его дни не заняты
+     *  уже выданным композитом. Профиль — только дни скопления (вылеты не входят). Композит — со следующего дня после
+     *  последнего дня скопления. */
+    static void pocClusters(List<Day> days, Result res, Params p, List<Zone> ob, List<Zone> greyComp,
+                            Map<LocalDate, LocalDate> nextTradeDay) {
+        final class Cl { final List<Day> m = new ArrayList<>(); int lo, hi, last; Profile cp; }
+        List<Cl> open = new ArrayList<>();
+        Set<LocalDate> used = new HashSet<>();
+        List<Cl> closing = new ArrayList<>();
+        for (int i = 0; i <= days.size(); i++) {
+            Day d = i < days.size() ? days.get(i) : null;
+            boolean roll = d != null && !open.isEmpty() && p.compRollBreak
+                    && rollBetween(res, p, days.get(i - 1).date, d.date);
+            closing.clear();
+            for (Cl c : open) if (d == null || roll || i - c.last > p.compExcursion) closing.add(c);
+            open.removeAll(closing);
+            closing.sort((x, y) -> y.m.size() - x.m.size());
+            for (Cl c : closing) {
+                if (c.m.size() < p.compositeMinDays) continue;
+                boolean sub = false;
+                for (Cl o : open) if (o.m.size() > c.m.size() && o.m.containsAll(c.m)) sub = true;
+                boolean taken = false;
+                for (Day x : c.m) if (used.contains(x.date)) taken = true;
+                if (sub || taken) continue;
+                LocalDate av = nextTradeDay.get(c.m.get(c.m.size() - 1).date);
+                if (av == null) continue;
+                for (Day x : c.m) used.add(x.date);
+                closeComposite(c.m, c.cp, av, p, ob, greyComp, res.comps, res.notBalance);
+            }
+            if (d == null) break;
+            boolean smear = p.smearMaxTpo > 0 && !d.shortDay && d.maxSq <= p.smearMaxTpo;
+            boolean wide = p.compDayMaxAdr > 0 && !Double.isNaN(d.adr) && d.high - d.low > p.compDayMaxAdr * d.adr + 1e-9;
+            if (smear || wide) { res.smearDays++; continue; }
+            if (Double.isNaN(d.adr)) continue;
+            double lim = p.compPocBandAdr * d.adr;
+            Cl best = null;
+            for (Cl c : open) {
+                int lo = Math.min(c.lo, d.poc), hi = Math.max(c.hi, d.poc);
+                if ((hi - lo) * p.tick > lim + 1e-9 || tooWide(c.cp, d, p)) continue;
+                c.m.add(d); c.lo = lo; c.hi = hi; c.last = i; c.cp = merge(c.cp, d.profile);
+                if (best == null || c.m.size() > best.m.size()) best = c;
+            }
+            Cl n = new Cl(); n.m.add(d); n.lo = n.hi = d.poc; n.last = i; n.cp = d.profile; open.add(n);
+            // одинаковые скопления (те же дни) — одно
+            for (int a = open.size() - 1; a >= 0; a--) for (int b = 0; b < a; b++)
+                if (open.get(a).m.equals(open.get(b).m)) { open.remove(a); break; }
+            if (best != null) {
+                boolean free = true; for (Day x : best.m) if (used.contains(x.date)) free = false;
+                if (free) live(best.m, best.cp, nextTradeDay.get(d.date), p, res.liveComps);
+            }
+        }
+    }
+
+    /** День входит в композит: полоса POC (compPocBandAdr) или стоимость по VA (valueIn). */
+    static boolean joins(Day d, List<Day> cand, Profile cp, Params p) {
+        if (p.compPocBandAdr <= 0) return valueIn(d, cp, p);
+        if (Double.isNaN(d.adr)) return false;
+        int lo = d.poc, hi = d.poc;
+        for (Day x : cand) { lo = Math.min(lo, x.poc); hi = Math.max(hi, x.poc); }
+        return (hi - lo) * p.tick <= p.compPocBandAdr * d.adr + 1e-9;
     }
 
     /** Стоимость дня в стоимости композита: POC дня внутри VA композита или VA дня на ≥ compValueShare внутри. */
