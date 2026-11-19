@@ -38,14 +38,16 @@ import patterns.zones.ZoneEngine.Params;
 import patterns.zones.ZoneEngine.Result;
 
 /**
- * TPO Zones 1.8 — плотная карта зон ES прямо на графике MotiveWave: обёртка SDK (настройки и фигуры).
+ * TPO Zones 1.8.1 — плотная карта зон ES прямо на графике MotiveWave: обёртка SDK (настройки и фигуры).
+ * В jar классы лежат в пакете своей версии (build.sh: patterns.zones → patterns.zones.v1_8_1), поэтому jar разных версий
+ * в расширениях MotiveWave не подменяют друг друга; версия и сборка — в строке info индикатора.
  * Расчёт — ZoneEngine, что рисовать — ZonePlan (оба без SDK); по 30m-барам инструмента, на любом таймфрейме графика.
  * Принцип действия — motivewave/README.md.
  */
 @StudyHeader(
     namespace = "com.patterns",
-    id = "TPO_ZONES_1_8",
-    name = "TPO Zones 1.8",
+    id = "TPO_ZONES_1_8_1",
+    name = "TPO Zones 1.8.1",
     label = "TPO Zones",
     desc = "Плотная карта зон по RTH TPO-профилям: сессионные зоны по телам свечей и квадратам TPO, цвет по композиту, серые — минорные, узкие, колеблющиеся",
     menu = "Patterns",
@@ -54,6 +56,9 @@ import patterns.zones.ZoneEngine.Result;
     requiresVolume = false,
     supportsBarUpdates = false)
 public class TpoZonesStudy extends Study {
+    /** Версия и сборка: build.sh подставляет в BUILD дату и коммит; в исходниках — "dev" (сборка не через build.sh). */
+    static final String VERSION = "1.8.1";
+    static final String BUILD = "dev";
 
     // ---- ключи настроек
     static final String S_MAX = "sessMax", MINOR = "sessMinor", CORE_TOUCH = "sessCoreTouch", CORE_NEAR = "coreNearestBlue", PRIM = "primaryByCore", CSYNC = "compSync", CS_DIP = "syncDip", CS_DROP = "syncDrop", CS_VA = "syncVaEdges", CS_TOL = "syncVaTol", PRIM_SHARE = "primaryShare", REFINE = "sessRefine", VA_PREV = "compVaPrevDay", RESYNC = "sessResyncLater", ROLL_BRK = "compRollBreak", ONE_COLOR = "drawOneColor", EXT_DAYS = "drawExtendDays", LIVE = "liveComposite", ROLL = "rollAdjust", ROLL_RAW = "rollRaw", ROLL_GAP = "rollMinGap", FALSE_BRK = "compFalseBreak", COMP_VA = "compVaOverlap", COMP_AND = "compJoinBoth", COMP_IN = "compInsideShare", COMP_OUT = "compOutsideDays", S_GAP = "sessMinGap", S_SHARE = "sessPeakShare", SESS = "sessionZones", S_PEAK = "sessMinPeak", S_BODY = "sessBody", CLUST = "bodyClusters", CL_DIP = "clusterDip", CL_MAX = "clusterMax", SUB_ADD = "subAddsZones", FIT_ETH = "fitEth", FIT_B = "fitBody", FIT_C = "fitCluster", PMAXB = "partMaxBody", PART = "partition", BODY = "bodyShare", PCORE = "partCore", PTGT = "partTarget", NODES = "coreNodes", NODE_DIP = "nodeDip", NODE_DROP = "nodeDrop", NO_OVERLAP = "noOverlap", CHART_NO_OV = "chartNoOverlap", GRID = "gridPts", GRID_OFF = "gridOffset", GRID_GREY = "gridNarrowGrey", GRID_BLUE = "gridNarrowKeepBlue", ONE_SQ = "oneSquareGrey", ONE_SQ_MAX = "oneSquareMax", CR = "compRejGrey", CR_RATIO = "compRejRatio", CR_MIN = "compRejMin", INV = "invertGrey", INV_GAP = "invertGap", MIN_PIECE = "minPiece", SHORT_DAYS = "compShortDays", SUB_OV = "subOverlap", SUB_RATIO = "subRatio", CLIFF = "coreCliff", CORE_DAYS = "coreMinDays", CORE_SESS = "coreFromSessions", JOIN_GAP = "joinGap", ZONE_W = "zoneMaxW", MODE = "compositeMode", CORE_VA = "coreByVa", BAR30 = "bar30", HISTORY_DAYS = "historyDays", TZ = "tz", RTH_START = "rthStart",
@@ -260,11 +265,11 @@ public class TpoZonesStudy extends Study {
             if (res.sessions.isEmpty()) return;
             computedFor = res.sessions.get(res.sessions.size() - 1).date;
             draw(res, p);
-            info("TPO Zones: RTH-дней " + res.rthDays + " (полных " + res.fullDays + "), зон " + res.zones.size()
+            info("TPO Zones " + VERSION + " (сборка " + BUILD + "): RTH-дней " + res.rthDays + " (полных " + res.fullDays + "), зон " + res.zones.size()
                     + (res.rawPrices ? ", роллов найдено " + res.rollMs.length + " (цены графика)" : ", роллов склеено " + res.rollMs.length)
                     + ", сессий на графике " + res.sessions.size() + (res.note.isEmpty() ? "" : " — " + res.note));
         } catch (Exception e) {
-            error("TPO Zones: " + e);
+            error("TPO Zones " + VERSION + " (сборка " + BUILD + "): " + e);
         } finally {
             endFigureUpdate();
         }

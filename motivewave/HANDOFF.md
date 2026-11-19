@@ -9,8 +9,10 @@
 ## 1. Где что лежит
 
 - Репозиторий `soseeeska/patterns`. Ветки индикатора: `zones-1.1 … zones-1.8`. Новую версию начинать **новой веткой от
-  `zones-1.8`** (например, `zones-1.9`), поднять версию: id в `@StudyHeader` (`TPO_ZONES_1_9` — чтобы MotiveWave не
-  подхватил сохранённые настройки 1.8), имя, `build.sh` (имя jar), заголовки README.
+  `zones-1.8`** (например, `zones-1.9`), поднять версию: `VERSION` в `build.sh` (имя jar и пакет классов в jar —
+  `patterns.zones.v1_9`), в `TpoZonesStudy` — `VERSION`, id в `@StudyHeader` (`TPO_ZONES_1_9` — чтобы MotiveWave не
+  подхватил сохранённые настройки) и имя, заголовки README. 1.8.1 (19.11.2026) — 1.8 с пакетом версии в jar и сборкой в
+  строке info (до неё jar разных версий подменяли друг друга после перезапуска MotiveWave).
 - Код MotiveWave 7: `motivewave/src/patterns/zones/` — `ZoneEngine.java` (весь расчёт, без SDK; пороги — `Params`, по
   шагам алгоритма, прежние режимы 1.1–1.6 — отдельным блоком), `ZonePlan.java` (что рисовать, подсказки),
   `TpoZonesStudy.java` (настройки и фигуры SDK). **Значение по умолчанию — в двух местах: `Params` и `TpoZonesStudy`
