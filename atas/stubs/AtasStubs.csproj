@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Заглушки API ATAS только для проверки компиляции ManualZones без установленного ATAS X.
+       Собранная с ними DLL в ATAS не годится — для ATAS собирать против настоящих DLL платформы. -->
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>disable</Nullable></PropertyGroup>
+</Project>
