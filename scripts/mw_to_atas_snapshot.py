@@ -7,7 +7,8 @@ OFT.Platform.DrawingObjects.RectangleObj. В нём: время точек _firs
 Новые рисунки — копии прямоугольника из образца с заменёнными полями; остальные настройки графика из образца.
 
 Перенос:
-  зоны и боксы  → прямоугольник: заливка — цвет и прозрачность MotiveWave, без рамки (в MW линия выключена),
+  зоны и боксы  → прямоугольник: заливка — цвет и прозрачность MotiveWave; рамка и пунктирная средняя линия —
+                  тот же оттенок светлее (HLS + 0.25), прозрачность рамки как у зон в образце (153);
                   продление вправо / влево — как в MW; скрытые в MW — Visible = false;
   горизонтали   → прямоугольник нулевой высоты: видна только рамка (цвет MW или серый, если в MW цвет темы);
   карандаш (pen) не переносится: в образце нет такого объекта (3 рисунка 2024 года на старом контракте).
@@ -18,6 +19,7 @@ OFT.Platform.DrawingObjects.RectangleObj. В нём: время точек _firs
 """
 from __future__ import annotations
 
+import colorsys
 import copy
 import json
 import re
@@ -30,6 +32,14 @@ from scripts.mw_to_atas import ROOT, convert
 
 TICK = Decimal("0.25")
 LINE_DEFAULT = (255, 200, 200, 200)          # цвет горизонтали, если в MW — цвет темы
+BORDER_ALPHA = 153                           # рамка зоны: как у зон, нарисованных в ATAS (образец)
+LIGHTEN = 0.25                               # рамка и середина: тот же оттенок, светлота HLS + 0.25
+
+
+def _lighter(c: tuple[int, int, int, int], alpha: int) -> tuple[int, int, int, int]:
+    h, l, s = colorsys.rgb_to_hls(*(x / 255 for x in c[1:]))
+    r, g, b = colorsys.hls_to_rgb(h, min(0.85, l + LIGHTEN) if l < 0.98 else l, s)
+    return (alpha, round(r * 255), round(g * 255), round(b * 255))
 NUM = "\x00NUM:"                             # маркер числа, записываемого как есть (7651.00, 30585.0)
 
 
@@ -74,7 +84,7 @@ def make_rect(tpl: dict, r: dict) -> dict:
     o = copy.deepcopy(tpl)
     if r["kind"] == "rectangle":
         fill = _argb(r["fill_argb"])
-        line = _argb(r["border_argb"]) if r["border_argb"] not in (None, "none") else (0,) + fill[1:]
+        line = _lighter(fill, BORDER_ALPHA)      # в MW рамки не было — делаем светлее заливки
         hi_first = True
     else:                                         # горизонталь
         line = _argb(r["border_argb"]) or LINE_DEFAULT
@@ -106,7 +116,12 @@ def make_rect(tpl: dict, r: dict) -> dict:
         "Visible": not r["hidden"],
         "Locked": bool(r["locked"]),
     })
-    o["MiddleLine"]["Enabled"] = False
+    mid = o["MiddleLine"]
+    mid["Enabled"] = r["kind"] == "rectangle"
+    if mid["Enabled"]:                            # средняя линия зоны — пунктир цвета рамки
+        a, rr, gg, bb = line
+        mid["Value"]["Color"] = f"Color [A={a}, R={rr}, G={gg}, B={bb}]"
+        mid["Value"]["Width"] = 1
     return o
 
 

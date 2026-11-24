@@ -24,16 +24,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=246, G=188, B=246]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "79, 238, 130, 238",
         "AreaOpacility": 30,
-        "Color": "0, 238, 130, 238",
+        "Color": "153, 246, 188, 246",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -89,16 +89,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -154,16 +154,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -219,16 +219,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -284,16 +284,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=246, G=188, B=246]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "79, 238, 130, 238",
         "AreaOpacility": 30,
-        "Color": "0, 238, 130, 238",
+        "Color": "153, 246, 188, 246",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -349,16 +349,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -414,16 +414,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -479,16 +479,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -544,16 +544,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -609,16 +609,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -674,16 +674,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -739,16 +739,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -804,16 +804,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -869,16 +869,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -934,16 +934,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -999,16 +999,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1064,16 +1064,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1129,16 +1129,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1194,16 +1194,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1259,16 +1259,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1324,16 +1324,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1389,16 +1389,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1454,16 +1454,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1519,16 +1519,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1584,16 +1584,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1649,16 +1649,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1714,16 +1714,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1779,16 +1779,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1844,16 +1844,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1909,16 +1909,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -1974,16 +1974,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2039,16 +2039,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2104,16 +2104,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2169,16 +2169,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2234,16 +2234,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2299,16 +2299,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2364,16 +2364,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=246, G=188, B=246]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "79, 238, 130, 238",
         "AreaOpacility": 30,
-        "Color": "0, 238, 130, 238",
+        "Color": "153, 246, 188, 246",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2429,16 +2429,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2494,16 +2494,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2559,16 +2559,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2624,16 +2624,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2689,16 +2689,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2754,16 +2754,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2819,16 +2819,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2884,16 +2884,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -2949,16 +2949,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3014,16 +3014,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3079,16 +3079,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3144,16 +3144,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3209,16 +3209,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3274,16 +3274,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3339,16 +3339,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3404,16 +3404,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3469,16 +3469,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3534,16 +3534,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3599,16 +3599,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3664,16 +3664,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3729,16 +3729,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3794,16 +3794,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3859,16 +3859,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3924,16 +3924,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -3989,16 +3989,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4054,16 +4054,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4119,16 +4119,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4184,16 +4184,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4249,16 +4249,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4314,16 +4314,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4379,16 +4379,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4444,16 +4444,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4509,16 +4509,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4574,16 +4574,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4639,16 +4639,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4704,16 +4704,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4769,16 +4769,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4834,16 +4834,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4899,16 +4899,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -4964,16 +4964,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5029,16 +5029,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5094,16 +5094,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5159,16 +5159,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5224,16 +5224,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5484,16 +5484,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=246, G=188, B=246]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "79, 238, 130, 238",
         "AreaOpacility": 30,
-        "Color": "0, 238, 130, 238",
+        "Color": "153, 246, 188, 246",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5549,16 +5549,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5614,16 +5614,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5679,16 +5679,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5744,16 +5744,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5809,16 +5809,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5874,16 +5874,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -5939,16 +5939,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6004,16 +6004,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6069,16 +6069,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=246, G=188, B=246]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "79, 238, 130, 238",
         "AreaOpacility": 30,
-        "Color": "0, 238, 130, 238",
+        "Color": "153, 246, 188, 246",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6134,16 +6134,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6199,16 +6199,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6264,16 +6264,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6329,16 +6329,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6394,16 +6394,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6459,16 +6459,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6524,16 +6524,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6589,16 +6589,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6654,16 +6654,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6719,16 +6719,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6784,16 +6784,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6849,16 +6849,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6914,16 +6914,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -6979,16 +6979,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7044,16 +7044,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=0, G=227, B=0]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 100, 0",
         "AreaOpacility": 23,
-        "Color": "0, 0, 100, 0",
+        "Color": "153, 0, 227, 0",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7109,16 +7109,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7174,16 +7174,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=120, G=118, B=118]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "85, 56, 55, 55",
         "AreaOpacility": 32,
-        "Color": "0, 56, 55, 55",
+        "Color": "153, 120, 118, 118",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7304,16 +7304,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7369,16 +7369,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=11, G=48, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 0, 21, 139",
         "AreaOpacility": 23,
-        "Color": "0, 0, 21, 139",
+        "Color": "153, 11, 48, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7434,16 +7434,16 @@
         "ExtendRight": true,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=11, B=11]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "61, 139, 0, 0",
         "AreaOpacility": 23,
-        "Color": "0, 139, 0, 0",
+        "Color": "153, 255, 11, 11",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7564,16 +7564,16 @@
         "ExtendRight": false,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=255, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "77, 255, 255, 255",
         "AreaOpacility": 29,
-        "Color": "0, 255, 255, 255",
+        "Color": "153, 255, 255, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
@@ -7629,16 +7629,16 @@
         "ExtendRight": false,
         "MiddleLine": {
           "EnabledVisible": true,
-          "Enabled": false,
+          "Enabled": true,
           "Value": {
-            "Color": "Color [A=255, R=59, G=59, B=254]",
+            "Color": "Color [A=153, R=255, G=255, B=255]",
             "LineDashStyle": 1,
-            "Width": 2
+            "Width": 1
           }
         },
         "AreaColor": "77, 255, 255, 255",
         "AreaOpacility": 29,
-        "Color": "0, 255, 255, 255",
+        "Color": "153, 255, 255, 255",
         "Width": 1,
         "Style": "solid",
         "VerticalPosition": "top",
