@@ -32,6 +32,22 @@ from scripts.mw_to_atas import ROOT, convert
 TICK = Decimal("0.25")
 LINE_DEFAULT = (255, 200, 200, 200)          # цвет горизонтали, если в MW — цвет темы
 FILL_BOOST = 0.05                            # заливка зон на 5 п.п. непрозрачнее, чем в MotiveWave
+NUM = "\x00NUM:"                             # маркер числа, записываемого как есть (7651.00, 30585.0)
+
+
+def _num(v) -> str:
+    return f"{NUM}{v}\x00"
+
+
+def _dump(obj) -> str:
+    s = json.dumps(obj, ensure_ascii=False, indent=2)
+    return re.sub(r'"\\u0000NUM:([^\\]*)\\u0000"', r"\1", s)
+
+
+def _load(path: Path):
+    """JSON с числами-строками как в файле (decimal 7651.00 остаётся 7651.00)."""
+    return json.loads(path.read_text(encoding="utf-8"),
+                      parse_float=_num, parse_int=lambda s: int(s))
 
 
 def _argb(c: str | None, alpha_override: int | None = None) -> tuple[int, int, int, int] | None:
